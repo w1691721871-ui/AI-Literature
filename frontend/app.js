@@ -1,6 +1,6 @@
 const { computed, createApp, ref } = Vue;
 
-const API_BASE_URL = "http://127.0.0.1:8000";
+const API_BASE_URL = "https://ai-literature.onrender.com";
 const REQUEST_TIMEOUT_MS = 90_000;
 const DEFAULT_TASK = "请分析这篇论文的研究主题、研究问题、研究方法、主要结果、创新点和局限性。";
 const AGENT_STAGES = [
