@@ -7,6 +7,7 @@ from uuid import uuid4
 from app.services.llm_service import (
     analyze_paper_with_template,
     answer_question_about_paper,
+    build_quality_check,
 )
 from app.services.pdf_service import extract_pdf_text
 from app.agent.scenario_config import ScenarioConfig, ScenarioTask, get_scenario_config
@@ -220,13 +221,21 @@ class PaperAnalysisAgent:
             )
             if instruction
         )
-        analysis = analyze_paper_with_template(
+        model_result = analyze_paper_with_template(
             paper_text=paper_text,
             task=plan.user_task,
             task_instruction=task_instruction,
             result_fields=scenario_config.output_fields,
             list_fields=scenario_config.list_fields,
             require_all_fields=True,
+            include_decision_report=True,
+        )
+        analysis = model_result["analysis"]
+        decision_report = model_result["decision_report"]
+        quality_check = build_quality_check(
+            scenario_config.identifier,
+            analysis,
+            decision_report,
         )
 
         return {
@@ -243,6 +252,8 @@ class PaperAnalysisAgent:
             "plan": plan.execution_plan,
             "analysis": analysis,
             "result": analysis,
+            "decision_report": decision_report,
+            "quality_check": quality_check,
             "summary": {
                 field: analysis[field] for field in scenario_config.summary_fields
             },

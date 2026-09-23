@@ -39,6 +39,31 @@ PAPER_ANALYSIS_LIST_FIELDS = (
     "limitations",
     "keywords",
 )
+DECISION_REPORT_FIELDS = (
+    "summary",
+    "key_points",
+    "risks",
+    "recommendations",
+    "business_value",
+)
+DECISION_REPORT_LIST_FIELDS = ("key_points", "risks", "recommendations")
+QUALITY_CHECK_SCENARIO_FIELDS = {
+    "paper": (
+        ("research_topic", "研究主题"),
+        ("methodology", "研究方法"),
+        ("innovation_points", "创新点"),
+    ),
+    "technical_document": (
+        ("technical_solution", "技术方案"),
+        ("core_modules", "核心模块"),
+        ("implementation_recommendations", "实施建议"),
+    ),
+    "product_document": (
+        ("product_positioning", "产品定位"),
+        ("user_value", "用户价值"),
+        ("application_scenarios", "应用场景"),
+    ),
+}
 
 
 class LLMConfigurationError(Exception):
@@ -47,6 +72,40 @@ class LLMConfigurationError(Exception):
 
 class LLMRequestError(Exception):
     """Raised when the model provider cannot complete a request."""
+
+
+def build_quality_check(
+    scenario: str,
+    analysis: dict[str, object],
+    decision_report: dict[str, object],
+) -> dict[str, object]:
+    """Evaluate required result sections without making another model request."""
+    checks = (
+        ("summary", "决策摘要", decision_report.get("summary"), 20),
+        ("key_points", "关键要点", decision_report.get("key_points"), 20),
+        ("risks", "风险分析", decision_report.get("risks"), 15),
+        ("recommendations", "行动建议", decision_report.get("recommendations"), 15),
+        *(
+            (field, label, analysis.get(field), 10)
+            for field, label in QUALITY_CHECK_SCENARIO_FIELDS.get(scenario, ())
+        ),
+    )
+    missing_information = [
+        label for _, label, value, _ in checks if not _has_meaningful_value(value)
+    ]
+    score = sum(
+        points for _, _, value, points in checks if _has_meaningful_value(value)
+    )
+
+    return {
+        "completeness": not missing_information,
+        "has_risk_analysis": _has_meaningful_value(decision_report.get("risks")),
+        "has_recommendations": _has_meaningful_value(
+            decision_report.get("recommendations")
+        ),
+        "missing_information": missing_information,
+        "score": min(score, 100),
+    }
 
 
 def analyze_paper(paper_text: str) -> str:
@@ -72,8 +131,9 @@ def analyze_paper_with_template(
     result_fields: tuple[str, ...],
     list_fields: tuple[str, ...] = (),
     require_all_fields: bool = False,
+    include_decision_report: bool = False,
 ) -> dict[str, object]:
-    """Run one task-specific prompt and return the requested JSON fields."""
+    """Run one task-specific prompt and return a structured analysis response."""
     field_names = "、".join(result_fields)
     field_type_note = ""
     if list_fields:
@@ -82,27 +142,90 @@ def analyze_paper_with_template(
             f"The fields {list_field_names} must be JSON arrays of strings; use [] when absent. "
             "All other fields must be strings."
         )
-    prompt = f"""You are a research-paper analysis assistant. The user task is:
+    if include_decision_report:
+        output_instruction = f"""Return only a valid JSON object with exactly these top-level keys:
+"analysis" and "decision_report".
+The "analysis" object must contain exactly these keys: {field_names}.
+The "decision_report" object must contain exactly these keys: {"、".join(DECISION_REPORT_FIELDS)}.
+The decision_report fields key_points, risks, and recommendations must be JSON arrays of strings. Its summary and business_value must be strings.
+Use only information supported by the document. Identify risks and recommendations carefully. Explain business_value as the decision support value derived from the document, not an unsupported promise.
+If a string detail is missing, use "文档未说明"; use [] for a missing list.
+Do not use Markdown code fences or any text outside the JSON object."""
+    else:
+        output_instruction = f"""Return only a valid JSON object with exactly these
+keys: {field_names}.
+{field_type_note}
+Use only information supported by the paper. If a string detail is missing, use "论文未说明"."""
+
+    prompt = f"""You are a document analysis assistant. The user task is:
 {task}
 
 Task-specific instructions:
 {task_instruction}
 
-Analyze the paper text below. Return only a valid JSON object with exactly these
-keys: {field_names}.
-{field_type_note}
-Use only information supported by the paper. If a string detail is missing, use "论文未说明".
+Analyze the document text below.
+{output_instruction}
 
-Paper text:
+Document text:
 {paper_text[:MAX_MODEL_INPUT_CHARS]}
 """
-    response_text = _request_model(prompt)
+    response_text = _request_model(prompt, json_mode=True)
+    if include_decision_report:
+        return _parse_analysis_with_decision_report(
+            response_text,
+            result_fields,
+            list_fields=list_fields,
+        )
     return _parse_structured_result(
         response_text,
         result_fields,
         list_fields=list_fields,
         require_all_fields=require_all_fields,
     )
+
+
+def _parse_analysis_with_decision_report(
+    response_text: str,
+    analysis_fields: tuple[str, ...],
+    list_fields: tuple[str, ...],
+) -> dict[str, object]:
+    """Validate a nested scenario analysis and the common decision report."""
+    data = _decode_json_object(response_text)
+    analysis_data = _as_json_object(data.get("analysis"))
+    decision_report_data = _as_json_object(data.get("decision_report"))
+
+    # Some compatible-model responses flatten the requested nested object. Keep
+    # the existing scenario fields by accepting that form when they are present.
+    if analysis_data is None:
+        analysis_data = {
+            field: data[field] for field in analysis_fields if field in data
+        }
+    if not analysis_data:
+        raise LLMRequestError("模型返回结果不完整，请重新分析。")
+
+    if decision_report_data is None:
+        decision_report_data = {
+            field: data[field] for field in DECISION_REPORT_FIELDS if field in data
+        }
+
+    return {
+        "analysis": _validate_structured_object(
+            analysis_data,
+            analysis_fields,
+            list_fields=list_fields,
+            require_all_fields=False,
+            missing_string_value="文档未说明",
+            coerce_types=True,
+        ),
+        "decision_report": _validate_structured_object(
+            decision_report_data,
+            DECISION_REPORT_FIELDS,
+            list_fields=DECISION_REPORT_LIST_FIELDS,
+            require_all_fields=False,
+            missing_string_value="文档未说明",
+            coerce_types=True,
+        ),
+    }
 
 
 def answer_question_about_paper(
@@ -139,7 +262,7 @@ def _format_conversation_history(history: list[dict[str, str]]) -> str:
     return "\n\n".join(reversed(selected_turns))
 
 
-def _request_model(prompt: str) -> str:
+def _request_model(prompt: str, json_mode: bool = False) -> str:
     """Send one safely-sized prompt to DashScope and return its text."""
     load_dotenv()
     api_key = os.getenv("DASHSCOPE_API_KEY")
@@ -152,9 +275,14 @@ def _request_model(prompt: str) -> str:
     model = os.getenv("LLM_MODEL", "qwen-plus")
     try:
         client = OpenAI(api_key=api_key, base_url=base_url)
+        request_options: dict[str, object] = {
+            "model": model,
+            "messages": [{"role": "user", "content": prompt}],
+        }
+        if json_mode:
+            request_options["response_format"] = {"type": "json_object"}
         response = client.chat.completions.create(
-            model=model,
-            messages=[{"role": "user", "content": prompt}],
+            **request_options,
         )
         response_text = response.choices[0].message.content
         if not response_text:
@@ -233,17 +361,25 @@ def _parse_structured_result(
     require_all_fields: bool = False,
 ) -> dict[str, object]:
     """Check that the model returned a JSON object for the selected task."""
-    cleaned_text = _clean_json_response(response_text)
-    try:
-        data = json.loads(cleaned_text)
-    except json.JSONDecodeError as error:
-        logger.warning("LLM structured JSON parsing failed | type=%s", type(error).__name__)
-        raise LLMRequestError("模型返回结果格式异常，请重新分析。") from error
+    data = _decode_json_object(response_text)
 
-    if not isinstance(data, dict):
-        logger.warning("LLM structured result was not a JSON object")
-        raise LLMRequestError("模型返回结果格式异常，请重新分析。")
+    return _validate_structured_object(
+        data,
+        expected_fields,
+        list_fields=list_fields,
+        require_all_fields=require_all_fields,
+    )
 
+
+def _validate_structured_object(
+    data: dict[str, object],
+    expected_fields: tuple[str, ...],
+    list_fields: tuple[str, ...] = (),
+    require_all_fields: bool = False,
+    missing_string_value: str = "论文未说明",
+    coerce_types: bool = False,
+) -> dict[str, object]:
+    """Validate one JSON object against a fixed string-and-list field schema."""
     missing_fields = [field for field in expected_fields if field not in data]
     if require_all_fields and missing_fields:
         raise LLMRequestError(
@@ -252,8 +388,10 @@ def _parse_structured_result(
 
     result: dict[str, object] = {}
     for field in expected_fields:
-        value = data.get(field, [] if field in list_fields else "论文未说明")
+        value = data.get(field, [] if field in list_fields else missing_string_value)
         if field in list_fields:
+            if coerce_types:
+                value = _coerce_string_list(value)
             if not isinstance(value, list) or not all(
                 isinstance(item, str) for item in value
             ):
@@ -262,6 +400,8 @@ def _parse_structured_result(
                 )
             result[field] = value
         else:
+            if coerce_types:
+                value = _coerce_string_value(value, missing_string_value)
             if not isinstance(value, str):
                 raise LLMRequestError(
                     "模型返回结果格式异常，请重新分析。"
@@ -277,3 +417,71 @@ def _clean_json_response(response_text: str) -> str:
         r"```(?:json)?\s*\n?(.*?)\n?```", cleaned_text, flags=re.IGNORECASE | re.DOTALL
     )
     return code_block.group(1).strip() if code_block else cleaned_text
+
+
+def _decode_json_object(response_text: str) -> dict[str, object]:
+    """Decode JSON, including a valid JSON object surrounded by model prose."""
+    cleaned_text = _clean_json_response(response_text)
+    try:
+        data = json.loads(cleaned_text)
+    except json.JSONDecodeError:
+        decoder = json.JSONDecoder()
+        data = None
+        for match in re.finditer(r"\{", cleaned_text):
+            try:
+                candidate, _ = decoder.raw_decode(cleaned_text[match.start():])
+            except json.JSONDecodeError:
+                continue
+            if isinstance(candidate, dict):
+                data = candidate
+                break
+        if data is None:
+            logger.warning("LLM structured JSON parsing failed")
+            raise LLMRequestError("模型返回结果格式异常，请重新分析。")
+
+    if not isinstance(data, dict):
+        logger.warning("LLM structured result was not a JSON object")
+        raise LLMRequestError("模型返回结果格式异常，请重新分析。")
+    return data
+
+
+def _as_json_object(value: object) -> dict[str, object] | None:
+    """Accept a nested object or a JSON string produced by a compatible model."""
+    if isinstance(value, dict):
+        return value
+    if not isinstance(value, str):
+        return None
+    try:
+        parsed = json.loads(value)
+    except json.JSONDecodeError:
+        return None
+    return parsed if isinstance(parsed, dict) else None
+
+
+def _coerce_string_list(value: object) -> list[str]:
+    """Normalize a model's single string or null into a safe list of strings."""
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, str)]
+    if not isinstance(value, str):
+        return []
+    lines = [line.strip(" -•\t") for line in value.splitlines()]
+    return [line for line in lines if line] or ([value.strip()] if value.strip() else [])
+
+
+def _coerce_string_value(value: object, missing_value: str) -> str:
+    """Normalize simple compatible-model type drift for required string fields."""
+    if isinstance(value, str):
+        return value
+    if isinstance(value, list) and all(isinstance(item, str) for item in value):
+        return "\n".join(value) or missing_value
+    return missing_value
+
+
+def _has_meaningful_value(value: object) -> bool:
+    """Treat empty values and the model's explicit missing-value markers as absent."""
+    missing_markers = {"", "文档未说明", "论文未说明"}
+    if isinstance(value, str):
+        return value.strip() not in missing_markers
+    if isinstance(value, list):
+        return any(_has_meaningful_value(item) for item in value)
+    return False

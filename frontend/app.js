@@ -56,6 +56,23 @@ createApp({
 
     const analysisData = computed(() => result.value?.analysis || result.value?.result || {});
 
+    const decisionReport = computed(() => {
+      const report = result.value?.decision_report;
+      if (!report || typeof report !== "object" || Array.isArray(report)) return null;
+      const normalized = {
+        summary: typeof report.summary === "string" ? report.summary : "",
+        keyPoints: Array.isArray(report.key_points) ? report.key_points : [],
+        risks: Array.isArray(report.risks) ? report.risks : [],
+        recommendations: Array.isArray(report.recommendations) ? report.recommendations : [],
+        businessValue: typeof report.business_value === "string" ? report.business_value : "",
+      };
+      if (!normalized.summary && !normalized.keyPoints.length && !normalized.risks.length
+        && !normalized.recommendations.length && !normalized.businessValue) {
+        return null;
+      }
+      return normalized;
+    });
+
     const analysisEntries = computed(() => Object.entries(analysisData.value)
       .filter(([key]) => key !== "title")
       .map(([key, value]) => ({ key, label: formatResultKey(key), value })));
@@ -228,6 +245,7 @@ createApp({
       askQuestion,
       chatMessages,
       clearCurrentDocument,
+      decisionReport,
       errorMessage,
       fileInput,
       fileSizeLabel,
@@ -363,6 +381,30 @@ createApp({
               <div v-if="agentDecision.executionPlan.length" class="trace-row trace-plan-row">
                 <span>执行计划</span>
                 <ol class="agent-execution-plan"><li v-for="step in agentDecision.executionPlan" :key="step"><i>✓</i>{{ step }}</li></ol>
+              </div>
+            </section>
+
+            <section v-if="decisionReport" class="decision-report" aria-label="AI决策支持报告">
+              <div class="decision-report-heading">
+                <div><p class="section-kicker">DECISION SUPPORT</p><h3>AI决策支持报告</h3></div>
+                <span>后端真实返回</span>
+              </div>
+              <div v-if="decisionReport.summary" class="decision-summary">
+                <span>决策摘要</span><p>{{ decisionReport.summary }}</p>
+              </div>
+              <div class="decision-report-grid">
+                <article v-if="decisionReport.keyPoints.length" class="decision-report-card">
+                  <h4>关键要点</h4><ul><li v-for="item in decisionReport.keyPoints" :key="item">{{ item }}</li></ul>
+                </article>
+                <article v-if="decisionReport.risks.length" class="decision-report-card risk-card">
+                  <h4>风险提示</h4><ul><li v-for="item in decisionReport.risks" :key="item">{{ item }}</li></ul>
+                </article>
+                <article v-if="decisionReport.recommendations.length" class="decision-report-card recommendation-card">
+                  <h4>建议行动</h4><ul><li v-for="item in decisionReport.recommendations" :key="item">{{ item }}</li></ul>
+                </article>
+              </div>
+              <div v-if="decisionReport.businessValue" class="business-value">
+                <span>业务决策价值</span><p>{{ decisionReport.businessValue }}</p>
               </div>
             </section>
 
