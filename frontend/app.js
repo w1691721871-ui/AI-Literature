@@ -4,11 +4,11 @@ const API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostnam
   ? "http://127.0.0.1:8000"
   : "https://ai-literature.onrender.com";
 const REQUEST_TIMEOUT_MS = 90_000;
-const DEFAULT_TASK = "请分析这份文档的核心内容、关键发现、风险与可执行建议。";
+const DEFAULT_TASK = "请说明我要完成的业务目标，并结合这份资料识别重点、风险与下一步行动。";
 const ROLE_OPTIONS = [
-  { id: "researcher", name: "研发人员", description: "聚焦技术路线、创新点、技术风险与后续研究。", scenario: "paper", task: "请总结这份技术研究资料，分析核心创新、技术路线、技术风险和后续研究建议。" },
-  { id: "product_manager", name: "产品经理", description: "聚焦用户需求、产品价值、功能机会与竞争差异。", scenario: "product_document", task: "请分析这份产品资料的用户需求、产品价值、功能机会、竞争差异和优化建议。" },
-  { id: "pre_sales_consultant", name: "售前顾问", description: "聚焦客户需求、方案匹配、实施风险与沟通建议。", scenario: "technical_document", task: "请分析客户需求与方案匹配情况，识别实施风险并给出沟通建议。" },
+  { id: "researcher", name: "AI技术专家", workspaceName: "AI技术专家工作空间", description: "分析技术路线、识别技术风险、输出技术建议。", scenario: "paper", task: "我需要评估这份技术资料的技术路线、核心优势、技术风险和优化方向。" },
+  { id: "product_manager", name: "AI产品经理", workspaceName: "AI产品经理工作空间", description: "分析产品资料、发现用户价值、输出产品机会。", scenario: "product_document", task: "我需要评估这份产品资料的用户痛点、产品机会、功能建议和优先级。" },
+  { id: "pre_sales_consultant", name: "AI售前顾问", workspaceName: "AI售前顾问工作空间", description: "分析客户方案、判断方案风险、生成沟通策略。", scenario: "technical_document", task: "我要准备一次客户技术交流，需要分析该方案优势、风险并生成沟通策略。" },
 ];
 const DEMO_CASES = [
   { name: "新能源汽车技术路线分析", role: "researcher", scenario: "paper", task: "分析新能源汽车技术路线的核心创新、技术风险和后续研究建议。" },
@@ -19,7 +19,7 @@ const FULL_DEMO_CASE = {
   name: "体验完整案例",
   role: "pre_sales_consultant",
   scenario: "technical_document",
-  task: "分析某企业技术方案的方案优势、实施风险，并给出客户沟通建议。",
+  task: "我要准备一次客户技术交流，需要分析该方案优势、风险并生成沟通策略。",
 };
 const SCENARIO_OPTIONS = [
   {
@@ -52,6 +52,7 @@ createApp({
     const loading = ref(false);
     const asking = ref(false);
     const errorMessage = ref("");
+    const showSimulation = ref(false);
 
     const selectedScenario = computed(() => (
       SCENARIO_OPTIONS.find((item) => item.id === scenario.value) || SCENARIO_OPTIONS[0]
@@ -134,6 +135,44 @@ createApp({
       const trace = result.value?.agent_trace;
       return trace && typeof trace === "object" && !Array.isArray(trace) ? trace : null;
     });
+    const agentWorkflow = computed(() => {
+      const workflow = result.value?.agent_workflow;
+      if (!workflow || typeof workflow !== "object" || Array.isArray(workflow)) return null;
+      const steps = Array.isArray(workflow.steps) ? workflow.steps.filter((item) => item && typeof item === "object") : [];
+      return steps.length || workflow.planning_summary ? { ...workflow, steps } : null;
+    });
+    const actionCenter = computed(() => {
+      const center = result.value?.action_center;
+      if (center && typeof center === "object" && !Array.isArray(center)) return {
+        nextActions: Array.isArray(center.next_actions) ? center.next_actions : [],
+        questionsToVerify: Array.isArray(center.questions_to_verify) ? center.questions_to_verify : [],
+        recommendedTasks: Array.isArray(center.recommended_tasks) ? center.recommended_tasks : [],
+      };
+      const plan = result.value?.action_plan;
+      if (!plan || typeof plan !== "object" || Array.isArray(plan)) return null;
+      return {
+        nextActions: Array.isArray(plan.immediate_actions) ? plan.immediate_actions : [],
+        questionsToVerify: Array.isArray(plan.follow_up_questions) ? plan.follow_up_questions : [],
+        recommendedTasks: Array.isArray(plan.recommended_next_steps) ? plan.recommended_next_steps : [],
+      };
+    });
+    const deliverables = computed(() => {
+      const source = result.value?.deliverables;
+      if (!source || typeof source !== "object" || Array.isArray(source)) return null;
+      const entry = Object.entries(source).find(([, value]) => value && typeof value === "object" && !Array.isArray(value));
+      if (!entry) return null;
+      const labels = {
+        customer_communication_plan: "客户沟通方案",
+        product_strategy_report: "产品策略报告",
+        technical_review_report: "技术评审报告",
+      };
+      return { title: labels[entry[0]] || "业务产物", entries: Object.entries(entry[1]) };
+    });
+    const simulationPrompts = computed(() => ({
+      researcher: ["关键技术指标如何验证？", "当前方案的实现前提是什么？", "主要技术风险如何缓解？", "下一步需要补充哪些实验或评审材料？", "与替代技术路线相比的边界是什么？"],
+      product_manager: ["目标用户最迫切的痛点是什么？", "产品机会需要哪些用户证据支持？", "功能建议的优先级依据是什么？", "竞品差异还需要补充哪些资料？", "下一轮产品评审应确认什么？"],
+      pre_sales_consultant: ["该方案如何匹配客户当前业务目标？", "实施依赖和系统集成边界是什么？", "客户最可能关注哪些风险？", "方案优势如何结合客户现状说明？", "下一次客户交流需要确认什么？"],
+    }[result.value?.user_role || role.value] || []));
 
     const analysisEntries = computed(() => Object.entries(analysisData.value)
       .filter(([key]) => key !== "title")
@@ -195,7 +234,7 @@ createApp({
 
     function applyFullDemo() {
       applyDemo(FULL_DEMO_CASE);
-      errorMessage.value = "完整案例已填充，请上传一份可提取文本的 PDF 后开始真实分析。";
+      errorMessage.value = "演示目标已填充。请上传一份可提取文本的 PDF 后开始真实分析。";
     }
 
     function onFileChange(event) {
@@ -316,12 +355,17 @@ createApp({
       question.value = "";
       chatMessages.value = [];
       errorMessage.value = "";
+      showSimulation.value = false;
       if (fileInput.value) fileInput.value.value = "";
     }
 
     return {
       agentDecision,
       agentTrace,
+      agentWorkflow,
+      actionCenter,
+      showSimulation,
+      simulationPrompts,
       analysisData,
       analysisEntries,
       analyzeDocument,
@@ -331,6 +375,7 @@ createApp({
       businessReport,
       clearCurrentDocument,
       decisionReport,
+      deliverables,
       demoCases: DEMO_CASES,
       evidenceCards,
       evidenceSources,
@@ -367,18 +412,18 @@ createApp({
         <div>
           <p class="product-mark"><span></span> AI INSIGHT AGENT</p>
           <h1>AI Insight Agent</h1>
-          <p class="hero-subtitle">企业知识洞察与决策支持助手</p>
-          <p class="product-description">让企业知识快速转化为决策能力</p>
+          <p class="hero-subtitle">企业AI员工工作空间</p>
+          <p class="product-description">让企业资料快速转化为可执行决策</p>
           <div class="hero-value-list"><span>理解复杂资料</span><span>发现关键风险</span><span>生成行动建议</span></div>
         </div>
         <div class="topbar-status"><i></i> Agent 已就绪</div>
       </header>
 
       <section class="role-use-cases" aria-label="适用岗位">
-        <div><p class="section-kicker">BUILT FOR TEAMS</p><h2>适用于</h2></div>
-        <article><b>研发工程师</b><span>快速理解技术资料</span></article>
-        <article><b>产品经理</b><span>发现产品机会</span></article>
-        <article><b>售前顾问</b><span>快速准备客户方案</span></article>
+        <div><p class="section-kicker">AI EMPLOYEES</p><h2>选择你的 AI 员工</h2></div>
+        <article><b>AI技术专家</b><span>分析技术路线，识别技术风险</span></article>
+        <article><b>AI产品经理</b><span>发现用户价值与产品机会</span></article>
+        <article><b>AI售前顾问</b><span>准备客户方案与沟通策略</span></article>
       </section>
 
       <p v-if="errorMessage" class="error-alert" role="alert">
@@ -389,11 +434,11 @@ createApp({
         <aside class="control-panel">
           <div class="panel-heading">
             <p class="section-kicker">WORKSPACE</p>
-            <h2>配置你的 Agent 任务</h2>
+            <h2>我的AI工作空间</h2>
           </div>
 
           <section class="role-section" aria-label="用户角色选择">
-            <div class="step-label"><b>Step 1</b><label>选择用户角色</label></div>
+            <div class="step-label"><b>Step 1</b><label>选择 AI 员工</label></div>
             <div class="role-options">
               <button v-for="item in roleOptions" :key="item.id" type="button" class="role-option" :class="{ active: role === item.id }" @click="selectRole(item)">
                 <strong>{{ item.name }}</strong><small>{{ item.description }}</small>
@@ -419,17 +464,17 @@ createApp({
 
           <div class="task-section">
             <div class="label-row">
-              <span class="step-label"><b>Step 3</b><label for="task">输入用户目标</label></span>
+              <span class="step-label"><b>Step 3</b><label for="task">请输入你的目标</label></span>
               <button class="text-button" type="button" @click="resetTask">恢复默认</button>
             </div>
-            <textarea id="task" v-model="task" rows="6"></textarea>
-            <p class="field-hint">当前角色：{{ selectedRole.name }}。Agent 会据此调整分析重点和业务报告。</p>
+            <textarea id="task" v-model="task" rows="6" placeholder="例如：我要准备一次客户技术交流，需要分析该方案优势和风险"></textarea>
+            <p class="field-hint">当前 AI 员工：{{ selectedRole.name }}。Agent 会据此规划分析重点和业务产物。</p>
           </div>
 
           <section class="demo-section" aria-label="预置演示案例">
             <div class="label-row"><label>Demo 展示模式</label><button class="full-demo-button" type="button" @click="applyFullDemo">3分钟体验Demo</button></div>
             <div class="demo-case-list"><button v-for="item in demoCases" :key="item.name" type="button" @click="applyDemo(item)">{{ item.name }}</button></div>
-            <ol class="demo-flow"><li><b>01</b>理解客户需求</li><li><b>02</b>分析技术方案</li><li><b>03</b>识别风险</li><li><b>04</b>生成沟通策略</li></ol>
+            <ol class="demo-flow"><li><b>01</b>理解客户需求</li><li><b>02</b>分析技术方案</li><li><b>03</b>判断风险</li><li><b>04</b>生成沟通方案</li><li><b>05</b>输出行动建议</li></ol>
           </section>
 
           <label class="upload-box" :class="{ 'has-file': selectedFile }" for="pdf-file">
@@ -482,6 +527,11 @@ createApp({
           </div>
 
           <div v-else class="analysis-content">
+            <section class="workspace-summary" aria-label="我的AI工作空间">
+              <div><p class="section-kicker">MY AI WORKSPACE</p><h3>{{ selectedRole.workspaceName || selectedRole.name + '工作空间' }}</h3></div>
+              <div class="workspace-summary-grid"><article><span>当前任务</span><p>{{ result.user_goal || result.user_task || result.task || task }}</p></article><article><span>当前资料</span><p>{{ selectedFile?.name || '已上传文档' }}</p></article><article><span>Agent状态</span><p>已完成规划、文档分析与业务结果整理</p></article></div>
+            </section>
+
             <section v-if="agentTrace" class="agent-trace-summary" aria-label="AI如何完成这次分析">
               <div class="agent-decision-heading"><div><p class="section-kicker">EXECUTION SUMMARY</p><h3>AI如何完成这次分析</h3></div><span class="agent-trace-status">执行摘要</span></div>
               <div class="trace-row"><span>用户目标</span><p>{{ agentTrace.user_goal }}</p></div>
@@ -490,6 +540,15 @@ createApp({
               <div v-if="agentTrace.selected_tools?.length" class="trace-row"><span>已用能力</span><div class="task-chip-list"><b v-for="item in agentTrace.selected_tools" :key="item">{{ item }}</b></div></div>
               <div v-if="agentTrace.execution_steps?.length" class="trace-row trace-plan-row"><span>执行步骤</span><ol class="agent-execution-plan"><li v-for="step in agentTrace.execution_steps" :key="step"><i>✓</i>{{ step }}</li></ol></div>
               <p class="trace-boundary">此处展示的是后端真实执行流程摘要，不展示模型内部思维过程。</p>
+            </section>
+
+            <section v-if="agentWorkflow" class="agent-workflow" aria-label="AI员工执行过程">
+              <div class="agent-decision-heading"><div><p class="section-kicker">WORKFLOW PLAN</p><h3>AI员工执行过程</h3></div><span class="agent-trace-status">真实执行摘要</span></div>
+              <div class="trace-row"><span>用户目标</span><p>{{ agentWorkflow.user_goal }}</p></div>
+              <div class="trace-row"><span>当前角色</span><p>{{ agentWorkflow.user_role }}</p></div>
+              <div v-if="agentWorkflow.planning_summary" class="trace-row"><span>规划说明</span><p>{{ agentWorkflow.planning_summary }}</p></div>
+              <ol v-if="agentWorkflow.steps.length" class="workflow-step-list"><li v-for="(step, index) in agentWorkflow.steps" :key="step.name"><b>{{ String(index + 1).padStart(2, '0') }}</b><div><strong>{{ step.name }}</strong><p v-if="step.purpose">{{ step.purpose }}</p></div><span>{{ step.status === 'completed' ? '已完成' : step.status }}</span></li></ol>
+              <p class="trace-boundary">展示的是后端真实工作流摘要，不展示模型内部思维过程。</p>
             </section>
 
             <section v-if="agentDecision" class="agent-decision" aria-label="Agent执行过程">
@@ -539,6 +598,22 @@ createApp({
                 <article v-if="businessReport.recommendedActions.length"><h4>推荐行动</h4><ul><li v-for="item in businessReport.recommendedActions" :key="item">{{ item }}</li></ul></article>
               </div>
               <div v-if="businessReport.expectedValue" class="business-summary"><span>预期价值</span><p>{{ businessReport.expectedValue }}</p></div>
+            </section>
+
+            <section v-if="deliverables" class="deliverables-report" aria-label="AI业务产物">
+              <div class="business-report-heading"><div><p class="section-kicker">BUSINESS DELIVERABLE</p><h3>{{ deliverables.title }}</h3></div><span>由本次分析整理</span></div>
+              <div class="deliverable-grid"><article v-for="entry in deliverables.entries" :key="entry[0]"><h4>{{ entry[0] }}</h4><template v-if="Array.isArray(entry[1])"><ul><li v-for="item in entry[1]" :key="item">{{ item }}</li></ul></template><p v-else>{{ entry[1] || '文档未说明' }}</p></article></div>
+            </section>
+
+            <section v-if="actionCenter" class="action-center" aria-label="下一步行动中心">
+              <div class="business-report-heading"><div><p class="section-kicker">ACTION CENTER</p><h3>下一步建议</h3></div><span>可继续验证</span></div>
+              <div class="action-center-grid"><article><h4>立即行动</h4><ul><li v-for="item in actionCenter.nextActions" :key="item">{{ item }}</li></ul></article><article><h4>需要确认</h4><ul><li v-for="item in actionCenter.questionsToVerify" :key="item">{{ item }}</li></ul></article><article><h4>推荐任务</h4><ul><li v-for="item in actionCenter.recommendedTasks" :key="item">{{ item }}</li></ul></article></div>
+            </section>
+
+            <section class="simulation-panel" aria-label="模拟业务交流">
+              <div class="business-report-heading"><div><p class="section-kicker">BUSINESS SIMULATION</p><h3>模拟业务交流</h3></div><button type="button" class="outline-button" @click="showSimulation = !showSimulation">{{ showSimulation ? '收起问题' : '查看问题 TOP 5' }}</button></div>
+              <p>基于当前 AI 员工角色整理业务交流时可用于人工准备的问题，不代表已获取客户或市场事实。</p>
+              <ol v-if="showSimulation" class="simulation-list"><li v-for="item in simulationPrompts" :key="item">{{ item }}</li></ol>
             </section>
 
             <section v-if="decisionReport" class="decision-report" aria-label="AI决策支持报告">

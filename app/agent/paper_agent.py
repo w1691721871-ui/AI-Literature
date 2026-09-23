@@ -266,6 +266,13 @@ class PaperAnalysisAgent:
         evidence_cards = self._build_evidence_cards(
             scenario_config.identifier, analysis
         )
+        agent_workflow = self._build_agent_workflow(plan, role_config)
+        action_center = self._build_action_center(
+            role_config, business_report, decision_report, quality_check
+        )
+        deliverables = self._build_deliverables(
+            role_config, analysis, business_report, decision_report, action_center
+        )
 
         return {
             "paper_id": paper_id,
@@ -282,6 +289,14 @@ class PaperAnalysisAgent:
             "execution_plan": plan.execution_plan,
             "plan": plan.execution_plan,
             "agent_trace": self._build_agent_trace(plan, role_config),
+            "agent_workflow": agent_workflow,
+            "action_plan": {
+                "immediate_actions": action_center["next_actions"],
+                "follow_up_questions": action_center["questions_to_verify"],
+                "recommended_next_steps": action_center["recommended_tasks"],
+            },
+            "action_center": action_center,
+            "deliverables": deliverables,
             "analysis": analysis,
             "result": analysis,
             "decision_report": decision_report,
@@ -298,7 +313,8 @@ class PaperAnalysisAgent:
             ),
             "quality_check": quality_check,
             "summary": {
-                field: analysis[field] for field in scenario_config.summary_fields
+                field: analysis.get(field, "文档未说明")
+                for field in scenario_config.summary_fields
             },
         }
 
@@ -323,6 +339,126 @@ class PaperAnalysisAgent:
                 "规则质量检查",
             ],
             "execution_steps": plan.execution_plan,
+        }
+
+    @staticmethod
+    def _build_agent_workflow(
+        plan: AgentPlan, role_config: RoleConfig
+    ) -> dict[str, object]:
+        """Return a user-facing workflow summary, never hidden model reasoning."""
+        return {
+            "user_goal": plan.user_task,
+            "user_role": plan.role_name,
+            "planning_summary": (
+                f"{role_config.name}已选择“{role_config.business_task_name}”工作模式，"
+                "将基于上传文档生成可复核的业务辅助信息。"
+            ),
+            "steps": [
+                {"name": name, "status": "completed", "purpose": purpose}
+                for name, purpose in role_config.workflow_steps
+            ],
+            # Keep the earlier field shape available for clients already using it.
+            "workflow_steps": [
+                {"step": index, "action": name, "purpose": purpose}
+                for index, (name, purpose) in enumerate(role_config.workflow_steps, start=1)
+            ],
+        }
+
+    @staticmethod
+    def _as_list(value: object) -> list[str]:
+        """Normalize model values into safe, display-ready strings."""
+        if isinstance(value, list):
+            return [item.strip() for item in value if isinstance(item, str) and item.strip()]
+        if isinstance(value, str) and value.strip() and value.strip() not in {"文档未说明", "论文未说明"}:
+            return [value.strip()]
+        return []
+
+    @classmethod
+    def _first_available(cls, *values: object) -> str:
+        """Choose documented information only; make missing evidence explicit."""
+        for value in values:
+            items = cls._as_list(value)
+            if items:
+                return "；".join(items[:3])
+        return "文档未说明"
+
+    @classmethod
+    def _build_action_center(
+        cls,
+        role_config: RoleConfig,
+        business_report: dict[str, object],
+        decision_report: dict[str, object],
+        quality_check: dict[str, object],
+    ) -> dict[str, list[str]]:
+        """Build role-specific next actions from actual report output and known gaps."""
+        immediate_actions = cls._as_list(business_report.get("recommended_actions"))
+        if not immediate_actions:
+            immediate_actions = cls._as_list(decision_report.get("recommendations"))
+        if not immediate_actions:
+            immediate_actions = ["整理本次文档中的已确认信息，并安排人工复核。"]
+
+        questions = {
+            "researcher": ["关键技术指标和验证数据是否完整？", "哪些实现前提仍需通过实验或评审确认？"],
+            "product_manager": ["目标用户的真实反馈和使用场景是否已验证？", "是否具备可比较的竞品或市场数据？"],
+            "pre_sales_consultant": ["客户当前系统环境、集成边界和优先级是什么？", "客户最需要确认的业务收益和实施条件是什么？"],
+        }[role_config.identifier]
+        missing = quality_check.get("missing_information", [])
+        if isinstance(missing, list):
+            questions.extend(
+                f"文档中未充分说明“{item}”，是否可以补充？"
+                for item in missing[:2]
+                if isinstance(item, str)
+            )
+
+        next_steps = {
+            "researcher": ["形成技术评审清单", "补充验证计划或实验设计"],
+            "product_manager": ["整理产品机会假设", "安排用户或竞品验证"],
+            "pre_sales_consultant": ["准备客户技术交流材料", "组织需求与实施边界确认"],
+        }[role_config.identifier]
+        return {
+            "next_actions": immediate_actions[:4],
+            "questions_to_verify": questions[:4],
+            "recommended_tasks": next_steps,
+        }
+
+    @classmethod
+    def _build_deliverables(
+        cls,
+        role_config: RoleConfig,
+        analysis: dict[str, object],
+        business_report: dict[str, object],
+        decision_report: dict[str, object],
+        action_center: dict[str, list[str]],
+    ) -> dict[str, dict[str, object]]:
+        """Generate role-specific, evidence-bounded business artifacts without another LLM call."""
+        risks = cls._as_list(analysis.get("risks")) or cls._as_list(decision_report.get("risks"))
+        recommendations = action_center["next_actions"]
+        if role_config.identifier == "pre_sales_consultant":
+            return {
+                "customer_communication_plan": {
+                    "客户关注点": cls._as_list(business_report.get("important_findings")) or ["需结合客户实际需求进一步确认。"],
+                    "方案优势": cls._first_available(analysis.get("technical_solution"), analysis.get("core_modules")),
+                    "可能问题": risks or ["文档未提供明确风险，建议在交流中核实实施前提。"],
+                    "推荐回答": cls._as_list(business_report.get("recommended_actions")) or ["基于文档信息说明方案边界，并确认客户现场条件。"],
+                    "下一步沟通动作": action_center["recommended_tasks"],
+                }
+            }
+        if role_config.identifier == "product_manager":
+            return {
+                "product_strategy_report": {
+                    "用户痛点": cls._as_list(analysis.get("user_value")) or ["文档未说明，需要补充用户研究。"],
+                    "产品机会": cls._as_list(business_report.get("business_opportunities")) or ["需结合用户反馈与竞品资料进一步验证。"],
+                    "功能建议": cls._as_list(analysis.get("feature_highlights")) or recommendations,
+                    "优先级": recommendations,
+                }
+            }
+        return {
+            "technical_review_report": {
+                "技术路线": cls._first_available(analysis.get("methodology"), analysis.get("technical_solution")),
+                "技术优势": cls._as_list(analysis.get("innovation_points")) or cls._as_list(analysis.get("key_findings")) or ["文档未说明"],
+                "风险": risks or ["文档未说明，需要进一步技术验证。"],
+                "优化方向": recommendations,
+            }
         }
 
     @classmethod

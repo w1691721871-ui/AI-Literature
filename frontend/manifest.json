@@ -1,0 +1,9 @@
+{
+  "name": "AI Insight Agent",
+  "short_name": "AI Insight",
+  "description": "企业 AI 员工工作空间原型",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#f4f7f5",
+  "theme_color": "#153c34"
+}

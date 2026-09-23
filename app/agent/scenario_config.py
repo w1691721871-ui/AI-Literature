@@ -39,6 +39,8 @@ class RoleConfig:
     name: str
     description: str
     prompt_context: str
+    business_task_name: str
+    workflow_steps: tuple[tuple[str, str], ...]
 
 
 TECHNICAL_DOCUMENT_CONFIG = ScenarioConfig(
@@ -188,6 +190,13 @@ ROLE_CONFIGS = {
             "The user is an R&D engineer. Prioritize technical novelty, technical "
             "route, feasibility risks, and follow-up research or implementation suggestions."
         ),
+        business_task_name="技术方案评估",
+        workflow_steps=(
+            ("理解技术评估目标", "明确技术路线、能力边界和验证重点。"),
+            ("分析文档内容", "提取技术方案、核心能力和实现约束。"),
+            ("识别技术风险", "定位实现难点、风险与待验证事项。"),
+            ("生成技术建议", "形成可供技术评审使用的后续建议。"),
+        ),
     ),
     "product_manager": RoleConfig(
         identifier="product_manager",
@@ -197,6 +206,13 @@ ROLE_CONFIGS = {
             "The user is a product manager. Prioritize user needs, product and "
             "business value, feature opportunities, and competitive differentiation."
         ),
+        business_task_name="产品机会分析",
+        workflow_steps=(
+            ("理解产品目标", "明确目标用户、业务问题和分析边界。"),
+            ("分析文档内容", "提取产品定位、用户价值和功能信息。"),
+            ("发现产品机会", "识别待验证的产品机会与潜在风险。"),
+            ("生成产品建议", "形成可供产品评审使用的行动建议。"),
+        ),
     ),
     "pre_sales_consultant": RoleConfig(
         identifier="pre_sales_consultant",
@@ -205,6 +221,13 @@ ROLE_CONFIGS = {
         prompt_context=(
             "The user is a pre-sales consultant. Prioritize customer needs, solution "
             "fit, implementation risks, and practical communication recommendations."
+        ),
+        business_task_name="客户方案评估",
+        workflow_steps=(
+            ("理解客户需求", "明确客户交流目标与关注重点。"),
+            ("分析技术方案", "梳理方案能力、匹配边界和依赖条件。"),
+            ("识别实施风险", "定位实施约束、风险和待确认信息。"),
+            ("生成沟通建议", "形成客户交流准备与后续行动建议。"),
         ),
     ),
 }

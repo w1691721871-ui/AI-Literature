@@ -24,7 +24,7 @@ from app.services.pdf_service import (
 )
 
 
-app = FastAPI(title="AI Research Paper Analysis Agent")
+app = FastAPI(title="AI Insight Agent · Enterprise AI Employee Workspace")
 paper_agent = PaperAnalysisAgent()
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
