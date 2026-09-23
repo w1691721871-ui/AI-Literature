@@ -48,6 +48,14 @@ h2 { margin: 0; font-size: 20px; letter-spacing: -.02em; }
 .upload-status strong.active { color: #238468; }
 
 .task-section { border-top: 1px solid #e8efeb; padding-top: 21px; }
+.scenario-section { padding-bottom: 21px; border-bottom: 1px solid #e8efeb; }
+.scenario-section .label-row > span { color: #718981; font-size: 11px; font-weight: 700; }
+.scenario-options { display: grid; gap: 8px; }
+.scenario-option { display: grid; gap: 3px; width: 100%; padding: 11px 12px; border: 1px solid #d8e6e0; border-radius: 10px; color: #57736a; background: #fbfdfc; text-align: left; transition: border-color .15s, background .15s, box-shadow .15s; }
+.scenario-option:hover { border-color: #94c9b7; background: #f5fbf8; }
+.scenario-option.active { border-color: #3b9e80; background: #eff9f4; box-shadow: 0 0 0 2px #def2e9; }
+.scenario-option strong { color: #315e50; font-size: 13px; }.scenario-option small { color: #789087; font-size: 11px; line-height: 1.45; }
+.scenario-option.active strong { color: #167458; }
 .label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
 .label-row label { color: #34574c; font-size: 14px; font-weight: 700; }
 .text-button { border: 0; padding: 0; color: #208267; background: transparent; font-size: 12px; }
@@ -98,6 +106,7 @@ textarea:focus, .chat-composer input:focus { border-color: #329b7c; box-shadow: 
 .analysis-card p, .finding-list { margin: 0; color: #587169; font-size: 13px; line-height: 1.7; white-space: pre-wrap; }
 .finding-list { padding-left: 18px; }
 .finding-list li + li { margin-top: 5px; }
+.report-empty { margin: 0; padding: 15px; border-radius: 10px; color: #718981; background: #f6faf8; font-size: 13px; text-align: center; }
 .keyword-card { grid-column: span 2; min-height: auto; }
 .keyword-list { display: flex; flex-wrap: wrap; gap: 7px; }
 .keyword-list span { padding: 5px 8px; border-radius: 6px; color: #2d7560; background: #e9f6ef; font-size: 12px; }

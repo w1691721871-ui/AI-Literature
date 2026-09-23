@@ -5,12 +5,11 @@ from enum import Enum
 from uuid import uuid4
 
 from app.services.llm_service import (
-    PAPER_ANALYSIS_FIELDS,
-    PAPER_ANALYSIS_LIST_FIELDS,
     analyze_paper_with_template,
     answer_question_about_paper,
 )
 from app.services.pdf_service import extract_pdf_text
+from app.agent.scenario_config import ScenarioConfig, ScenarioTask, get_scenario_config
 
 
 MAX_STORED_PAPER_CHARS = 120_000
@@ -116,6 +115,9 @@ class AgentPlan:
     """A simple explanation of how the agent will handle a user task."""
 
     user_task: str
+    scenario: str
+    document_type: str
+    user_intent: str
     task_type: str
     detected_tasks: list[str]
     decision_reason: str
@@ -138,54 +140,69 @@ class PaperAnalysisAgent:
         self._papers: dict[str, str] = {}
         self._conversations: dict[str, list[ConversationTurn]] = {}
 
-    def understand_task(self, task: str) -> tuple[AgentPlan, tuple[TaskTemplate, ...]]:
-        """Recognize one or more task types and select their prompt templates."""
+    def understand_task(
+        self, task: str, scenario: str = "paper"
+    ) -> tuple[AgentPlan, tuple[TaskTemplate | ScenarioTask, ...], ScenarioConfig]:
+        """Recognize tasks and choose templates for one supported document scenario."""
         normalized_task = task.strip()
         if not normalized_task:
             raise ValueError("请输入分析任务。")
-        if not self._looks_like_analysis_task(normalized_task):
+        scenario_config = get_scenario_config(scenario)
+        if not self._looks_like_analysis_task(normalized_task, scenario_config):
             raise TaskNotRecognizedError(
-                "暂时无法识别该分析任务，请说明你希望了解论文的哪些内容。"
+                "暂时无法识别该分析任务，请说明你希望了解文档的哪些内容。"
             )
 
-        templates = self._select_templates(normalized_task)
+        if scenario_config.identifier == "paper":
+            templates = self._select_templates(normalized_task)
+        else:
+            templates = self._select_scenario_templates(normalized_task, scenario_config)
         detected_tasks = [template.agent_task for template in templates]
-        task_names = "、".join(template.task_type.value for template in templates)
+        task_names = "、".join(self._template_display_name(template) for template in templates)
         if len(templates) > 1:
             decision_reason = (
-                f"用户需求包含{task_names}，因此 Agent 选择多个分析任务组合执行。"
+                f"用户需求包含{task_names}，因此 Agent 在{scenario_config.name}场景选择多个分析任务组合执行。"
             )
             task_type = f"组合分析（{task_names}）"
-        elif templates[0] is OVERALL_TEMPLATE:
-            decision_reason = "用户未指定单一分析重点，因此 Agent 选择论文整体分析。"
-            task_type = templates[0].task_type.value
+        elif templates[0] is OVERALL_TEMPLATE or templates[0] is scenario_config.overall_task:
+            decision_reason = (
+                f"用户未指定单一分析重点，因此 Agent 选择{scenario_config.name}整体分析。"
+            )
+            task_type = self._template_display_name(templates[0])
         else:
             decision_reason = (
                 f"用户需求聚焦{task_names}，因此 Agent 选择对应的分析模板。"
             )
-            task_type = templates[0].task_type.value
+            task_type = self._template_display_name(templates[0])
 
+        document_label = "论文" if scenario_config.identifier == "paper" else "文档"
         execution_plan = [
             f"识别用户任务并选择：{task_names}",
             "解析 PDF 文本",
-            "保存当前论文文本以支持后续追问",
+            f"保存当前{document_label}文本以支持后续追问",
             f"使用{task_names}提示词调用大模型生成结构化结果",
             "校验并整理结构化结果",
         ]
         return (
             AgentPlan(
                 user_task=normalized_task,
+                scenario=scenario_config.identifier,
+                document_type=scenario_config.document_type,
+                user_intent=normalized_task,
                 task_type=task_type,
                 detected_tasks=detected_tasks,
                 decision_reason=decision_reason,
                 execution_plan=execution_plan,
             ),
             templates,
+            scenario_config,
         )
 
-    def analyze_pdf(self, file_content: bytes, task: str) -> dict[str, object]:
-        """Run the full agent workflow for one uploaded PDF."""
-        plan, templates = self.understand_task(task)
+    def analyze_pdf(
+        self, file_content: bytes, task: str, scenario: str = "paper"
+    ) -> dict[str, object]:
+        """Run the full agent workflow for one uploaded PDF and scenario."""
+        plan, templates, scenario_config = self.understand_task(task, scenario)
         paper_text = extract_pdf_text(file_content)
         if len(paper_text) > MAX_STORED_PAPER_CHARS:
             raise PaperTextTooLongError(
@@ -195,19 +212,29 @@ class PaperAnalysisAgent:
         paper_id = str(uuid4())
         self._papers[paper_id] = paper_text
         self._conversations[paper_id] = []
-        task_instruction = "\n".join(template.instruction for template in templates)
+        task_instruction = "\n".join(
+            instruction
+            for instruction in (
+                scenario_config.prompt_context,
+                *(template.instruction for template in templates),
+            )
+            if instruction
+        )
         analysis = analyze_paper_with_template(
             paper_text=paper_text,
             task=plan.user_task,
             task_instruction=task_instruction,
-            result_fields=PAPER_ANALYSIS_FIELDS,
-            list_fields=PAPER_ANALYSIS_LIST_FIELDS,
+            result_fields=scenario_config.output_fields,
+            list_fields=scenario_config.list_fields,
             require_all_fields=True,
         )
 
         return {
             "paper_id": paper_id,
             "task": plan.user_task,
+            "scenario": plan.scenario,
+            "document_type": plan.document_type,
+            "user_intent": plan.user_intent,
             "task_type": plan.task_type,
             "user_task": plan.user_task,
             "detected_tasks": plan.detected_tasks,
@@ -217,9 +244,7 @@ class PaperAnalysisAgent:
             "analysis": analysis,
             "result": analysis,
             "summary": {
-                "title": analysis["title"],
-                "research_topic": analysis["research_topic"],
-                "key_findings": analysis["key_findings"],
+                field: analysis[field] for field in scenario_config.summary_fields
             },
         }
 
@@ -289,10 +314,43 @@ class PaperAnalysisAgent:
         return PaperAnalysisAgent._select_templates(task)[0]
 
     @staticmethod
-    def _looks_like_analysis_task(task: str) -> bool:
-        """Accept ordinary Chinese paper-analysis requests and reject meaningless input."""
+    def _select_scenario_templates(
+        task: str, scenario_config: ScenarioConfig
+    ) -> tuple[ScenarioTask, ...]:
+        """Choose non-paper scenario tasks in user mention order, or use the overall task."""
+        matched_tasks: list[tuple[int, ScenarioTask]] = []
+        for scenario_task in scenario_config.supported_tasks:
+            positions = [
+                task.find(keyword)
+                for keyword in scenario_task.keywords
+                if keyword in task
+            ]
+            if positions:
+                matched_tasks.append((min(positions), scenario_task))
+        if not matched_tasks:
+            return (scenario_config.overall_task,)
+        return tuple(
+            task_template
+            for _, task_template in sorted(matched_tasks, key=lambda item: item[0])
+        )
+
+    @staticmethod
+    def _template_display_name(template: TaskTemplate | ScenarioTask) -> str:
+        """Return a display name for either the existing or scenario-specific template."""
+        if isinstance(template, TaskTemplate):
+            return template.task_type.value
+        return template.display_name
+
+    @staticmethod
+    def _looks_like_analysis_task(task: str, scenario_config: ScenarioConfig) -> bool:
+        """Accept ordinary document-analysis tasks for the chosen scenario."""
         task_markers = (
             "论文", "分析", "摘要", "研究", "方法", "创新", "结论", "局限",
-            "总结", "概括", "问题", "结果", "说明", "告诉", "请", "什么",
+            "总结", "概括", "问题", "结果", "说明", "告诉", "请", "什么", "文档",
         )
-        return any(marker in task for marker in task_markers)
+        scenario_keywords = (
+            keyword
+            for scenario_task in scenario_config.supported_tasks
+            for keyword in scenario_task.keywords
+        )
+        return any(marker in task for marker in (*task_markers, *scenario_keywords))
