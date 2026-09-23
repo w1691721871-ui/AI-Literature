@@ -27,10 +27,14 @@ from app.services.pdf_service import (
 app = FastAPI(title="AI Research Paper Analysis Agent")
 paper_agent = PaperAnalysisAgent()
 
-# Allow the local Vue development page to call this API during development.
+# Allow the local Vue page and the deployed Render frontend to call this API.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173", "http://127.0.0.1:5173"],
+    allow_origins=[
+        "http://localhost:5173",
+        "http://127.0.0.1:5173",
+        "https://ai-literature-13.onrender.com",
+    ],
     allow_methods=["*"],
     allow_headers=["*"],
 )
