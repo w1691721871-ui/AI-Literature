@@ -81,6 +81,12 @@ textarea:focus, .chat-composer input:focus { border-color: #329b7c; box-shadow: 
 .progress-note { width: min(360px, 100%); margin-top: 17px; color: #96a69f; font-size: 11px; line-height: 1.55; text-align: left; }
 
 .analysis-content { padding-top: 20px; }
+.agent-decision { margin-bottom: 20px; padding: 17px; border: 1px solid #cfe5dc; border-radius: 13px; background: linear-gradient(135deg, #f4fbf7, #fbfdfc); }
+.agent-decision-heading { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; padding-bottom: 13px; border-bottom: 1px solid #dcebe4; }.agent-decision-heading .section-kicker { margin-bottom: 5px; }.agent-decision-heading h3 { margin: 0; color: #27584a; font-size: 15px; }
+.agent-trace-status { padding: 5px 8px; border-radius: 999px; color: #28765f; background: #dff2e9; font-size: 11px; white-space: nowrap; }
+.trace-row { display: grid; grid-template-columns: 92px minmax(0, 1fr); gap: 12px; padding-top: 13px; color: #5d756c; font-size: 13px; line-height: 1.65; }.trace-row > span { color: #56766a; font-size: 12px; font-weight: 800; }.trace-row p { margin: 0; white-space: pre-wrap; }
+.task-chip-list { display: flex; flex-wrap: wrap; gap: 7px; }.task-chip-list b { padding: 4px 8px; border-radius: 6px; color: #276d58; background: #e0f3ea; font-size: 12px; font-weight: 700; }
+.agent-execution-plan { display: grid; gap: 7px; margin: 0; padding: 0; list-style: none; }.agent-execution-plan li { display: flex; align-items: flex-start; gap: 8px; }.agent-execution-plan i { display: grid; flex: 0 0 auto; place-items: center; width: 17px; height: 17px; margin-top: 2px; border-radius: 50%; color: #fff; background: #4aa98c; font-size: 10px; font-style: normal; font-weight: 800; }
 .completed-process { display: flex; align-items: center; gap: 8px; margin-bottom: 18px; padding: 9px 11px; border: 1px solid #dceee5; border-radius: 9px; color: #3c7965; background: #f4fbf7; font-size: 12px; }.completed-process span { display: grid; place-items: center; width: 17px; height: 17px; border-radius: 50%; color: #fff; background: #40a887; font-size: 10px; font-weight: 800; }
 .paper-title-row { display: flex; align-items: flex-start; justify-content: space-between; gap: 15px; margin-bottom: 19px; }
 .result-label { display: block; margin-bottom: 5px; color: #82968e; font-size: 11px; font-weight: 700; letter-spacing: .08em; }
@@ -130,6 +136,7 @@ textarea:focus, .chat-composer input:focus { border-color: #329b7c; box-shadow: 
   .analysis-grid { grid-template-columns: 1fr; }
   .keyword-card { grid-column: auto; }
   .paper-title-row, .result-header { flex-direction: column; }
+  .trace-row { grid-template-columns: 1fr; gap: 4px; }
   .outline-button { align-self: flex-start; }
   .chat-composer { flex-direction: column; }
   .chat-composer button { width: 100%; }

@@ -1,16 +1,10 @@
 const { computed, createApp, ref } = Vue;
 
-const API_BASE_URL = "https://ai-literature.onrender.com";
+const API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
+  ? "http://127.0.0.1:8000"
+  : "https://ai-literature.onrender.com";
 const REQUEST_TIMEOUT_MS = 90_000;
 const DEFAULT_TASK = "请分析这篇论文的研究主题、研究问题、研究方法、主要结果、创新点和局限性。";
-const AGENT_STAGES = [
-  "正在读取论文",
-  "正在提取论文内容",
-  "正在理解用户任务",
-  "正在分析论文",
-  "正在整理分析结果",
-  "分析完成",
-];
 
 createApp({
   setup() {
@@ -23,9 +17,6 @@ createApp({
     const loading = ref(false);
     const asking = ref(false);
     const errorMessage = ref("");
-    const agentStageIndex = ref(0);
-    const analysisCompleted = ref(false);
-    let stageTimers = [];
 
     const fileSizeLabel = computed(() => {
       if (!selectedFile.value) return "";
@@ -42,8 +33,8 @@ createApp({
     });
 
     const analysisCards = computed(() => {
-      if (!result.value?.analysis) return [];
-      const analysis = result.value.analysis;
+      const analysis = result.value?.analysis || result.value?.result;
+      if (!analysis) return [];
       return [
         { key: "research_topic", title: "研究主题", value: analysis.research_topic },
         { key: "research_question", title: "研究问题", value: analysis.research_question },
@@ -55,34 +46,28 @@ createApp({
       ];
     });
 
+    const analysisData = computed(() => result.value?.analysis || result.value?.result || {});
+
+    const agentDecision = computed(() => {
+      if (!result.value) return null;
+      const detectedTasks = Array.isArray(result.value.detected_tasks)
+        ? result.value.detected_tasks
+        : [];
+      const executionPlan = Array.isArray(result.value.execution_plan)
+        ? result.value.execution_plan
+        : [];
+      const userTask = result.value.user_task || result.value.task || "";
+      const decisionReason = result.value.decision_reason || "";
+
+      if (!userTask && !detectedTasks.length && !decisionReason && !executionPlan.length) {
+        return null;
+      }
+      return { userTask, detectedTasks, decisionReason, executionPlan };
+    });
+
     function onFileChange(event) {
       selectedFile.value = event.target.files[0] || null;
       errorMessage.value = "";
-    }
-
-    function clearStageTimers() {
-      stageTimers.forEach((timer) => window.clearTimeout(timer));
-      stageTimers = [];
-    }
-
-    function startAgentProgress() {
-      clearStageTimers();
-      agentStageIndex.value = 0;
-      analysisCompleted.value = false;
-
-      // The backend has no streaming stage events. These are paced UI hints while
-      // one analysis request is in progress, not a claim of real-time server state.
-      [400, 900, 1500, 2300].forEach((delay, index) => {
-        stageTimers.push(window.setTimeout(() => {
-          agentStageIndex.value = index + 1;
-        }, delay));
-      });
-    }
-
-    function finishAgentProgress() {
-      clearStageTimers();
-      agentStageIndex.value = AGENT_STAGES.length - 1;
-      analysisCompleted.value = true;
     }
 
     async function readResponse(response) {
@@ -137,7 +122,6 @@ createApp({
       errorMessage.value = "";
       result.value = null;
       chatMessages.value = [];
-      startAgentProgress();
 
       try {
         const formData = new FormData();
@@ -148,13 +132,11 @@ createApp({
           body: formData,
         });
         result.value = await readResponse(response);
-        finishAgentProgress();
         chatMessages.value.push({
           role: "assistant",
           content: "论文分析已完成。你可以继续针对研究方法、实验设计或结论提问。",
         });
       } catch (error) {
-        clearStageTimers();
         errorMessage.value = error.message || "分析请求失败，请稍后重试。";
       } finally {
         loading.value = false;
@@ -199,18 +181,14 @@ createApp({
       question.value = "";
       chatMessages.value = [];
       errorMessage.value = "";
-      clearStageTimers();
-      agentStageIndex.value = 0;
-      analysisCompleted.value = false;
       if (fileInput.value) fileInput.value.value = "";
     }
 
     return {
       analysisCards,
-      agentStageIndex,
-      agentStages: AGENT_STAGES,
+      agentDecision,
       asking,
-      analysisCompleted,
+      analysisData,
       chatMessages,
       clearCurrentPaper,
       errorMessage,
@@ -298,14 +276,8 @@ createApp({
           <div v-if="loading" class="loading-state">
             <div class="process-heading">
               <span class="spinner"></span>
-              <div><h3>{{ agentStages[agentStageIndex] }}</h3><p>请求正在处理中，请稍候…</p></div>
+              <div><h3>正在请求 Agent 分析论文</h3><p>后端处理完成后，将展示实际返回的决策过程。</p></div>
             </div>
-            <ol class="agent-progress" aria-label="Agent 处理阶段">
-              <li v-for="(stage, index) in agentStages.slice(0, 5)" :key="stage" :class="{ active: index === agentStageIndex, done: index < agentStageIndex }">
-                <span>{{ index < agentStageIndex ? "✓" : index + 1 }}</span>{{ stage }}
-              </li>
-            </ol>
-            <small class="progress-note">阶段为请求生命周期指引，服务端未提供实时流式状态。</small>
           </div>
 
           <div v-else-if="!result" class="empty-state">
@@ -315,11 +287,37 @@ createApp({
           </div>
 
           <div v-else class="analysis-content">
-            <div v-if="analysisCompleted" class="completed-process"><span>✓</span> Agent 已完成论文读取、任务理解、分析与结果整理</div>
+            <section v-if="agentDecision" class="agent-decision" aria-label="Agent执行过程">
+              <div class="agent-decision-heading">
+                <div>
+                  <p class="section-kicker">AGENT TRACE</p>
+                  <h3>Agent执行过程</h3>
+                </div>
+                <span class="agent-trace-status">后端真实返回</span>
+              </div>
+
+              <div v-if="agentDecision.userTask" class="trace-row">
+                <span>用户任务</span><p>{{ agentDecision.userTask }}</p>
+              </div>
+              <div v-if="agentDecision.detectedTasks.length" class="trace-row">
+                <span>任务识别结果</span>
+                <div class="task-chip-list"><b v-for="item in agentDecision.detectedTasks" :key="item">{{ item }}</b></div>
+              </div>
+              <div v-if="agentDecision.decisionReason" class="trace-row">
+                <span>决策原因</span><p>{{ agentDecision.decisionReason }}</p>
+              </div>
+              <div v-if="agentDecision.executionPlan.length" class="trace-row trace-plan-row">
+                <span>执行计划</span>
+                <ol class="agent-execution-plan">
+                  <li v-for="step in agentDecision.executionPlan" :key="step"><i>✓</i>{{ step }}</li>
+                </ol>
+              </div>
+            </section>
+
             <div class="paper-title-row">
               <div>
                 <span class="result-label">论文标题</span>
-                <h3>{{ result.analysis.title || "论文未说明" }}</h3>
+                <h3>{{ analysisData.title || "论文未说明" }}</h3>
               </div>
               <span class="status-pill">{{ result.task_type || "论文整体分析" }}</span>
             </div>
