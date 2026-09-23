@@ -457,21 +457,30 @@ createApp({
   template: `
     <main class="app-shell">
       <header class="topbar">
-        <div>
+        <div class="hero-copy">
           <p class="product-mark"><span></span> AI INSIGHT AGENT</p>
           <h1>AI Insight Agent</h1>
-          <p class="hero-subtitle">企业AI员工工作空间</p>
-          <p class="product-description">让企业资料快速转化为可执行决策</p>
+          <p class="hero-subtitle">企业知识洞察与业务决策智能体</p>
+          <p class="product-description">让企业资料快速转化为可执行决策，让每个岗位拥有专属 AI 员工。</p>
           <div class="hero-value-list"><span>理解复杂资料</span><span>发现关键风险</span><span>生成行动建议</span></div>
+          <button class="hero-demo-cta" type="button" @click="applyFullDemo"><span>✦</span> 3分钟体验 AI 员工 <b>→</b></button>
+        </div>
+        <div class="hero-visual" aria-label="AI员工业务交付流程">
+          <span class="hero-orbit orbit-one"></span><span class="hero-orbit orbit-two"></span>
+          <div class="hero-core"><i>AI</i><b>企业 AI 员工</b><small>Business Copilot</small></div>
+          <div class="hero-signal signal-one">任务理解</div><div class="hero-signal signal-two">决策交付</div>
         </div>
         <div class="topbar-status"><i></i> Agent 已就绪</div>
       </header>
 
       <section class="role-use-cases" aria-label="适用岗位">
         <div><p class="section-kicker">AI EMPLOYEES</p><h2>选择你的 AI 员工</h2></div>
-        <article><b>AI技术专家</b><span>分析技术路线，识别技术风险</span></article>
-        <article><b>AI产品经理</b><span>发现用户价值与产品机会</span></article>
-        <article><b>AI售前顾问</b><span>准备客户方案与沟通策略</span></article>
+        <article v-for="item in roleOptions" :key="item.id"><b>{{ item.name }}</b><span>{{ item.description }}</span><div class="role-capability-list"><em v-for="capability in item.capabilities" :key="capability">{{ capability }}</em></div></article>
+      </section>
+
+      <section class="product-flow" aria-label="AI员工工作流程">
+        <div><p class="section-kicker">AGENT DELIVERY FLOW</p><h2>从企业资料到业务行动</h2></div>
+        <ol><li><b>01</b><span>用户目标</span></li><li><b>02</b><span>AI员工理解</span></li><li><b>03</b><span>任务规划</span></li><li><b>04</b><span>文档分析</span></li><li><b>05</b><span>业务交付</span></li></ol>
       </section>
 
       <section class="quick-workspace" aria-label="AI Insight Workspace">
@@ -491,8 +500,9 @@ createApp({
           </div>
 
           <section class="employee-profile" aria-label="AI员工档案">
-            <div><p class="section-kicker">AI EMPLOYEE PROFILE</p><h3>{{ selectedRole.name }}</h3></div>
-            <p class="profile-label">能力</p><div class="profile-capabilities"><span v-for="item in selectedRole.capabilities" :key="item">{{ item }}</span></div>
+            <div class="employee-profile-heading"><div><p class="section-kicker">AI EMPLOYEE STATUS</p><h3>{{ selectedRole.name }}</h3></div><span class="employee-online"><i></i> 在线</span></div>
+            <p class="profile-label">核心能力</p><div class="profile-capabilities"><span v-for="item in selectedRole.capabilities" :key="item">{{ item }}</span></div>
+            <div class="employee-task-status"><span>当前任务状态</span><b :class="{ active: loading }">{{ loading ? '正在执行任务' : (result ? '已完成业务交付' : '等待接收任务') }}</b><small>{{ task || '请选择或输入业务目标' }}</small></div>
             <p class="profile-label">历史任务</p>
             <ul v-if="roleHistory.length" class="profile-history"><li v-for="item in roleHistory" :key="item.completedAt"><b>✓</b><span>{{ item.task }}</span><small>{{ item.fileName }}</small></li></ul>
             <p v-else class="profile-empty">完成真实文档分析后，最近任务会保存在当前浏览器。</p>
@@ -577,8 +587,10 @@ createApp({
           <div v-if="loading" class="loading-state">
             <div class="process-heading">
               <span class="spinner"></span>
-              <div><h3>Agent 正在处理文档</h3><p>请求已发送，正在等待后端完成 PDF 解析、任务规划与模型分析。</p></div>
+              <div><h3>AI员工正在处理业务任务</h3><p>请求已发送，正在等待后端完成 PDF 解析、任务规划与模型分析。</p></div>
             </div>
+            <ol class="loading-workflow" aria-label="分析过程提示"><li><i></i>理解业务目标</li><li><i></i>规划分析任务</li><li><i></i>分析文档内容</li><li><i></i>整理业务交付</li></ol>
+            <p class="loading-boundary">这是非流式请求的阶段提示；最终执行摘要以接口返回的 Agent 工作流为准。</p>
           </div>
 
           <div v-else-if="!result" class="empty-state">
