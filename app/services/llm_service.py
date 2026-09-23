@@ -47,6 +47,20 @@ DECISION_REPORT_FIELDS = (
     "business_value",
 )
 DECISION_REPORT_LIST_FIELDS = ("key_points", "risks", "recommendations")
+BUSINESS_REPORT_FIELDS = (
+    "decision_summary",
+    "important_findings",
+    "business_opportunities",
+    "risks",
+    "recommended_actions",
+    "expected_value",
+)
+BUSINESS_REPORT_LIST_FIELDS = (
+    "important_findings",
+    "business_opportunities",
+    "risks",
+    "recommended_actions",
+)
 QUALITY_CHECK_SCENARIO_FIELDS = {
     "paper": (
         ("research_topic", "研究主题"),
@@ -132,6 +146,7 @@ def analyze_paper_with_template(
     list_fields: tuple[str, ...] = (),
     require_all_fields: bool = False,
     include_decision_report: bool = False,
+    include_business_report: bool = False,
 ) -> dict[str, object]:
     """Run one task-specific prompt and return a structured analysis response."""
     field_names = "、".join(result_fields)
@@ -142,7 +157,17 @@ def analyze_paper_with_template(
             f"The fields {list_field_names} must be JSON arrays of strings; use [] when absent. "
             "All other fields must be strings."
         )
-    if include_decision_report:
+    if include_decision_report and include_business_report:
+        output_instruction = f"""Return only a valid JSON object with exactly these top-level keys:
+"analysis", "decision_report", and "business_report".
+The "analysis" object must contain exactly these keys: {field_names}.
+The "decision_report" object must contain exactly these keys: {"、".join(DECISION_REPORT_FIELDS)}.
+The "business_report" object must contain exactly these keys: {"、".join(BUSINESS_REPORT_FIELDS)}.
+The list fields in decision_report (key_points, risks, recommendations) and business_report (important_findings, business_opportunities, risks, recommended_actions) must be JSON arrays of strings. All remaining fields must be strings.
+Use only information supported by the document. Do not make unsupported promises. If a detail is missing, use "文档未说明" for strings and [] for lists.
+For business_report, describe decision support value for the selected user role, not generic text summarization.
+Do not use Markdown code fences or any text outside the JSON object."""
+    elif include_decision_report:
         output_instruction = f"""Return only a valid JSON object with exactly these top-level keys:
 "analysis" and "decision_report".
 The "analysis" object must contain exactly these keys: {field_names}.
@@ -170,6 +195,12 @@ Document text:
 {paper_text[:MAX_MODEL_INPUT_CHARS]}
 """
     response_text = _request_model(prompt, json_mode=True)
+    if include_decision_report and include_business_report:
+        return _parse_analysis_with_reports(
+            response_text,
+            result_fields,
+            list_fields=list_fields,
+        )
     if include_decision_report:
         return _parse_analysis_with_decision_report(
             response_text,
@@ -182,6 +213,34 @@ Document text:
         list_fields=list_fields,
         require_all_fields=require_all_fields,
     )
+
+
+def _parse_analysis_with_reports(
+    response_text: str,
+    analysis_fields: tuple[str, ...],
+    list_fields: tuple[str, ...],
+) -> dict[str, object]:
+    """Parse the current nested response while accepting partial model output."""
+    parsed = _parse_analysis_with_decision_report(
+        response_text,
+        analysis_fields,
+        list_fields,
+    )
+    data = _decode_json_object(response_text)
+    business_data = _as_json_object(data.get("business_report"))
+    if business_data is None:
+        business_data = {
+            field: data[field] for field in BUSINESS_REPORT_FIELDS if field in data
+        }
+    parsed["business_report"] = _validate_structured_object(
+        business_data,
+        BUSINESS_REPORT_FIELDS,
+        list_fields=BUSINESS_REPORT_LIST_FIELDS,
+        require_all_fields=False,
+        missing_string_value="文档未说明",
+        coerce_types=True,
+    )
+    return parsed
 
 
 def _parse_analysis_with_decision_report(

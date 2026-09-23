@@ -104,6 +104,7 @@ async def agent_analyze_paper(
     task: str = Form(...),
     file: UploadFile = File(...),
     scenario: str = Form("paper"),
+    role: str = Form("researcher"),
 ) -> dict[str, object]:
     """Run the document-analysis Agent for an uploaded PDF and user task."""
     filename = file.filename or ""
@@ -111,7 +112,7 @@ async def agent_analyze_paper(
         raise HTTPException(status_code=400, detail="文件格式不正确，请上传 PDF 文件。")
 
     try:
-        return paper_agent.analyze_pdf(await file.read(), task, scenario)
+        return paper_agent.analyze_pdf(await file.read(), task, scenario, role)
     except ValueError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except TaskNotRecognizedError as error:

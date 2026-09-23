@@ -31,6 +31,16 @@ class ScenarioConfig:
     prompt_context: str
 
 
+@dataclass(frozen=True)
+class RoleConfig:
+    """A small role lens that keeps the same Agent workflow business-focused."""
+
+    identifier: str
+    name: str
+    description: str
+    prompt_context: str
+
+
 TECHNICAL_DOCUMENT_CONFIG = ScenarioConfig(
     identifier="technical_document",
     name="企业技术文档分析",
@@ -169,6 +179,37 @@ SCENARIO_CONFIGS = {
 }
 
 
+ROLE_CONFIGS = {
+    "researcher": RoleConfig(
+        identifier="researcher",
+        name="研发人员",
+        description="聚焦技术路线、创新点、技术风险与后续研究方向。",
+        prompt_context=(
+            "The user is an R&D engineer. Prioritize technical novelty, technical "
+            "route, feasibility risks, and follow-up research or implementation suggestions."
+        ),
+    ),
+    "product_manager": RoleConfig(
+        identifier="product_manager",
+        name="产品经理",
+        description="聚焦用户需求、产品价值、功能机会与竞争差异。",
+        prompt_context=(
+            "The user is a product manager. Prioritize user needs, product and "
+            "business value, feature opportunities, and competitive differentiation."
+        ),
+    ),
+    "pre_sales_consultant": RoleConfig(
+        identifier="pre_sales_consultant",
+        name="售前顾问",
+        description="聚焦客户需求、方案匹配、实施风险与沟通建议。",
+        prompt_context=(
+            "The user is a pre-sales consultant. Prioritize customer needs, solution "
+            "fit, implementation risks, and practical communication recommendations."
+        ),
+    ),
+}
+
+
 def get_scenario_config(scenario: str) -> ScenarioConfig:
     """Return a supported scenario configuration or raise a user-safe error."""
     normalized_scenario = scenario.strip().lower()
@@ -176,4 +217,14 @@ def get_scenario_config(scenario: str) -> ScenarioConfig:
     if config is None:
         supported = "、".join(SCENARIO_CONFIGS)
         raise ValueError(f"不支持的分析场景，请使用：{supported}。")
+    return config
+
+
+def get_role_config(role: str) -> RoleConfig:
+    """Return a supported user role or a clear request error."""
+    normalized_role = role.strip().lower()
+    config = ROLE_CONFIGS.get(normalized_role)
+    if config is None:
+        supported = "、".join(ROLE_CONFIGS)
+        raise ValueError(f"不支持的用户角色，请使用：{supported}。")
     return config

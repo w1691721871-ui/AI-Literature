@@ -10,7 +10,13 @@ from app.services.llm_service import (
     build_quality_check,
 )
 from app.services.pdf_service import extract_pdf_text
-from app.agent.scenario_config import ScenarioConfig, ScenarioTask, get_scenario_config
+from app.agent.scenario_config import (
+    RoleConfig,
+    ScenarioConfig,
+    ScenarioTask,
+    get_role_config,
+    get_scenario_config,
+)
 
 
 MAX_STORED_PAPER_CHARS = 120_000
@@ -116,6 +122,8 @@ class AgentPlan:
     """A simple explanation of how the agent will handle a user task."""
 
     user_task: str
+    user_role: str
+    role_name: str
     scenario: str
     document_type: str
     user_intent: str
@@ -142,13 +150,19 @@ class PaperAnalysisAgent:
         self._conversations: dict[str, list[ConversationTurn]] = {}
 
     def understand_task(
-        self, task: str, scenario: str = "paper"
-    ) -> tuple[AgentPlan, tuple[TaskTemplate | ScenarioTask, ...], ScenarioConfig]:
+        self, task: str, scenario: str = "paper", role: str = "researcher"
+    ) -> tuple[
+        AgentPlan,
+        tuple[TaskTemplate | ScenarioTask, ...],
+        ScenarioConfig,
+        RoleConfig,
+    ]:
         """Recognize tasks and choose templates for one supported document scenario."""
         normalized_task = task.strip()
         if not normalized_task:
             raise ValueError("请输入分析任务。")
         scenario_config = get_scenario_config(scenario)
+        role_config = get_role_config(role)
         if not self._looks_like_analysis_task(normalized_task, scenario_config):
             raise TaskNotRecognizedError(
                 "暂时无法识别该分析任务，请说明你希望了解文档的哪些内容。"
@@ -178,15 +192,17 @@ class PaperAnalysisAgent:
 
         document_label = "论文" if scenario_config.identifier == "paper" else "文档"
         execution_plan = [
-            f"识别用户任务并选择：{task_names}",
+            f"识别{role_config.name}的目标并选择：{task_names}",
             "解析 PDF 文本",
             f"保存当前{document_label}文本以支持后续追问",
-            f"使用{task_names}提示词调用大模型生成结构化结果",
-            "校验并整理结构化结果",
+            f"使用{task_names}与{role_config.name}视角调用大模型生成结构化结果",
+            "校验并整理分析结果、决策报告与业务价值报告",
         ]
         return (
             AgentPlan(
                 user_task=normalized_task,
+                user_role=role_config.identifier,
+                role_name=role_config.name,
                 scenario=scenario_config.identifier,
                 document_type=scenario_config.document_type,
                 user_intent=normalized_task,
@@ -197,13 +213,20 @@ class PaperAnalysisAgent:
             ),
             templates,
             scenario_config,
+            role_config,
         )
 
     def analyze_pdf(
-        self, file_content: bytes, task: str, scenario: str = "paper"
+        self,
+        file_content: bytes,
+        task: str,
+        scenario: str = "paper",
+        role: str = "researcher",
     ) -> dict[str, object]:
         """Run the full agent workflow for one uploaded PDF and scenario."""
-        plan, templates, scenario_config = self.understand_task(task, scenario)
+        plan, templates, scenario_config, role_config = self.understand_task(
+            task, scenario, role
+        )
         paper_text = extract_pdf_text(file_content)
         if len(paper_text) > MAX_STORED_PAPER_CHARS:
             raise PaperTextTooLongError(
@@ -217,6 +240,7 @@ class PaperAnalysisAgent:
             instruction
             for instruction in (
                 scenario_config.prompt_context,
+                role_config.prompt_context,
                 *(template.instruction for template in templates),
             )
             if instruction
@@ -229,19 +253,26 @@ class PaperAnalysisAgent:
             list_fields=scenario_config.list_fields,
             require_all_fields=True,
             include_decision_report=True,
+            include_business_report=True,
         )
         analysis = model_result["analysis"]
         decision_report = model_result["decision_report"]
+        business_report = model_result["business_report"]
         quality_check = build_quality_check(
             scenario_config.identifier,
             analysis,
             decision_report,
+        )
+        evidence_cards = self._build_evidence_cards(
+            scenario_config.identifier, analysis
         )
 
         return {
             "paper_id": paper_id,
             "task": plan.user_task,
             "scenario": plan.scenario,
+            "user_role": plan.user_role,
+            "role_name": plan.role_name,
             "document_type": plan.document_type,
             "user_intent": plan.user_intent,
             "task_type": plan.task_type,
@@ -250,13 +281,150 @@ class PaperAnalysisAgent:
             "decision_reason": plan.decision_reason,
             "execution_plan": plan.execution_plan,
             "plan": plan.execution_plan,
+            "agent_trace": self._build_agent_trace(plan, role_config),
             "analysis": analysis,
             "result": analysis,
             "decision_report": decision_report,
+            "business_report": business_report,
+            "evidence_sources": self._build_evidence_sources(
+                scenario_config.identifier, analysis
+            ),
+            "evidence_cards": evidence_cards,
+            "trust_report": self._build_trust_report(
+                quality_check, evidence_cards, role_config
+            ),
+            "value_estimation": self._build_value_estimation(
+                scenario_config.identifier, role_config
+            ),
             "quality_check": quality_check,
             "summary": {
                 field: analysis[field] for field in scenario_config.summary_fields
             },
+        }
+
+    @staticmethod
+    def _build_agent_trace(
+        plan: AgentPlan, role_config: RoleConfig
+    ) -> dict[str, object]:
+        """Return an execution summary, not hidden model reasoning."""
+        strategy = {
+            "researcher": "从技术路线、核心创新、技术风险与后续研究维度分析。",
+            "product_manager": "从用户价值、功能机会、商业价值与竞争差异维度分析。",
+            "pre_sales_consultant": "从客户需求、方案匹配、实施风险与沟通建议维度分析。",
+        }[role_config.identifier]
+        return {
+            "user_goal": plan.user_task,
+            "user_role": plan.role_name,
+            "analysis_strategy": strategy,
+            "selected_tools": [
+                "PDF 文本解析",
+                "DashScope qwen-plus",
+                "JSON 结构化校验",
+                "规则质量检查",
+            ],
+            "execution_steps": plan.execution_plan,
+        }
+
+    @classmethod
+    def _build_evidence_sources(
+        cls, scenario: str, analysis: dict[str, object]
+    ) -> list[dict[str, str]]:
+        """Expose honest section-level evidence hints without claiming page precision."""
+        section_hints = {
+            "paper": {
+                "research_topic": "摘要、引言相关内容",
+                "methodology": "方法与实验相关内容",
+                "innovation_points": "引言、方法与结论相关内容",
+            },
+            "technical_document": {
+                "technical_solution": "技术方案与架构相关内容",
+                "core_modules": "系统组成与模块说明相关内容",
+                "implementation_recommendations": "实施说明与风险相关内容",
+            },
+            "product_document": {
+                "product_positioning": "产品介绍与目标用户相关内容",
+                "user_value": "用户需求与价值说明相关内容",
+                "application_scenarios": "应用场景与业务说明相关内容",
+            },
+        }
+        return [
+            {"field": field, "source_section": source_section}
+            for field, source_section in section_hints.get(scenario, {}).items()
+            if cls._evidence_finding(analysis.get(field))
+        ]
+
+    @classmethod
+    def _build_evidence_cards(
+        cls, scenario: str, analysis: dict[str, object]
+    ) -> list[dict[str, str]]:
+        """Create traceable section-level cards without claiming page precision."""
+        cards: list[dict[str, str]] = []
+        for source in cls._build_evidence_sources(scenario, analysis):
+            value = analysis.get(source["field"])
+            finding = cls._evidence_finding(value)
+            if not finding:
+                continue
+            cards.append(
+                {
+                    "finding": finding,
+                    "source_type": "文档章节",
+                    "source": source["source_section"],
+                    "support_level": "medium",
+                }
+            )
+        return cards
+
+    @staticmethod
+    def _evidence_finding(value: object) -> str:
+        """Keep an evidence card concise and omit explicit missing-value markers."""
+        if isinstance(value, list):
+            value = next((item for item in value if isinstance(item, str)), "")
+        if not isinstance(value, str) or value.strip() in {"", "文档未说明", "论文未说明"}:
+            return ""
+        return value.strip()[:120]
+
+    @staticmethod
+    def _build_trust_report(
+        quality_check: dict[str, object],
+        evidence_cards: list[dict[str, str]],
+        role_config: RoleConfig,
+    ) -> dict[str, object]:
+        """Expose rule-based coverage and uncertainty instead of claiming accuracy."""
+        missing = quality_check.get("missing_information", [])
+        uncertainties = [
+            f"缺少{item}，相关判断需要结合原始资料复核。"
+            for item in missing
+            if isinstance(item, str)
+        ]
+        uncertainties.append("当前仅提供章节级证据提示，未进行精确页码或段落定位。")
+        suggestions = {
+            "researcher": "建议结合原始实验数据、评审意见或技术验证进一步确认。",
+            "product_manager": "建议结合用户反馈、市场数据和竞品调研进一步验证。",
+            "pre_sales_consultant": "建议结合客户访谈、现网环境与实施边界进一步确认。",
+        }
+        return {
+            "confidence_score": int(quality_check.get("score", 0)),
+            "information_basis": [
+                f"依据：{card['source']}" for card in evidence_cards
+            ] or ["依据：文档可提取文本"],
+            "uncertainties": uncertainties,
+            "verification_suggestions": [suggestions[role_config.identifier]],
+        }
+
+    @staticmethod
+    def _build_value_estimation(
+        scenario: str, role_config: RoleConfig
+    ) -> dict[str, str]:
+        """Describe qualitative value only; this MVP never invents metrics."""
+        applications = {
+            "paper": "研发评审、技术路线研究与专利资料初步研读",
+            "technical_document": "技术方案评审、售前方案准备与实施风险沟通",
+            "product_document": "产品规划、竞品资料研读与需求讨论",
+        }
+        return {
+            "time_saved": "减少人工阅读、整理和首次归纳资料的重复工作。",
+            "decision_support": f"帮助{role_config.name}快速聚焦关键机会、风险与待验证信息。",
+            "application_scene": applications[scenario],
         }
 
     def answer_follow_up(self, paper_id: str, question: str) -> dict[str, object]:

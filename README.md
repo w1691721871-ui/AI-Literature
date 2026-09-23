@@ -1,112 +1,115 @@
-# AI科研文献分析 Agent
+# AI Insight Agent
 
-一个面向个人校招展示的独立 Agent 应用场景实践项目。项目使用 FastAPI、Vue 3 CDN、PDF 文本提取与阿里云百炼 Qwen，实现对单篇科研论文的任务驱动式分析与连续追问。
+> 企业知识洞察与决策支持助手 · 企业 AI Agent 产品原型
 
-> 项目采用轻量级单 Agent 工作流，不使用 LangChain、LangGraph、RAG、向量数据库、多 Agent 或持久化数据库。
+AI Insight Agent 是一个面向帆软 AI 产品体验设计挑战赛展示的轻量级企业 AI Agent 原型。用户上传可提取文本的 PDF，选择业务角色和分析场景后，Agent 将文档内容转化为结构化分析、决策支持报告与业务价值报告。
 
-## 1. 项目背景
+## 比赛展示版本
 
-科研人员阅读论文时，常需要在较短时间内梳理研究主题、问题、实验方法、创新点与局限性。相关信息通常分散在摘要、方法、实验和结论等章节中，人工提取与归纳成本较高；在阅读多篇论文时，这种理解成本会进一步累积。
+本项目面向企业 AI 应用场景设计：Agent 理解用户目标，根据角色调整分析策略，并将非结构化文档转换为结构化决策建议。它强调“从信息阅读到决策辅助”的产品体验，而不把模型输出包装为未经验证的业务结论。
 
-本项目以“用户任务驱动”的方式组织论文分析：用户上传一篇可提取文本的 PDF 并说明关注点，由 Agent 理解任务、选择分析模板、调用论文解析与大模型能力，最后返回结构化结果。它用于辅助初步理解论文，不替代人工学术评审。
+### 产品故事
 
-## 2. 项目介绍
+企业每天产生大量技术文档、方案资料和产品材料，人工阅读成本高，关键信息不易快速提取。AI Insight Agent 模拟企业专家的分析流程，帮助研发、产品和售前等不同岗位快速理解资料，并形成可继续验证的决策辅助信息。
 
-这是一个基于 Agent 工作流的科研文献分析助手。
+项目沿用简洁技术栈：Vue 3 CDN、FastAPI、`PaperAnalysisAgent`、`pypdf` 与阿里云百炼 DashScope OpenAI-compatible API（`qwen-plus`）。它不是生产系统，也不包含 RAG、向量数据库、多 Agent 或持久化数据库。
 
-用户上传论文并提出分析任务后，Agent 能够：
+## 产品场景
 
-- 理解用户需求并识别一个或多个分析任务；
-- 生成与实际代码流程对应的执行计划；
-- 调用 PDF 文本解析与 DashScope 大模型分析能力；
-- 校验模型返回的 JSON，并输出稳定的结构化论文分析结果；
-- 保存当前论文文本和最近 3 轮问答上下文，支持继续追问。
+| 用户角色 | 适用场景 | Agent 关注点 |
+| --- | --- | --- |
+| 研发人员 | 科研论文、技术方案、专利资料 | 技术路线、核心创新、技术风险、后续研究建议 |
+| 产品经理 | 竞品资料、产品资料、需求文档 | 用户需求、产品价值、功能机会、竞争差异 |
+| 售前顾问 | 客户需求、解决方案文档 | 需求理解、方案匹配、实施风险、沟通建议 |
 
-## 3. Agent工作流程
+当前支持三个分析场景：`paper`、`technical_document` 与 `product_document`。用户角色会传入后端，并影响 Agent 的提示词重点和业务报告视角。
+
+## Agent 工作流
 
 ```mermaid
-flowchart TD
-    A[用户上传 PDF 并输入任务] --> B[任务识别]
-    B --> C[任务规划]
+flowchart LR
+    A[选择角色与场景] --> B[上传 PDF 并输入目标]
+    B --> C[任务识别与规划]
     C --> D[PDF 文本解析]
-    D --> E[LLM 分析]
-    E --> F[JSON 校验与结构化结果输出]
-    F --> G[基于当前论文的连续问答]
+    D --> E[DashScope Qwen-plus]
+    E --> F[JSON 容错与质量检查]
+    F --> G[结构化分析 / 决策报告 / 业务价值报告]
 ```
 
-实际执行中，`PaperAnalysisAgent` 会先识别任务类型，再解析 PDF、在内存中保存当前论文上下文，组合已有提示词模板并调用一次模型，最后校验结构化结果。
+返回结果保留已有 `analysis`、`result`、`decision_report`、`summary`、`decision_reason` 与 `execution_plan` 字段，并新增：
 
-## 4. Agent核心能力
+- `user_role`、`role_name`：实际传入的用户角色；
+- `business_report`：决策摘要、重要发现、业务机会、风险、推荐行动与预期价值；
+- `quality_check`：完整度、风险/建议存在性、缺失信息与 0–100 分；
+- `evidence_sources`：章节级证据提示。当前未实现精确页码或段落定位，页面会明确标注这一限制。
 
-### 任务识别
+## 最新产品体验能力
 
-Agent 根据用户输入的关键词识别任务，并可组合多个分析重点。当前支持：
+### agent_trace：可解释执行摘要
 
-- 摘要总结；
-- 创新点分析；
-- 实验方法 / 研究方法分析；
-- 主要结论与局限性分析；
-- 论文整体分析；
-- 论文问答。
+`agent_trace` 展示本次 Agent 的可解释执行过程，包括：
 
-例如，用户输入“请总结这篇论文，并分析创新点和实验方法”时，Agent 会识别 `summary`、`innovation` 与 `experiment` 三个任务，并组合相应提示词进行一次结构化分析。
+- 用户目标；
+- 用户角色；
+- 分析策略；
+- 已使用能力与执行步骤。
 
-### 决策流程展示
+页面不展示模型内部思维链，只展示与实际代码流程对应的执行摘要，帮助用户理解 Agent 如何完成文档分析。
 
-分析接口会返回以下真实决策信息，前端据此展示“Agent执行过程”：
+### trust_report：结果可信度辅助信息
 
-- `detected_tasks`：识别出的任务列表；
-- `decision_reason`：选择任务组合的原因；
-- `execution_plan`：与实际代码执行对应的计划步骤。
+`trust_report` 用于提示结果的使用边界，包括：
 
-同时保留 `paper_id`、`task_type`、`analysis`、`result` 与 `summary` 等结果字段，便于兼容页面展示和后续追问。
+- 信息依据；
+- 不确定性；
+- 验证建议。
 
-### 上下文问答
+其中 `confidence_score` 是基于结构化结果字段覆盖和缺失信息计算的规则评分，不代表模型输出的事实准确率。
 
-首次分析后，后端使用 `paper_id` 关联当前论文文本；用户可以继续针对研究方法、实验设计或结论提问。每篇论文仅在内存中保留最近 3 轮问答，以控制上下文长度。
+### evidence_cards：章节级依据提示
 
-## 5. 技术架构
+`evidence_cards` 将关键结论与其关联的文档章节提示一起展示，并标注支持程度。
+
+当前能力不是精准页码引用，也不是原文段落级溯源；章节提示用于帮助用户回到文档的相关内容进行复核。
+
+### business_report：业务价值报告
+
+`business_report` 面向决策辅助输出以下内容：
+
+- 决策摘要；
+- 重要发现；
+- 业务机会；
+- 风险；
+- 推荐行动；
+- 预期价值。
+
+报告根据用户角色和文档场景组织表达，用于辅助后续判断，不替代人工业务决策。
+
+## 项目结构
 
 ```text
-Vue 3 CDN 前端
-      ↓ HTTP
-FastAPI
-      ↓
-PaperAnalysisAgent
-  ├── PDF 解析（pypdf）
-  └── DashScope OpenAI-compatible API（qwen-plus）
-      ↓
-JSON 结构化结果
-      ↓
-Vue 页面展示与继续追问
+app/
+  main.py                    # FastAPI 路由与异常映射
+  agent/
+    paper_agent.py           # Agent 编排、任务规划、角色与证据提示
+    scenario_config.py       # 场景和用户角色的轻量配置
+  services/
+    llm_service.py           # DashScope 调用、JSON 容错、质量检查
+    pdf_service.py           # PDF 文本提取
+frontend/                    # Vue 3 CDN 产品原型页面
 ```
 
-## 6. 技术实现
+## 本地运行
 
-- **FastAPI 后端**：提供健康检查、论文分析和追问接口，并映射 PDF、任务和模型调用异常为中文提示。
-- **Vue 3 CDN 前端**：不依赖 Vite 或大型 UI 框架，负责文件上传、任务输入、Agent 决策过程、结构化结果和对话展示。
-- **大模型 API 调用**：通过 OpenAI Python SDK 调用阿里云百炼的 OpenAI-compatible 接口；API Key 仅从 `DASHSCOPE_API_KEY` 环境变量读取。
-- **Agent Workflow 设计**：`PaperAnalysisAgent` 负责任务识别、决策说明、执行计划、PDF/LLM 服务编排与当前论文会话管理。
-- **PDF 文本解析**：使用 `pypdf` 提取文本，并处理空文件、非 PDF、无法解析和无文本等异常。
-- **JSON 结构化输出**：模型按固定字段返回 JSON；后端可清理 Markdown JSON 代码块并校验字段。结果包含 `title`、`research_topic`、`research_question`、`methodology`、`key_findings`、`innovation_points`、`limitations`、`keywords`。
+1. 创建并激活 Python 虚拟环境，安装依赖：
 
-## 7. 项目部署
-
-代码通过 GitHub 管理，部署架构保持简单：
-
-```text
-GitHub main
-  ├── Render Web Service：FastAPI 后端
-  └── Render Static Site：Vue 3 CDN 前端
+```powershell
+py -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install -r requirements.txt
 ```
 
-后端在 Render 中使用以下启动方式：
-
-```bash
-uvicorn app.main:app --host 0.0.0.0 --port $PORT
-```
-
-部署时，在 Render 后端服务的环境变量中配置：
+2. 在项目根目录创建 `.env`，不要提交该文件：
 
 ```env
 DASHSCOPE_API_KEY=your_api_key_here
@@ -114,28 +117,39 @@ LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL=qwen-plus
 ```
 
-不要提交 `.env`、真实 API Key 或包含敏感信息的论文文件。线上前端域名需要加入 FastAPI 的 CORS 白名单。
-
-本地运行时，可分别启动：
+3. 启动后端和前端：
 
 ```powershell
 .\.venv\Scripts\python.exe -m uvicorn app.main:app --host 127.0.0.1 --port 8000
 py -m http.server 5173 --directory frontend
 ```
 
-## 8. 项目限制
+打开 `http://127.0.0.1:5173`，选择角色、场景，上传 PDF 并输入分析目标即可开始。后端健康检查为 `http://127.0.0.1:8000/health`。
 
-- 当前论文文本与问答上下文保存在 FastAPI 进程内存中；服务重启、实例休眠或扩容后需要重新上传论文。
-- 仅支持可通过 `pypdf` 提取文字的 PDF，扫描型或图片型 PDF 没有 OCR 支持。
-- 单次发送给模型的论文文本最多取前 20,000 个字符，超出部分不会参与该次分析。
-- 任务识别采用关键词与固定模板的轻量级策略，不是开放式自主规划系统。
-- 当前未加入向量数据库检索、RAG 或论文知识库。
-- 模型调用效果、可用额度和响应速度受百炼账户权限、模型服务与网络环境影响。
+## 当前限制
 
-## 9. 后续优化方向
+- 仅支持通过 `pypdf` 提取出文字的 PDF；扫描件暂不支持 OCR。
+- 单次模型输入最多取前 20,000 个字符。
+- 当前文档和最近三轮问答只保存于进程内存中，服务重启后需重新上传。
+- 证据来源只提供章节级提示，并不声称精确页码或段落定位。
+- 分析质量、可用额度和速度取决于文档内容、百炼账户权限、模型服务和网络条件。
 
-- 增加 RAG 知识检索，为长论文和多篇论文对比提供更细粒度上下文；
-- 增加论文知识库与持久化会话能力；
-- 支持综述生成、论文对比、研究路线梳理等更多科研场景；
-- 为扫描型 PDF 增加 OCR；
-- 增加自动化测试与持续集成，提升部署后的回归验证效率。
+## 产品体验设计思路
+
+### 用户痛点
+
+企业的技术方案、竞品资料和客户需求文档通常信息密度高、阅读成本高。使用者不仅需要“看懂资料”，还需要识别风险、机会和下一步行动。
+
+### AI 解决方案
+
+用户先选择业务角色和场景，再输入目标。`PaperAnalysisAgent` 根据这些真实输入选择提示词重点、规划执行步骤、调用 PDF 解析与 Qwen-plus，并返回可展示的执行摘要。页面不展示模型内部思维链。
+
+### 产品价值
+
+产品将信息获取升级为决策辅助：除了结构化分析，还提供业务价值报告、规则化可信度中心、章节级证据提示与待验证建议。所有“时间节省”和“决策辅助”描述均为定性说明，不包含虚构比例、准确率或收益数据。
+
+## 后续方向
+
+- 引入可追溯的段落/页码级引用；
+- 为长文档增加检索与知识库能力；
+- 增加多文档对比、持久化会话与更完整的评测集。
