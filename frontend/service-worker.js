@@ -1,5 +1,5 @@
-const CACHE_NAME = "ai-insight-agent-shell-v7";
-const APP_SHELL = ["./", "./index.html", "./styles.css", "./app.js", "./manifest.json"];
+const CACHE_NAME = "ai-research-workspace-v9";
+const APP_SHELL = ["./", "./index.html", "./styles.css?v=9", "./app.js?v=9", "./manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
@@ -10,7 +10,7 @@ self.addEventListener("activate", (event) => {
   event.waitUntil(
     caches.keys()
       .then((names) => Promise.all(names
-        .filter((name) => name.startsWith("ai-insight-agent-shell-") && name !== CACHE_NAME)
+        .filter((name) => (name.startsWith("ai-insight-agent-shell-") || name.startsWith("ai-research-workspace-")) && name !== CACHE_NAME)
         .map((name) => caches.delete(name))))
       .then(() => self.clients.claim()),
   );

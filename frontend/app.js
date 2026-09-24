@@ -80,6 +80,8 @@ createApp({
     const errorMessage = ref("");
     const activeWorkspaceView = ref("assistant");
     const libraryPapers = ref([]);
+    const librarySearch = ref("");
+    const libraryStatusFilter = ref("all");
     const libraryLoading = ref(false);
     const libraryUploading = ref(false);
     const libraryAnalysisLoading = ref(false);
@@ -130,6 +132,22 @@ createApp({
     const roleHistory = computed(() => taskHistory.value
       .filter((item) => item.role === role.value)
       .slice(0, 3));
+    const filteredLibraryPapers = computed(() => {
+      const keyword = librarySearch.value.trim().toLowerCase();
+      return libraryPapers.value.filter((paper) => {
+        const status = paper.quality_status || paper.analysis_status || "";
+        const matchesKeyword = !keyword || [paper.title, paper.filename]
+          .some((value) => String(value || "").toLowerCase().includes(keyword));
+        const matchesStatus = libraryStatusFilter.value === "all"
+          || status === libraryStatusFilter.value;
+        return matchesKeyword && matchesStatus;
+      });
+    });
+    const knowledgeChunkTotal = computed(() => libraryPapers.value
+      .reduce((total, paper) => total + Number(paper.chunk_count || 0), 0));
+    const readyPaperCount = computed(() => libraryPapers.value
+      .filter((paper) => ["ready", "indexed"].includes(paper.quality_status || paper.analysis_status))
+      .length);
 
     const fileSizeLabel = computed(() => {
       if (!selectedFile.value) return "";
@@ -787,6 +805,11 @@ createApp({
       errorMessage,
       libraryAnalysisLoading,
       libraryError,
+      librarySearch,
+      libraryStatusFilter,
+      filteredLibraryPapers,
+      knowledgeChunkTotal,
+      readyPaperCount,
       libraryFileInput,
       libraryLoading,
       libraryStatusLabel,
@@ -870,60 +893,28 @@ createApp({
   },
   template: `
     <main class="app-shell">
-      <header class="topbar">
-        <div class="hero-copy">
-          <p class="product-mark"><span></span> AI INSIGHT AGENT</p>
+      <header class="workspace-header">
+        <nav class="top-navigation" aria-label="主导航">
+          <button class="brand-button" type="button" @click="openWorkspaceView('assistant')"><span class="brand-orb">✦</span><span>AI Research Agent</span></button>
+          <div class="top-navigation-links"><button type="button" :class="{ active: activeWorkspaceView === 'assistant' }" @click="openWorkspaceView('assistant')">AI助手</button><button type="button" :class="{ active: activeWorkspaceView === 'library' }" @click="openWorkspaceView('library')">论文库</button><button type="button" :class="{ active: activeWorkspaceView === 'reports' }" @click="openWorkspaceView('reports')">研究报告</button><button type="button" :class="{ active: activeWorkspaceView === 'rag' }" @click="openWorkspaceView('rag')">知识问答</button></div>
+          <span class="top-navigation-status"><i></i> Online</span>
+        </nav>
+        <div v-if="activeWorkspaceView === 'assistant'" class="minimal-hero">
           <h1>AI Research Agent</h1>
-          <p class="hero-subtitle">面向科研人员的智能文献管理、分析与知识探索助手</p>
-          <p class="product-description">让科研资料从信息阅读升级为可追溯的知识检索、研究比较与洞察生成。</p>
-          <div class="hero-value-list"><span>上传论文</span><span>AI理解文献</span><span>构建知识库</span><span>智能问答</span><span>研究洞察</span></div>
-          <button class="hero-demo-cta" type="button" @click="openWorkspaceView('library')"><span>✦</span> 开始管理科研资料 <b>→</b></button>
+          <p>让 AI 帮助你理解论文、探索知识、生成研究洞察。</p>
+          <div class="hero-tags" aria-label="核心能力"><span>📄 论文分析</span><span>🔍 知识检索</span><span>🧠 研究生成</span></div>
+          <label class="hero-input"><span>✦</span><input v-model="task" placeholder="上传论文后，告诉 AI 你想研究什么" /><button type="button" @click="openWorkspaceView('assistant')">开始</button></label>
         </div>
-        <div class="hero-visual" aria-label="AI员工业务交付流程">
-          <span class="hero-orbit orbit-one"></span><span class="hero-orbit orbit-two"></span>
-          <div class="hero-core"><i>AI</i><b>科研知识助手</b><small>Research Copilot</small></div>
-          <div class="hero-signal signal-one">文献解析</div><div class="hero-signal signal-two">研究洞察</div>
-        </div>
-        <div class="topbar-status"><i></i> Agent 已就绪</div>
       </header>
-
-      <section class="role-use-cases" aria-label="适用岗位">
-        <div><p class="section-kicker">AI EMPLOYEES</p><h2>选择你的 AI 员工</h2></div>
-        <article v-for="item in roleOptions" :key="item.id"><b>{{ item.name }}</b><span>{{ item.description }}</span><div class="role-capability-list"><em v-for="capability in item.capabilities" :key="capability">{{ capability }}</em></div></article>
-      </section>
-
-      <section class="product-flow" aria-label="AI员工工作流程">
-        <div><p class="section-kicker">RESEARCH AGENT FLOW</p><h2>从论文资料到研究洞察</h2></div>
-        <ol><li><b>01</b><span>上传论文</span></li><li><b>02</b><span>AI理解文献</span></li><li><b>03</b><span>构建知识库</span></li><li><b>04</b><span>智能问答</span></li><li><b>05</b><span>生成研究洞察</span></li></ol>
-      </section>
-
-      <section class="research-capability-grid" aria-label="AI Research Agent 核心能力">
-        <article><span>01</span><h3>Deep Analysis</h3><p>单篇论文深度分析，提炼方法、创新点、结果与局限性。</p></article>
-        <article><span>02</span><h3>Knowledge Retrieval</h3><p>从多篇已索引论文中检索证据，支持带引用的知识问答。</p></article>
-        <article><span>03</span><h3>Research Report</h3><p>围绕综述、趋势与研究空白生成结构化研究报告。</p></article>
-      </section>
-
-      <nav class="research-space-nav" aria-label="科研空间导航">
-        <div><p class="section-kicker">RESEARCH SPACE</p><h2>科研知识空间</h2></div>
-        <div class="research-space-tabs"><button type="button" :class="{ active: activeWorkspaceView === 'assistant' }" @click="openWorkspaceView('assistant')">✦ AI助手</button><button type="button" :class="{ active: activeWorkspaceView === 'library' }" @click="openWorkspaceView('library')">▣ 我的论文库</button><button type="button" :class="{ active: activeWorkspaceView === 'reports' }" @click="openWorkspaceView('reports')">▤ 研究报告</button><button type="button" :class="{ active: activeWorkspaceView === 'rag' }" @click="openWorkspaceView('rag')">⌕ 知识问答</button></div>
-      </nav>
-
-      <section class="research-overview" aria-label="科研空间概览">
-        <div class="overview-heading"><p class="section-kicker">RESEARCH OVERVIEW</p><h2>科研空间概览</h2><span v-if="overviewLoading">正在更新…</span></div>
-        <div class="overview-card-grid">
-          <article><span class="overview-icon">▣</span><p>论文资料</p><strong>{{ researchOverview?.paper_count ?? 0 }}</strong><small>当前论文库数量</small></article>
-          <article><span class="overview-icon">✓</span><p>已解析文献</p><strong>{{ researchOverview?.parsed_count ?? 0 }}</strong><small>可直接进入 Agent 分析</small></article>
-          <article><span class="overview-icon">✦</span><p>Agent 分析任务</p><strong>{{ researchOverview?.analysis_count ?? 0 }}</strong><small>已保存的论文库分析记录</small></article>
-          <article><span class="overview-icon">◷</span><p>最近分析</p><strong class="overview-date">{{ researchOverview?.last_analysis_time ? formatLibraryDate(researchOverview.last_analysis_time) : '暂无记录' }}</strong><small>最近一次保存的分析时间</small></article>
-        </div>
-      </section>
 
       <section v-if="activeWorkspaceView === 'library'" class="library-workspace" aria-label="我的论文库">
         <div class="library-header"><div><p class="section-kicker">MY PAPER LIBRARY</p><h2>我的论文库</h2><p>已保存并解析的科研资料，可直接进入 AI助手分析。</p></div><div class="library-header-actions"><label class="library-upload-button" :class="{ busy: libraryUploading }"><input ref="libraryFileInput" type="file" accept="application/pdf,.pdf" :disabled="libraryUploading" @change="uploadLibraryPaper" /><span>{{ libraryUploading ? '正在保存论文…' : '＋ 上传论文' }}</span></label><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新列表' }}</button></div></div>
+        <div v-if="libraryPapers.length" class="library-toolbar"><label><span>⌕</span><input v-model="librarySearch" type="search" placeholder="搜索论文标题或文件名" /></label><select v-model="libraryStatusFilter" aria-label="按知识库状态筛选"><option value="all">全部状态</option><option value="ready">Ready</option><option value="indexed">Indexed</option><option value="parsed">Parsed</option><option value="failed">Failed</option></select><small>共 {{ filteredLibraryPapers.length }} / {{ libraryPapers.length }} 篇资料</small></div>
         <p v-if="libraryError" class="error-alert" role="alert"><span>!</span>{{ libraryError }}</p>
         <div v-if="libraryLoading && !libraryPapers.length" class="library-empty-state"><span class="spinner"></span><p>正在加载论文库…</p></div>
         <div v-else-if="!libraryPapers.length" class="library-empty-state"><div class="empty-illustration">▣</div><h3>暂无科研资料，上传第一篇论文开始分析</h3><p>上传可提取文本的 PDF 后，它会成为科研知识空间中的一份资料。</p></div>
-        <div v-else class="library-layout"><div class="paper-card-list"><article v-for="paper in libraryPapers" :key="paper.paper_id" class="paper-library-card" :class="{ selected: selectedLibraryPaper?.paper_id === paper.paper_id }"><div class="paper-card-top"><span class="paper-file-icon">PDF</span><span class="paper-status">{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</span></div><h3>{{ paper.title }}</h3><p class="paper-filename">{{ paper.filename }}</p><dl><div><dt>知识库状态</dt><dd>{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</dd></div><div><dt>知识片段</dt><dd>{{ paper.chunk_count ?? 0 }} 个</dd></div><div><dt>更新时间</dt><dd>{{ formatLibraryDate(paper.updated_at || paper.upload_time) }}</dd></div><div><dt>文本长度</dt><dd>{{ formatTextLength(paper.text_length) }}</dd></div></dl><div class="paper-card-actions"><button type="button" @click="viewLibraryPaper(paper)">查看详情</button><button type="button" class="primary-card-action" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(paper)">{{ libraryAnalysisLoading && selectedLibraryPaper?.paper_id === paper.paper_id ? 'Agent 分析中…' : '进入 AI 分析' }}</button><button type="button" class="danger-card-action" @click="deleteLibraryPaper(paper)">删除</button></div></article></div><aside v-if="libraryPaperDetail" class="library-detail-panel"><div class="library-detail-heading"><div><p class="section-kicker">PAPER DETAIL</p><h3>{{ libraryPaperDetail.title }}</h3></div><button type="button" class="text-button" @click="libraryPaperDetail = null">关闭</button></div><dl><div><dt>文件名</dt><dd>{{ libraryPaperDetail.filename }}</dd></div><div><dt>知识库状态</dt><dd>{{ libraryPaperDetail.quality_status || libraryStatusLabel(libraryPaperDetail.analysis_status) }}</dd></div><div><dt>知识片段</dt><dd>{{ libraryPaperDetail.chunk_count ?? 0 }} 个</dd></div><div><dt>更新时间</dt><dd>{{ formatLibraryDate(libraryPaperDetail.updated_at || libraryPaperDetail.upload_time) }}</dd></div><div><dt>文本长度</dt><dd>{{ formatTextLength(libraryPaperDetail.text_length) }}</dd></div><div><dt>文件位置</dt><dd>{{ libraryPaperDetail.file_path }}</dd></div></dl><p>为保护科研资料，详情页仅展示元信息，不展示完整论文文本。</p><button type="button" class="analyze-button" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(libraryPaperDetail)">{{ libraryAnalysisLoading ? '正在进入 AI助手分析…' : '进入 AI 分析' }}</button></aside></div>
+        <div v-else-if="!filteredLibraryPapers.length" class="library-empty-state"><div class="empty-illustration">⌕</div><h3>没有匹配的科研资料</h3><p>试试调整关键词或知识库状态筛选条件。</p></div>
+        <div v-else class="library-layout"><div class="paper-card-list"><article v-for="paper in filteredLibraryPapers" :key="paper.paper_id" class="paper-library-card" :class="{ selected: selectedLibraryPaper?.paper_id === paper.paper_id }"><div class="paper-card-top"><span class="paper-status">{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</span><details class="paper-more"><summary aria-label="更多操作">•••</summary><button type="button" @click="deleteLibraryPaper(paper)">删除论文</button></details></div><h3>{{ paper.title }}</h3><p class="paper-filename">{{ paper.filename }}</p><div class="paper-meta"><span>{{ paper.chunk_count ?? 0 }} 个知识片段</span><span>{{ formatLibraryDate(paper.updated_at || paper.upload_time) }}</span></div><div class="paper-card-actions"><button type="button" class="primary-card-action" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(paper)">{{ libraryAnalysisLoading && selectedLibraryPaper?.paper_id === paper.paper_id ? '分析中…' : '分析' }}</button><button type="button" class="text-button" @click="viewLibraryPaper(paper)">详情</button></div></article></div><aside v-if="libraryPaperDetail" class="library-detail-panel"><div class="library-detail-heading"><div><p class="section-kicker">PAPER DETAIL</p><h3>{{ libraryPaperDetail.title }}</h3></div><button type="button" class="text-button" @click="libraryPaperDetail = null">关闭</button></div><dl><div><dt>文件名</dt><dd>{{ libraryPaperDetail.filename }}</dd></div><div><dt>知识库状态</dt><dd>{{ libraryPaperDetail.quality_status || libraryStatusLabel(libraryPaperDetail.analysis_status) }}</dd></div><div><dt>知识片段</dt><dd>{{ libraryPaperDetail.chunk_count ?? 0 }} 个</dd></div><div><dt>更新时间</dt><dd>{{ formatLibraryDate(libraryPaperDetail.updated_at || libraryPaperDetail.upload_time) }}</dd></div><div><dt>文本长度</dt><dd>{{ formatTextLength(libraryPaperDetail.text_length) }}</dd></div></dl><button type="button" class="analyze-button" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(libraryPaperDetail)">{{ libraryAnalysisLoading ? '正在进入 AI助手分析…' : '进入 AI 分析' }}</button></aside></div>
       </section>
 
       <section v-if="activeWorkspaceView === 'reports'" class="research-reports" aria-label="研究报告历史">
@@ -938,13 +929,13 @@ createApp({
         <div class="library-header"><div><p class="section-kicker">MULTI-PAPER RAG</p><h2>科研知识问答</h2><p>Agent 会检索论文库中的相关片段，再基于引用证据回答问题。</p></div><div class="library-header-actions"><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新论文范围' }}</button></div></div>
         <p v-if="ragError" class="error-alert" role="alert"><span>!</span>{{ ragError }}</p>
         <div v-if="!libraryPapers.length && !libraryLoading" class="library-empty-state"><div class="empty-illustration">⌕</div><h3>暂无可检索论文</h3><p>请先在“我的论文库”上传论文，并等待知识索引建立完成。</p></div>
-        <div v-else class="rag-content"><div class="rag-scope"><div><h3>论文检索范围</h3><p>不勾选时将检索论文库中的全部已建立索引资料。</p></div><div class="rag-paper-options"><label v-for="paper in libraryPapers" :key="paper.paper_id"><input v-model="ragSelectedPaperIds" type="checkbox" :value="paper.paper_id" :disabled="!['indexed', 'ready'].includes(paper.quality_status || paper.analysis_status)" /><span>{{ paper.title }}</span><em>{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</em></label></div></div>
+        <div v-else class="rag-content"><section class="knowledge-status-strip" aria-label="当前知识库状态"><div><span>论文</span><strong>{{ libraryPapers.length }}</strong><small>篇资料</small></div><div><span>知识片段</span><strong>{{ knowledgeChunkTotal }}</strong><small>个可检索片段</small></div><div><span>已就绪</span><strong>{{ readyPaperCount }}</strong><small>篇论文</small></div></section><details class="rag-scope compact-details"><summary>选择论文范围</summary><div class="rag-paper-options"><label v-for="paper in libraryPapers" :key="paper.paper_id"><input v-model="ragSelectedPaperIds" type="checkbox" :value="paper.paper_id" :disabled="!['indexed', 'ready'].includes(paper.quality_status || paper.analysis_status)" /><span>{{ paper.title }}</span><em>{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</em></label></div></details>
           <section class="research-task-center"><div><p class="section-kicker">RESEARCH TASK CENTER</p><h3>研究任务中心</h3><p>选择任务后，Agent 会检索选定论文并生成结构化研究报告。</p></div><div class="report-task-options"><button v-for="item in ragReportTasks" :key="item.id" type="button" :class="{ active: ragReportType === item.id }" @click="ragReportType = item.id"><b>{{ item.name }}</b><small>{{ item.description }}</small></button></div><button class="outline-button" type="button" :disabled="ragReportLoading" @click="generateResearchReport">{{ ragReportLoading ? '正在生成研究报告…' : '生成结构化报告' }}</button><p v-if="ragReportError" class="error-alert" role="alert"><span>!</span>{{ ragReportError }}</p><div v-if="ragReportResult" class="rag-report-card"><div class="rag-answer-heading"><div><p class="section-kicker">STRUCTURED RESEARCH REPORT</p><h3>研究任务结果</h3></div><span>{{ ragReportQuality?.evidence_level || 'low' }} evidence</span></div><article v-for="(value, key) in ragReportResult" :key="key"><h4>{{ key }}</h4><p v-if="typeof value === 'string'">{{ value }}</p><ul v-else><li v-for="item in value" :key="item">{{ item }}</li></ul></article><footer v-if="ragReportEvaluation">检索质量：<b>{{ ragReportEvaluation.retrieval_quality }}</b> · {{ ragReportEvaluation.retrieval_count }} 条证据 · 最高分 {{ ragReportEvaluation.highest_score }}</footer></div></section>
           <div class="rag-question-form"><label for="rag-question">请输入科研知识问题</label><textarea id="rag-question" v-model="ragQuestion" rows="5" placeholder="例如：总结这些论文在研究方法上的差异，并说明各自的适用边界。"></textarea><button class="analyze-button" type="button" :disabled="ragLoading || !libraryPapers.length" @click="askResearchQuestion"><span v-if="ragLoading" class="spinner small-spinner"></span>{{ ragLoading ? 'Agent 正在检索论文证据…' : '开始知识问答' }}</button></div>
           <div v-if="ragLoading" class="loading-state rag-loading"><div class="process-heading"><span class="spinner"></span><div><h3>Research Agent 正在处理问题</h3><p>正在分析问题、改写检索 Query、检索相关论文、筛选证据并生成回答。</p></div></div><ol class="loading-workflow"><li><i></i>分析研究任务</li><li><i></i>检索相关论文</li><li><i></i>筛选与重排证据</li><li><i></i>生成可信回答</li></ol></div>
-          <div v-if="ragAgentPlan && !ragLoading" class="rag-plan"><span>Agent任务类型：{{ ragAgentPlan.task_type }}</span><p>{{ ragAgentPlan.instruction }}</p><small>优化检索 Query：{{ ragAgentPlan.retrieval_query }}</small></div>
-          <section v-if="ragAgentTrace?.steps?.length" class="rag-trace" aria-label="Agent执行过程"><div class="result-section-heading"><div><p class="section-kicker">AGENT EXECUTION SUMMARY</p><h3>Agent 执行过程</h3></div><span>trace {{ ragAgentTrace.trace_id?.slice(0, 8) }}</span></div><ol><li v-for="(trace, index) in ragAgentTrace.steps" :key="trace.created_at + trace.step"><b>✓</b><div><strong>{{ index + 1 }}. {{ trace.step }}</strong><p>{{ trace.message }}</p></div></li></ol></section>
-          <section v-if="ragRetrievalEvaluation" class="rag-evaluation" aria-label="检索效果评估"><div><p class="section-kicker">RETRIEVAL QUALITY</p><h3>知识库检索质量</h3></div><span :class="ragRetrievalEvaluation.retrieval_quality">{{ ragRetrievalEvaluation.retrieval_quality }}</span><dl><div><dt>检索证据</dt><dd>{{ ragRetrievalEvaluation.retrieval_count }} 条</dd></div><div><dt>平均分</dt><dd>{{ ragRetrievalEvaluation.average_score }}</dd></div><div><dt>最高分</dt><dd>{{ ragRetrievalEvaluation.highest_score }}</dd></div></dl><small>该评分反映检索匹配质量，不代表回答事实准确率。</small></section>
+          <details v-if="ragAgentPlan && !ragLoading" class="rag-plan compact-details"><summary>AI 执行过程</summary><span>✓ 理解问题</span><span>✓ 检索论文</span><span>✓ 筛选证据</span><span>✓ 生成回答</span><p>{{ ragAgentPlan.instruction }}</p><small>优化检索 Query：{{ ragAgentPlan.retrieval_query }}</small></details>
+          <details v-if="ragAgentTrace?.steps?.length" class="rag-trace compact-details" aria-label="AI执行过程"><summary>查看执行摘要</summary><ol><li v-for="(trace, index) in ragAgentTrace.steps" :key="trace.created_at + trace.step"><b>✓</b><div><strong>{{ index + 1 }}. {{ trace.step }}</strong><p>{{ trace.message }}</p></div></li></ol></details>
+          <details v-if="ragRetrievalEvaluation" class="rag-evaluation compact-details" aria-label="检索效果"><summary>检索质量 · {{ ragRetrievalEvaluation.retrieval_quality }}</summary><dl><div><dt>检索证据</dt><dd>{{ ragRetrievalEvaluation.retrieval_count }} 条</dd></div><div><dt>平均分</dt><dd>{{ ragRetrievalEvaluation.average_score }}</dd></div><div><dt>最高分</dt><dd>{{ ragRetrievalEvaluation.highest_score }}</dd></div></dl><small>该评分反映检索匹配质量，不代表回答事实准确率。</small></details>
           <div v-if="ragAnswer" class="rag-answer-card"><div class="rag-answer-heading"><div><p class="section-kicker">EVIDENCE-GROUNDED ANSWER</p><h3>AI 回答</h3></div><span>检索匹配度：{{ ragConfidence }}</span></div><p>{{ ragAnswer }}</p><footer v-if="ragSourceQuality">证据等级：<b>{{ ragSourceQuality.evidence_level }}</b> · {{ ragSourceQuality.citation_count }} 条引用 · 平均分 {{ ragSourceQuality.average_score }}</footer></div>
           <div v-if="ragSources.length" class="rag-sources"><div class="result-section-heading"><div><p class="section-kicker">RETRIEVAL SOURCES</p><h3>引用论文片段</h3></div><span>{{ ragSources.length }} 条证据</span></div><article v-for="(source, index) in ragSources" :key="source.paper_id + '-' + index" class="rag-source-card" tabindex="0" @click="showRagSource(source)"><div><span class="evidence-number">{{ index + 1 }}</span><div><h4>{{ source.paper_title }}</h4><p>章节：{{ source.section }}</p></div><strong>{{ Number(source.score).toFixed(4) }}</strong></div><blockquote>{{ source.content }}</blockquote></article></div>
           <aside v-if="ragSelectedSource" class="rag-source-detail"><div class="library-detail-heading"><div><p class="section-kicker">SOURCE DETAIL</p><h3>{{ ragSelectedSource.paper_title }}</h3></div><button type="button" class="text-button" @click="ragSelectedSource = null">关闭</button></div><p><b>来源章节：</b>{{ ragSelectedSource.section }}</p><blockquote>{{ ragSelectedSource.content }}</blockquote><small>相似度：{{ Number(ragSelectedSource.score).toFixed(4) }}</small></aside>
@@ -954,10 +945,10 @@ createApp({
 
       <div v-show="activeWorkspaceView === 'assistant'" class="assistant-workspace-view">
 
-      <section class="quick-workspace" aria-label="AI Insight Workspace">
+      <details class="quick-workspace compact-details" aria-label="快捷研究任务"><summary>快捷研究任务</summary>
         <div><p class="section-kicker">AI INSIGHT WORKSPACE</p><h2>今天我要完成</h2><p>选择一个业务任务，工作空间会自动配置 AI 员工、场景和目标。</p></div>
         <div class="quick-task-options"><button v-for="item in quickWorkspaceTasks" :key="item.id" type="button" :class="{ active: selectedQuickTask === item.id }" @click="selectQuickTask(item)"><i></i>{{ item.name }}</button></div>
-      </section>
+      </details>
 
       <p v-if="errorMessage" class="error-alert" role="alert">
         <span>!</span>{{ errorMessage }}
@@ -970,14 +961,14 @@ createApp({
             <h2>我的AI工作空间</h2>
           </div>
 
-          <section class="employee-profile" aria-label="AI员工档案">
+          <details class="employee-profile compact-details" aria-label="AI助手状态"><summary>AI 助手状态 · {{ selectedRole.name }}</summary>
             <div class="employee-profile-heading"><div><p class="section-kicker">AI EMPLOYEE STATUS</p><h3>{{ selectedRole.name }}</h3></div><span class="employee-online"><i></i> 在线</span></div>
             <p class="profile-label">核心能力</p><div class="profile-capabilities"><span v-for="item in selectedRole.capabilities" :key="item">{{ item }}</span></div>
             <div class="employee-task-status"><span>当前任务状态</span><b :class="{ active: loading }">{{ loading ? '正在执行任务' : (result ? '已完成业务交付' : '等待接收任务') }}</b><small>{{ task || '请选择或输入业务目标' }}</small></div>
             <p class="profile-label">历史任务</p>
             <ul v-if="roleHistory.length" class="profile-history"><li v-for="item in roleHistory" :key="item.completedAt"><b>✓</b><span>{{ item.task }}</span><small>{{ item.fileName }}</small></li></ul>
             <p v-else class="profile-empty">完成真实文档分析后，最近任务会保存在当前浏览器。</p>
-          </section>
+          </details>
 
           <section class="role-section" aria-label="用户角色选择">
             <div class="step-label"><b>Step 1</b><label>选择 AI 员工</label></div>
@@ -988,7 +979,7 @@ createApp({
             </div>
           </section>
 
-          <section class="scenario-section" aria-label="应用场景选择">
+          <details class="scenario-section compact-details" aria-label="更多分析设置"><summary>更多分析设置 · {{ selectedScenario.name }}</summary>
             <div class="step-label"><b>Step 2</b><label>选择分析场景</label><span>{{ selectedScenario.id }}</span></div>
             <div class="scenario-options">
               <button
@@ -1002,7 +993,7 @@ createApp({
                 <strong>{{ item.name }}</strong><small>{{ item.description }}</small>
               </button>
             </div>
-          </section>
+          </details>
 
           <div class="task-section">
             <div class="label-row">
@@ -1013,11 +1004,11 @@ createApp({
             <p class="field-hint">当前 AI 员工：{{ selectedRole.name }}。Agent 会据此规划分析重点和业务产物。</p>
           </div>
 
-          <section class="demo-section" aria-label="预置演示案例">
+          <details class="demo-section compact-details" aria-label="预置演示案例"><summary>预置演示案例</summary>
             <div class="label-row"><label>Demo 展示模式</label><button class="full-demo-button" type="button" @click="applyFullDemo">3分钟体验Demo</button></div>
             <div class="demo-case-list"><button v-for="item in demoCases" :key="item.name" type="button" @click="applyDemo(item)">{{ item.name }}</button></div>
             <ol class="demo-flow"><li><b>01</b>理解客户需求</li><li><b>02</b>分析技术方案</li><li><b>03</b>判断风险</li><li><b>04</b>生成沟通方案</li><li><b>05</b>输出行动建议</li></ol>
-          </section>
+          </details>
 
           <label class="upload-box" :class="{ 'has-file': selectedFile }" for="pdf-file">
             <input ref="fileInput" id="pdf-file" type="file" accept="application/pdf,.pdf" @change="onFileChange" />
@@ -1058,9 +1049,9 @@ createApp({
           <div v-if="loading || libraryAnalysisLoading" class="loading-state">
             <div class="process-heading">
               <span class="spinner"></span>
-              <div><h3>AI员工正在处理业务任务</h3><p>请求已发送，正在等待后端完成 PDF 解析、任务规划与模型分析。</p></div>
+              <div><h3>AI 正在生成研究洞察</h3><p>请求已发送，正在处理研究任务与文档资料。</p></div>
             </div>
-            <ol class="loading-workflow" aria-label="分析过程提示"><li><i></i>理解业务目标</li><li><i></i>规划分析任务</li><li><i></i>分析文档内容</li><li><i></i>整理业务交付</li></ol>
+            <ol class="loading-workflow" aria-label="分析过程提示"><li><i></i>分析研究问题</li><li><i></i>理解文档内容</li><li><i></i>筛选关键证据</li><li><i></i>生成结构化结果</li></ol>
             <p class="loading-boundary">这是非流式请求的阶段提示；最终执行摘要以接口返回的 Agent 工作流为准。</p>
           </div>
 
@@ -1088,14 +1079,14 @@ createApp({
               <p class="trace-boundary">此处展示的是后端真实执行流程摘要，不展示模型内部思维过程。</p>
             </details>
 
-            <section v-if="agentWorkflow" class="agent-workflow" aria-label="AI员工执行过程">
+            <details v-if="agentWorkflow" class="agent-workflow compact-details" aria-label="AI执行过程"><summary>AI 执行过程</summary>
               <div class="agent-decision-heading"><div><p class="section-kicker">WORKFLOW PLAN</p><h3>AI员工执行过程</h3></div><span class="agent-trace-status">真实执行摘要</span></div>
               <div class="trace-row"><span>用户目标</span><p>{{ agentWorkflow.user_goal }}</p></div>
               <div class="trace-row"><span>当前角色</span><p>{{ agentWorkflow.user_role }}</p></div>
               <div v-if="agentWorkflow.planning_summary" class="trace-row"><span>规划说明</span><p>{{ agentWorkflow.planning_summary }}</p></div>
               <ol v-if="agentWorkflow.steps.length" class="workflow-step-list"><li v-for="(step, index) in agentWorkflow.steps" :key="step.name"><b>{{ String(index + 1).padStart(2, '0') }}</b><div><strong>{{ step.name }}</strong><p v-if="step.purpose">{{ step.purpose }}</p></div><span>{{ step.status === 'completed' ? '已完成' : step.status }}</span></li></ol>
               <p class="trace-boundary">展示的是后端真实工作流摘要，不展示模型内部思维过程。</p>
-            </section>
+            </details>
 
             <details v-if="agentDecision" class="agent-decision advanced-details" aria-label="高级信息：Agent执行过程">
               <summary>高级信息 · Agent 原始任务信息</summary>
@@ -1123,19 +1114,19 @@ createApp({
               </div>
             </details>
 
-            <section v-if="trustReport" class="trust-report" aria-label="结果可信度中心">
+            <details v-if="trustReport" class="trust-report compact-details" aria-label="结果可信度中心"><summary>可信度与依据</summary>
               <div class="trust-report-heading"><div><p class="section-kicker">TRUST CENTER</p><h3>结果可信度中心</h3></div><strong v-if="trustReport.confidenceScore !== null">{{ trustReport.confidenceScore }}<small>/100</small></strong></div>
               <p class="trust-note">该评分基于当前结构化结果的字段覆盖与缺失信息规则计算，不代表事实正确率。</p>
               <div class="trust-grid"><article><h4>信息依据</h4><ul><li v-for="item in trustReport.informationBasis" :key="item">{{ item }}</li></ul></article><article><h4>不确定性</h4><ul><li v-for="item in trustReport.uncertainties" :key="item">{{ item }}</li></ul></article><article><h4>验证建议</h4><ul><li v-for="item in trustReport.verificationSuggestions" :key="item">{{ item }}</li></ul></article></div>
-            </section>
+            </details>
 
-            <section v-if="valueEstimation" class="value-estimation" aria-label="业务价值量化模拟">
+            <details v-if="valueEstimation" class="value-estimation compact-details" aria-label="业务价值说明"><summary>研究价值说明</summary>
               <div><p class="section-kicker">VALUE ESTIMATION</p><h3>业务价值说明</h3></div>
               <div class="value-estimation-grid"><article><h4>时间节省</h4><p>{{ valueEstimation.time_saved }}</p></article><article><h4>决策辅助</h4><p>{{ valueEstimation.decision_support }}</p></article><article><h4>应用场景</h4><p>{{ valueEstimation.application_scene }}</p></article></div>
               <p>仅描述定性价值，不虚构节省比例、准确率或业务收益数据。</p>
-            </section>
+            </details>
 
-            <section v-if="businessReport" class="business-report" aria-label="AI业务价值报告">
+            <details v-if="businessReport" class="business-report compact-details" aria-label="AI研究报告"><summary>研究报告</summary>
               <div class="business-report-heading"><div><p class="section-kicker">BUSINESS INSIGHT</p><h3>AI业务价值报告</h3></div><span>后端真实返回</span></div>
               <div v-if="businessReport.decisionSummary" class="business-summary"><span>决策摘要</span><p>{{ businessReport.decisionSummary }}</p></div>
               <div class="business-report-grid">
@@ -1145,23 +1136,23 @@ createApp({
                 <article v-if="businessReport.recommendedActions.length"><h4>推荐行动</h4><ul><li v-for="item in businessReport.recommendedActions" :key="item">{{ item }}</li></ul></article>
               </div>
               <div v-if="businessReport.expectedValue" class="business-summary"><span>预期价值</span><p>{{ businessReport.expectedValue }}</p></div>
-            </section>
+            </details>
 
-            <section v-if="deliverables" class="deliverables-report" aria-label="AI业务产物">
+            <details v-if="deliverables" class="deliverables-report compact-details" aria-label="研究产物"><summary>{{ deliverables.title }}</summary>
               <div class="business-report-heading"><div><p class="section-kicker">BUSINESS DELIVERABLE</p><h3>{{ deliverables.title }}</h3></div><span>由本次分析整理</span></div>
               <div class="deliverable-grid"><article v-for="entry in deliverables.entries" :key="entry[0]"><h4>{{ entry[0] }}</h4><template v-if="Array.isArray(entry[1])"><ul><li v-for="item in entry[1]" :key="item">{{ item }}</li></ul></template><p v-else>{{ entry[1] || '文档未说明' }}</p></article></div>
-            </section>
+            </details>
 
-            <section v-if="actionCenter" class="action-center" aria-label="下一步行动中心">
+            <details v-if="actionCenter" class="action-center compact-details" aria-label="下一步行动"><summary>下一步行动</summary>
               <div class="business-report-heading"><div><p class="section-kicker">ACTION CENTER</p><h3>下一步建议</h3></div><span>可继续验证</span></div>
               <div class="action-center-grid"><article><h4>立即行动</h4><ul><li v-for="item in actionCenter.nextActions" :key="item">{{ item }}</li></ul></article><article><h4>需要确认</h4><ul><li v-for="item in actionCenter.questionsToVerify" :key="item">{{ item }}</li></ul></article><article><h4>推荐任务</h4><ul><li v-for="item in actionCenter.recommendedTasks" :key="item">{{ item }}</li></ul></article></div>
-            </section>
+            </details>
 
-            <section class="simulation-panel" aria-label="模拟业务交流">
+            <details class="simulation-panel compact-details" aria-label="模拟业务交流"><summary>模拟交流问题</summary>
               <div class="business-report-heading"><div><p class="section-kicker">BUSINESS SIMULATION</p><h3>模拟业务交流</h3></div><button type="button" class="outline-button" @click="showSimulation = !showSimulation">{{ showSimulation ? '收起问题' : '查看问题 TOP 5' }}</button></div>
               <p>基于当前 AI 员工角色整理业务交流时可用于人工准备的问题，不代表已获取客户或市场事实。</p>
               <ol v-if="showSimulation" class="simulation-list"><li v-for="item in simulationPrompts" :key="item">{{ item }}</li></ol>
-            </section>
+            </details>
 
             <section v-if="decisionReport" class="decision-report" aria-label="AI决策支持报告">
               <div class="decision-report-heading">
@@ -1187,6 +1178,7 @@ createApp({
               </div>
             </section>
 
+            <details class="analysis-details compact-details"><summary>查看完整分析</summary>
             <div class="paper-title-row">
               <div>
                 <span class="result-label">文档标题</span>
@@ -1208,17 +1200,18 @@ createApp({
               </article>
             </div>
             <p v-else class="report-empty">后端未返回可展示的结构化报告字段。</p>
+            </details>
 
-            <section v-if="evidenceSources.length" class="evidence-section" aria-label="证据来源">
+            <details v-if="evidenceSources.length" class="evidence-section compact-details" aria-label="证据来源"><summary>引用来源</summary>
               <div><p class="section-kicker">EXPLAINABILITY</p><h3>证据来源</h3></div>
               <p>当前 MVP 提供文档章节级提示，尚未实现精确页码与段落定位。</p>
               <ul><li v-for="item in evidenceSources" :key="item.field"><b>{{ formatResultKey(item.field) }}</b><span>{{ item.source_section }}</span></li></ul>
-            </section>
+            </details>
 
-            <section v-if="evidenceCards.length" class="evidence-cards" aria-label="关键结论证据卡">
+            <details v-if="evidenceCards.length" class="evidence-cards compact-details" aria-label="关键结论证据卡"><summary>关键结论依据</summary>
               <div><p class="section-kicker">EVIDENCE CARDS</p><h3>关键结论与依据</h3></div>
               <article v-for="item in evidenceCards" :key="item.finding"><p>{{ item.finding }}</p><div><span>📌 依据：{{ item.source }}</span><b>可信程度：{{ item.support_level === 'high' ? '高' : '中' }}</b></div></article>
-            </section>
+            </details>
 
             <details v-if="qualityCheck" class="quality-check advanced-details" aria-label="高级技术信息">
               <summary>高级技术信息 · 结构化质量检查</summary>
