@@ -1,0 +1,19 @@
+services:
+  - type: web
+    name: ai-research-agent-api
+    runtime: python
+    plan: free
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
+    healthCheckPath: /health
+    envVars:
+      - key: DASHSCOPE_API_KEY
+        sync: false
+      - key: LLM_BASE_URL
+        value: https://dashscope.aliyuncs.com/compatible-mode/v1
+      - key: LLM_MODEL
+        value: qwen-plus
+      - key: EMBEDDING_MODEL
+        value: text-embedding-v4
+      - key: EMBEDDING_DIMENSIONS
+        value: "1024"

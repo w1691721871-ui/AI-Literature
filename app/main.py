@@ -22,10 +22,13 @@ from app.services.pdf_service import (
     PdfTextExtractionError,
     extract_pdf_text,
 )
+from app.routes.research import router as research_router
 
 
 app = FastAPI(title="AI Insight Agent · Enterprise AI Employee Workspace")
 paper_agent = PaperAnalysisAgent()
+app.state.paper_agent = paper_agent
+app.include_router(research_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 app.add_middleware(

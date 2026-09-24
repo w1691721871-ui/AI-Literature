@@ -15,6 +15,7 @@ logger = logging.getLogger(__name__)
 # This prevents very large papers from being sent to the model in one request.
 MAX_MODEL_INPUT_CHARS = 20_000
 MAX_CONVERSATION_HISTORY_CHARS = 6_000
+MAX_RAG_CONTEXT_CHARS = 12_000
 ANALYSIS_FIELDS = (
     "论文主题",
     "研究问题",
@@ -306,6 +307,82 @@ Paper text:
 {paper_text[:MAX_MODEL_INPUT_CHARS]}
 """
     return _request_model(prompt)
+
+
+def answer_question_with_retrieved_context(
+    question: str,
+    sources: list[dict[str, object]],
+    task_instruction: str = "直接回答问题，清楚区分证据与推断。",
+) -> str:
+    """Answer a multi-paper question using only retriever-provided evidence."""
+    context_parts: list[str] = []
+    used_chars = 0
+    for index, source in enumerate(sources, start=1):
+        content = str(source.get("content", "")).strip()
+        if not content:
+            continue
+        header = (
+            f"[证据 {index}] 论文：{source.get('paper_title', '未命名论文')}\n"
+            f"章节：{source.get('section', '正文')}\n"
+        )
+        remaining = MAX_RAG_CONTEXT_CHARS - used_chars - len(header)
+        if remaining <= 0:
+            break
+        excerpt = content[:remaining]
+        context_parts.append(f"{header}内容：{excerpt}")
+        used_chars += len(header) + len(excerpt)
+
+    if not context_parts:
+        raise ValueError("没有可用于回答的论文证据。")
+    prompt = f"""你是科研知识问答助手。请使用下方检索到的论文片段回答用户问题。
+必须仅依据给出的证据回答；不要补充证据中没有的信息。若证据不足，请明确说明“现有论文片段不足以回答”。
+请用中文作答，并在相关结论后以 [证据编号] 标注依据。
+
+任务要求：{task_instruction}
+
+用户问题：{question}
+
+检索证据：
+{chr(10).join(context_parts)}
+"""
+    return _request_model(prompt)
+
+
+def complete_research_prompt(prompt: str, json_mode: bool = False) -> str:
+    """Expose a small Qwen helper for independent RAG planning and reporting."""
+    return _request_model(prompt, json_mode=json_mode)
+
+
+def generate_research_report(
+    report_type: str,
+    sources: list[dict[str, object]],
+) -> dict[str, object]:
+    """Create a grounded structured research report from retrieved evidence."""
+    report_fields = {
+        "literature_review": (
+            "研究背景", "核心问题", "技术路线", "方法比较", "创新点", "不足",
+            "未来研究方向", "参考论文",
+        ),
+        "technology_roadmap": ("发展路线", "关键阶段", "技术演进", "当前挑战", "后续方向"),
+        "research_gap": ("现有研究覆盖", "研究空白", "可能原因", "潜在方向", "验证建议"),
+    }
+    fields = report_fields.get(report_type)
+    if fields is None:
+        raise ValueError("不支持的研究报告类型。")
+    evidence_text = "\n\n".join(
+        f"[证据 {index}] 论文：{source.get('paper_title')}；章节：{source.get('section')}\n{str(source.get('content', ''))[:1800]}"
+        for index, source in enumerate(sources, start=1)
+    )[:MAX_RAG_CONTEXT_CHARS]
+    prompt = f"""基于下列论文检索证据生成中文研究报告。
+只能使用提供的证据；信息不足时填写“现有证据不足”。
+返回且只返回 JSON 对象，字段必须是：{"、".join(fields)}。每个字段使用字符串或字符串数组。
+在每项结论中保留 [证据编号] 标注。
+
+证据：
+{evidence_text}"""
+    raw = _request_model(prompt, json_mode=True)
+    data = _decode_json_object(raw)
+    return {field: data.get(field, "现有证据不足") for field in fields}
 
 
 def _format_conversation_history(history: list[dict[str, str]]) -> str:

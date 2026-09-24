@@ -42,6 +42,11 @@ const FULL_DEMO_CASE = {
   scenario: "technical_document",
   task: "我要准备一次客户技术交流，需要分析该方案优势、风险并生成沟通策略。",
 };
+const RESEARCH_REPORT_TASKS = [
+  { id: "literature_review", name: "论文综述", description: "研究背景、技术路线、方法比较与未来方向" },
+  { id: "technology_roadmap", name: "研究趋势", description: "技术发展路线、阶段与当前挑战" },
+  { id: "research_gap", name: "创新点分析", description: "研究空白、潜在方向与验证建议" },
+];
 const SCENARIO_OPTIONS = [
   {
     id: "paper",
@@ -73,6 +78,45 @@ createApp({
     const loading = ref(false);
     const asking = ref(false);
     const errorMessage = ref("");
+    const activeWorkspaceView = ref("assistant");
+    const libraryPapers = ref([]);
+    const libraryLoading = ref(false);
+    const libraryUploading = ref(false);
+    const libraryAnalysisLoading = ref(false);
+    const libraryError = ref("");
+    const selectedLibraryPaper = ref(null);
+    const libraryPaperDetail = ref(null);
+    const libraryFileInput = ref(null);
+    const analysisFromLibrary = ref(false);
+    const researchOverview = ref(null);
+    const overviewLoading = ref(false);
+    const reportRecords = ref([]);
+    const reportsLoading = ref(false);
+    const reportsError = ref("");
+    const selectedReport = ref(null);
+    const reportDetailLoading = ref(false);
+    const ragQuestion = ref("");
+    const ragAnswer = ref("");
+    const ragSources = ref([]);
+    const ragConfidence = ref("");
+    const ragLoading = ref(false);
+    const ragError = ref("");
+    const ragSelectedPaperIds = ref([]);
+    const ragAgentPlan = ref(null);
+    const ragAgentTrace = ref(null);
+    const ragRetrievalEvaluation = ref(null);
+    const ragSourceQuality = ref(null);
+    const ragHistory = ref([]);
+    const ragHistoryLoading = ref(false);
+    const ragSelectedSource = ref(null);
+    const ragReportType = ref("literature_review");
+    const ragReportResult = ref(null);
+    const ragReportSources = ref([]);
+    const ragReportQuality = ref(null);
+    const ragReportTrace = ref(null);
+    const ragReportEvaluation = ref(null);
+    const ragReportLoading = ref(false);
+    const ragReportError = ref("");
     const showSimulation = ref(false);
     const selectedQuickTask = ref("");
     const taskHistory = ref(loadTaskHistory());
@@ -268,6 +312,313 @@ createApp({
       selectedQuickTask.value = "";
     }
 
+    async function openWorkspaceView(view) {
+      activeWorkspaceView.value = view;
+      libraryError.value = "";
+      reportsError.value = "";
+      if (view === "library") await loadLibraryPapers();
+      if (view === "reports") await loadResearchReports();
+      if (view === "rag") {
+        await loadLibraryPapers();
+        await loadRagHistory();
+      }
+      void loadResearchOverview();
+    }
+
+    async function askResearchQuestion() {
+      const normalizedQuestion = ragQuestion.value.trim();
+      if (ragLoading.value) return;
+      if (!normalizedQuestion) {
+        ragError.value = "请输入你希望从多篇论文中了解的问题。";
+        return;
+      }
+      if (!libraryPapers.value.length) {
+        ragError.value = "论文库暂无可检索资料，请先上传并完成索引。";
+        return;
+      }
+      ragLoading.value = true;
+      ragError.value = "";
+      ragAnswer.value = "";
+      ragSources.value = [];
+      ragConfidence.value = "";
+      ragAgentPlan.value = null;
+      ragAgentTrace.value = null;
+      ragRetrievalEvaluation.value = null;
+      ragSourceQuality.value = null;
+      ragSelectedSource.value = null;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/questions`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            question: normalizedQuestion,
+            paper_ids: ragSelectedPaperIds.value,
+          }),
+        });
+        const data = await readResponse(response);
+        ragAnswer.value = typeof data.answer === "string" ? data.answer : "未获得有效回答。";
+        ragSources.value = Array.isArray(data.sources) ? data.sources : [];
+        ragConfidence.value = typeof data.confidence === "string" ? data.confidence : "low";
+        ragAgentPlan.value = data.agent_plan && typeof data.agent_plan === "object" ? data.agent_plan : null;
+        ragAgentTrace.value = data.agent_trace && typeof data.agent_trace === "object" ? data.agent_trace : null;
+        ragRetrievalEvaluation.value = data.retrieval_evaluation && typeof data.retrieval_evaluation === "object" ? data.retrieval_evaluation : null;
+        ragSourceQuality.value = data.source_quality && typeof data.source_quality === "object" ? data.source_quality : null;
+        void loadRagHistory();
+      } catch (error) {
+        ragError.value = error.message || "知识问答请求失败，请稍后重试。";
+      } finally {
+        ragLoading.value = false;
+      }
+    }
+
+    async function loadRagHistory() {
+      if (ragHistoryLoading.value) return;
+      ragHistoryLoading.value = true;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/questions/history`, { method: "GET" });
+        const data = await readResponse(response);
+        ragHistory.value = Array.isArray(data) ? data : [];
+      } catch (error) {
+        ragError.value = error.message || "历史知识问答加载失败，请稍后重试。";
+      } finally {
+        ragHistoryLoading.value = false;
+      }
+    }
+
+    async function restoreRagHistory(record) {
+      if (!record?.id || ragHistoryLoading.value) return;
+      ragHistoryLoading.value = true;
+      ragError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/questions/history/${record.id}`, { method: "GET" });
+        const data = await readResponse(response);
+        ragQuestion.value = data.question || "";
+        ragAnswer.value = data.answer || "";
+        ragSources.value = Array.isArray(data.sources) ? data.sources : [];
+        ragSelectedPaperIds.value = Array.isArray(data.paper_ids) ? data.paper_ids : [];
+        ragConfidence.value = "历史记录";
+        ragSourceQuality.value = null;
+        ragAgentPlan.value = null;
+        ragAgentTrace.value = null;
+        ragRetrievalEvaluation.value = null;
+      } catch (error) {
+        ragError.value = error.message || "历史知识问答恢复失败，请稍后重试。";
+      } finally {
+        ragHistoryLoading.value = false;
+      }
+    }
+
+    async function generateResearchReport() {
+      if (ragReportLoading.value || !libraryPapers.value.length) return;
+      ragReportLoading.value = true;
+      ragReportError.value = "";
+      ragReportResult.value = null;
+      ragReportSources.value = [];
+      ragReportQuality.value = null;
+      ragReportTrace.value = null;
+      ragReportEvaluation.value = null;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/generate-report`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ report_type: ragReportType.value, paper_ids: ragSelectedPaperIds.value }),
+        });
+        const data = await readResponse(response);
+        ragReportResult.value = data.report && typeof data.report === "object" ? data.report : null;
+        ragReportSources.value = Array.isArray(data.sources) ? data.sources : [];
+        ragReportQuality.value = data.source_quality && typeof data.source_quality === "object" ? data.source_quality : null;
+        ragReportTrace.value = data.agent_trace && typeof data.agent_trace === "object" ? data.agent_trace : null;
+        ragReportEvaluation.value = data.retrieval_evaluation && typeof data.retrieval_evaluation === "object" ? data.retrieval_evaluation : null;
+      } catch (error) {
+        ragReportError.value = error.message || "研究报告生成失败，请稍后重试。";
+      } finally {
+        ragReportLoading.value = false;
+      }
+    }
+
+    function showRagSource(source) {
+      ragSelectedSource.value = source;
+    }
+
+    async function loadResearchOverview() {
+      if (overviewLoading.value) return;
+      overviewLoading.value = true;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/overview`, { method: "GET" });
+        researchOverview.value = await readResponse(response);
+      } catch {
+        // The dashboard remains optional; existing assistant operations should not be blocked.
+        researchOverview.value = null;
+      } finally {
+        overviewLoading.value = false;
+      }
+    }
+
+    async function loadResearchReports() {
+      if (reportsLoading.value) return;
+      reportsLoading.value = true;
+      reportsError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/reports`, { method: "GET" });
+        const data = await readResponse(response);
+        reportRecords.value = Array.isArray(data) ? data : [];
+      } catch (error) {
+        reportsError.value = error.message || "研究报告加载失败，请稍后重试。";
+      } finally {
+        reportsLoading.value = false;
+      }
+    }
+
+    async function viewResearchReport(report) {
+      if (!report?.id || reportDetailLoading.value) return;
+      reportDetailLoading.value = true;
+      reportsError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/reports/${report.id}`, { method: "GET" });
+        const data = await readResponse(response);
+        const savedResult = data.analysis_result;
+        if (!savedResult || typeof savedResult !== "object" || Array.isArray(savedResult)) {
+          throw new Error("保存的分析结果格式异常，无法恢复报告。 ");
+        }
+        result.value = { ...savedResult, paper_id: savedResult.paper_id || data.paper_id };
+        task.value = data.task || task.value;
+        scenario.value = data.scenario || scenario.value;
+        role.value = data.role || role.value;
+        selectedReport.value = data;
+        analysisFromLibrary.value = data.source_type === "library";
+        selectedLibraryPaper.value = {
+          paper_id: data.paper_id,
+          title: data.paper_title,
+          filename: data.paper_title,
+        };
+        chatMessages.value = [{ role: "assistant", content: "已恢复历史研究报告。若该论文仍在当前 Agent 会话上下文中，你可以继续追问。" }];
+        activeWorkspaceView.value = "assistant";
+      } catch (error) {
+        reportsError.value = error.message || "历史报告加载失败，请稍后重试。";
+      } finally {
+        reportDetailLoading.value = false;
+      }
+    }
+
+    async function loadLibraryPapers() {
+      if (libraryLoading.value) return;
+      libraryLoading.value = true;
+      libraryError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/papers`, { method: "GET" });
+        const data = await readResponse(response);
+        libraryPapers.value = Array.isArray(data) ? data : [];
+      } catch (error) {
+        libraryError.value = error.message || "论文库加载失败，请稍后重试。";
+      } finally {
+        libraryLoading.value = false;
+      }
+    }
+
+    async function uploadLibraryPaper(event) {
+      const file = event.target.files?.[0];
+      if (!file || libraryUploading.value) return;
+      libraryUploading.value = true;
+      libraryError.value = "";
+      try {
+        const formData = new FormData();
+        formData.append("file", file);
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/papers/upload`, {
+          method: "POST",
+          body: formData,
+        });
+        selectedLibraryPaper.value = await readResponse(response);
+        libraryPaperDetail.value = null;
+        await loadLibraryPapers();
+        void loadResearchOverview();
+      } catch (error) {
+        libraryError.value = error.message || "论文上传失败，请稍后重试。";
+      } finally {
+        libraryUploading.value = false;
+        if (libraryFileInput.value) libraryFileInput.value.value = "";
+      }
+    }
+
+    async function viewLibraryPaper(paper) {
+      if (!paper?.paper_id) return;
+      libraryError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/papers/${paper.paper_id}`, { method: "GET" });
+        libraryPaperDetail.value = await readResponse(response);
+        selectedLibraryPaper.value = paper;
+      } catch (error) {
+        libraryError.value = error.message || "论文详情加载失败，请稍后重试。";
+      }
+    }
+
+    async function deleteLibraryPaper(paper) {
+      if (!paper?.paper_id || !window.confirm(`确定删除《${paper.title}》吗？`)) return;
+      libraryError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/papers/${paper.paper_id}`, { method: "DELETE" });
+        if (!response.ok) await readResponse(response);
+        if (selectedLibraryPaper.value?.paper_id === paper.paper_id) {
+          selectedLibraryPaper.value = null;
+          libraryPaperDetail.value = null;
+        }
+        await loadLibraryPapers();
+        ragSelectedPaperIds.value = ragSelectedPaperIds.value.filter((id) => id !== paper.paper_id);
+        void loadResearchOverview();
+      } catch (error) {
+        libraryError.value = error.message || "论文删除失败，请稍后重试。";
+      }
+    }
+
+    async function analyzeLibraryPaper(paper) {
+      if (!paper?.paper_id || libraryAnalysisLoading.value) return;
+      libraryAnalysisLoading.value = true;
+      libraryError.value = "";
+      selectedLibraryPaper.value = paper;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/research/papers/${paper.paper_id}/analyze`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ task: task.value.trim() || DEFAULT_TASK, scenario: scenario.value, role: role.value }),
+        });
+        result.value = await readResponse(response);
+        analysisFromLibrary.value = true;
+        selectedReport.value = null;
+        saveTaskHistory({
+          role: result.value.user_role || role.value,
+          roleName: result.value.role_name || selectedRole.value.name,
+          task: result.value.user_goal || result.value.user_task || task.value,
+          fileName: paper.filename || paper.title || "论文库资料",
+          completedAt: new Date().toISOString(),
+        });
+        taskHistory.value = loadTaskHistory();
+        chatMessages.value = [{ role: "assistant", content: "已基于论文库中的资料完成分析。你可以继续针对当前论文提问。" }];
+        activeWorkspaceView.value = "assistant";
+        void loadResearchOverview();
+      } catch (error) {
+        libraryError.value = error.message || "论文库分析失败，请稍后重试。";
+      } finally {
+        libraryAnalysisLoading.value = false;
+      }
+    }
+
+    function formatLibraryDate(value) {
+      const date = new Date(value);
+      return Number.isNaN(date.getTime()) ? "时间未知" : date.toLocaleString("zh-CN", { dateStyle: "medium", timeStyle: "short" });
+    }
+
+    function formatTextLength(length) {
+      return `${Number(length || 0).toLocaleString("zh-CN")} 字`;
+    }
+
+    function libraryStatusLabel(status) {
+      return {
+        uploaded: "等待解析",
+        parsed: "已解析",
+        indexed: "已建立知识索引",
+        failed: "索引失败",
+      }[status] || status || "状态未知";
+    }
+
     function applyFullDemo() {
       applyDemo(FULL_DEMO_CASE);
       errorMessage.value = "演示目标已填充。请上传一份可提取文本的 PDF 后开始真实分析。";
@@ -329,6 +680,8 @@ createApp({
       loading.value = true;
       errorMessage.value = "";
       result.value = null;
+      analysisFromLibrary.value = false;
+      selectedReport.value = null;
       chatMessages.value = [];
 
       try {
@@ -400,14 +753,22 @@ createApp({
       chatMessages.value = [];
       errorMessage.value = "";
       showSimulation.value = false;
+      analysisFromLibrary.value = false;
+      selectedReport.value = null;
       if (fileInput.value) fileInput.value.value = "";
     }
+
+    void loadResearchOverview();
 
     return {
       agentDecision,
       agentTrace,
       agentWorkflow,
+      activeWorkspaceView,
+      analysisFromLibrary,
       actionCenter,
+      askResearchQuestion,
+      generateResearchReport,
       showSimulation,
       simulationPrompts,
       analysisData,
@@ -424,13 +785,51 @@ createApp({
       evidenceCards,
       evidenceSources,
       errorMessage,
+      libraryAnalysisLoading,
+      libraryError,
+      libraryFileInput,
+      libraryLoading,
+      libraryStatusLabel,
+      libraryPaperDetail,
+      libraryPapers,
+      libraryUploading,
       fileInput,
       fileSizeLabel,
       formatResultKey,
       loading,
       onFileChange,
+      openWorkspaceView,
       question,
+      ragAnswer,
+      ragAgentPlan,
+      ragAgentTrace,
+      ragRetrievalEvaluation,
+      ragConfidence,
+      ragError,
+      ragHistory,
+      ragHistoryLoading,
+      ragLoading,
+      ragQuestion,
+      ragReportError,
+      ragReportLoading,
+      ragReportQuality,
+      ragReportTrace,
+      ragReportEvaluation,
+      ragReportResult,
+      ragReportSources,
+      ragReportTasks: RESEARCH_REPORT_TASKS,
+      ragReportType,
+      ragSelectedPaperIds,
+      ragSelectedSource,
+      ragSourceQuality,
+      ragSources,
       reportTitle,
+      reportRecords,
+      reportDetailLoading,
+      reportsError,
+      reportsLoading,
+      researchOverview,
+      overviewLoading,
       resetTask,
       result,
       scenario,
@@ -442,16 +841,31 @@ createApp({
       applyDemo,
       applyFullDemo,
       selectedFile,
+      selectedLibraryPaper,
+      selectedReport,
       selectedScenario,
       roleHistory,
       quickWorkspaceTasks: QUICK_WORKSPACE_TASKS,
       selectedQuickTask,
       selectQuickTask,
       task,
+      analyzeLibraryPaper,
+      deleteLibraryPaper,
+      formatLibraryDate,
+      formatTextLength,
+      loadLibraryPapers,
+      loadResearchOverview,
+      loadResearchReports,
+      loadRagHistory,
       qualityCheck,
       trustReport,
       uploadStatus,
       valueEstimation,
+      uploadLibraryPaper,
+      viewLibraryPaper,
+      viewResearchReport,
+      restoreRagHistory,
+      showRagSource,
     };
   },
   template: `
@@ -459,16 +873,16 @@ createApp({
       <header class="topbar">
         <div class="hero-copy">
           <p class="product-mark"><span></span> AI INSIGHT AGENT</p>
-          <h1>AI Insight Agent</h1>
-          <p class="hero-subtitle">企业知识洞察与业务决策智能体</p>
-          <p class="product-description">让企业资料快速转化为可执行决策，让每个岗位拥有专属 AI 员工。</p>
-          <div class="hero-value-list"><span>理解复杂资料</span><span>发现关键风险</span><span>生成行动建议</span></div>
-          <button class="hero-demo-cta" type="button" @click="applyFullDemo"><span>✦</span> 3分钟体验 AI 员工 <b>→</b></button>
+          <h1>AI Research Agent</h1>
+          <p class="hero-subtitle">面向科研人员的智能文献管理、分析与知识探索助手</p>
+          <p class="product-description">让科研资料从信息阅读升级为可追溯的知识检索、研究比较与洞察生成。</p>
+          <div class="hero-value-list"><span>上传论文</span><span>AI理解文献</span><span>构建知识库</span><span>智能问答</span><span>研究洞察</span></div>
+          <button class="hero-demo-cta" type="button" @click="openWorkspaceView('library')"><span>✦</span> 开始管理科研资料 <b>→</b></button>
         </div>
         <div class="hero-visual" aria-label="AI员工业务交付流程">
           <span class="hero-orbit orbit-one"></span><span class="hero-orbit orbit-two"></span>
-          <div class="hero-core"><i>AI</i><b>企业 AI 员工</b><small>Business Copilot</small></div>
-          <div class="hero-signal signal-one">任务理解</div><div class="hero-signal signal-two">决策交付</div>
+          <div class="hero-core"><i>AI</i><b>科研知识助手</b><small>Research Copilot</small></div>
+          <div class="hero-signal signal-one">文献解析</div><div class="hero-signal signal-two">研究洞察</div>
         </div>
         <div class="topbar-status"><i></i> Agent 已就绪</div>
       </header>
@@ -479,9 +893,66 @@ createApp({
       </section>
 
       <section class="product-flow" aria-label="AI员工工作流程">
-        <div><p class="section-kicker">AGENT DELIVERY FLOW</p><h2>从企业资料到业务行动</h2></div>
-        <ol><li><b>01</b><span>用户目标</span></li><li><b>02</b><span>AI员工理解</span></li><li><b>03</b><span>任务规划</span></li><li><b>04</b><span>文档分析</span></li><li><b>05</b><span>业务交付</span></li></ol>
+        <div><p class="section-kicker">RESEARCH AGENT FLOW</p><h2>从论文资料到研究洞察</h2></div>
+        <ol><li><b>01</b><span>上传论文</span></li><li><b>02</b><span>AI理解文献</span></li><li><b>03</b><span>构建知识库</span></li><li><b>04</b><span>智能问答</span></li><li><b>05</b><span>生成研究洞察</span></li></ol>
       </section>
+
+      <section class="research-capability-grid" aria-label="AI Research Agent 核心能力">
+        <article><span>01</span><h3>Deep Analysis</h3><p>单篇论文深度分析，提炼方法、创新点、结果与局限性。</p></article>
+        <article><span>02</span><h3>Knowledge Retrieval</h3><p>从多篇已索引论文中检索证据，支持带引用的知识问答。</p></article>
+        <article><span>03</span><h3>Research Report</h3><p>围绕综述、趋势与研究空白生成结构化研究报告。</p></article>
+      </section>
+
+      <nav class="research-space-nav" aria-label="科研空间导航">
+        <div><p class="section-kicker">RESEARCH SPACE</p><h2>科研知识空间</h2></div>
+        <div class="research-space-tabs"><button type="button" :class="{ active: activeWorkspaceView === 'assistant' }" @click="openWorkspaceView('assistant')">✦ AI助手</button><button type="button" :class="{ active: activeWorkspaceView === 'library' }" @click="openWorkspaceView('library')">▣ 我的论文库</button><button type="button" :class="{ active: activeWorkspaceView === 'reports' }" @click="openWorkspaceView('reports')">▤ 研究报告</button><button type="button" :class="{ active: activeWorkspaceView === 'rag' }" @click="openWorkspaceView('rag')">⌕ 知识问答</button></div>
+      </nav>
+
+      <section class="research-overview" aria-label="科研空间概览">
+        <div class="overview-heading"><p class="section-kicker">RESEARCH OVERVIEW</p><h2>科研空间概览</h2><span v-if="overviewLoading">正在更新…</span></div>
+        <div class="overview-card-grid">
+          <article><span class="overview-icon">▣</span><p>论文资料</p><strong>{{ researchOverview?.paper_count ?? 0 }}</strong><small>当前论文库数量</small></article>
+          <article><span class="overview-icon">✓</span><p>已解析文献</p><strong>{{ researchOverview?.parsed_count ?? 0 }}</strong><small>可直接进入 Agent 分析</small></article>
+          <article><span class="overview-icon">✦</span><p>Agent 分析任务</p><strong>{{ researchOverview?.analysis_count ?? 0 }}</strong><small>已保存的论文库分析记录</small></article>
+          <article><span class="overview-icon">◷</span><p>最近分析</p><strong class="overview-date">{{ researchOverview?.last_analysis_time ? formatLibraryDate(researchOverview.last_analysis_time) : '暂无记录' }}</strong><small>最近一次保存的分析时间</small></article>
+        </div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'library'" class="library-workspace" aria-label="我的论文库">
+        <div class="library-header"><div><p class="section-kicker">MY PAPER LIBRARY</p><h2>我的论文库</h2><p>已保存并解析的科研资料，可直接进入 AI助手分析。</p></div><div class="library-header-actions"><label class="library-upload-button" :class="{ busy: libraryUploading }"><input ref="libraryFileInput" type="file" accept="application/pdf,.pdf" :disabled="libraryUploading" @change="uploadLibraryPaper" /><span>{{ libraryUploading ? '正在保存论文…' : '＋ 上传论文' }}</span></label><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新列表' }}</button></div></div>
+        <p v-if="libraryError" class="error-alert" role="alert"><span>!</span>{{ libraryError }}</p>
+        <div v-if="libraryLoading && !libraryPapers.length" class="library-empty-state"><span class="spinner"></span><p>正在加载论文库…</p></div>
+        <div v-else-if="!libraryPapers.length" class="library-empty-state"><div class="empty-illustration">▣</div><h3>暂无科研资料，上传第一篇论文开始分析</h3><p>上传可提取文本的 PDF 后，它会成为科研知识空间中的一份资料。</p></div>
+        <div v-else class="library-layout"><div class="paper-card-list"><article v-for="paper in libraryPapers" :key="paper.paper_id" class="paper-library-card" :class="{ selected: selectedLibraryPaper?.paper_id === paper.paper_id }"><div class="paper-card-top"><span class="paper-file-icon">PDF</span><span class="paper-status">{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</span></div><h3>{{ paper.title }}</h3><p class="paper-filename">{{ paper.filename }}</p><dl><div><dt>知识库状态</dt><dd>{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</dd></div><div><dt>知识片段</dt><dd>{{ paper.chunk_count ?? 0 }} 个</dd></div><div><dt>更新时间</dt><dd>{{ formatLibraryDate(paper.updated_at || paper.upload_time) }}</dd></div><div><dt>文本长度</dt><dd>{{ formatTextLength(paper.text_length) }}</dd></div></dl><div class="paper-card-actions"><button type="button" @click="viewLibraryPaper(paper)">查看详情</button><button type="button" class="primary-card-action" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(paper)">{{ libraryAnalysisLoading && selectedLibraryPaper?.paper_id === paper.paper_id ? 'Agent 分析中…' : '进入 AI 分析' }}</button><button type="button" class="danger-card-action" @click="deleteLibraryPaper(paper)">删除</button></div></article></div><aside v-if="libraryPaperDetail" class="library-detail-panel"><div class="library-detail-heading"><div><p class="section-kicker">PAPER DETAIL</p><h3>{{ libraryPaperDetail.title }}</h3></div><button type="button" class="text-button" @click="libraryPaperDetail = null">关闭</button></div><dl><div><dt>文件名</dt><dd>{{ libraryPaperDetail.filename }}</dd></div><div><dt>知识库状态</dt><dd>{{ libraryPaperDetail.quality_status || libraryStatusLabel(libraryPaperDetail.analysis_status) }}</dd></div><div><dt>知识片段</dt><dd>{{ libraryPaperDetail.chunk_count ?? 0 }} 个</dd></div><div><dt>更新时间</dt><dd>{{ formatLibraryDate(libraryPaperDetail.updated_at || libraryPaperDetail.upload_time) }}</dd></div><div><dt>文本长度</dt><dd>{{ formatTextLength(libraryPaperDetail.text_length) }}</dd></div><div><dt>文件位置</dt><dd>{{ libraryPaperDetail.file_path }}</dd></div></dl><p>为保护科研资料，详情页仅展示元信息，不展示完整论文文本。</p><button type="button" class="analyze-button" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(libraryPaperDetail)">{{ libraryAnalysisLoading ? '正在进入 AI助手分析…' : '进入 AI 分析' }}</button></aside></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'reports'" class="research-reports" aria-label="研究报告历史">
+        <div class="library-header"><div><p class="section-kicker">RESEARCH REPORTS</p><h2>研究报告</h2><p>这里保存从论文库进入 AI 助手后生成的分析记录。查看报告会回到原有 AI助手结果区。</p></div><div class="library-header-actions"><button class="outline-button" type="button" :disabled="reportsLoading" @click="loadResearchReports">{{ reportsLoading ? '刷新中' : '刷新报告' }}</button></div></div>
+        <p v-if="reportsError" class="error-alert" role="alert"><span>!</span>{{ reportsError }}</p>
+        <div v-if="reportsLoading && !reportRecords.length" class="library-empty-state"><span class="spinner"></span><p>正在读取研究报告…</p></div>
+        <div v-else-if="!reportRecords.length" class="library-empty-state"><div class="empty-illustration">▤</div><h3>暂无历史研究报告</h3><p>从“我的论文库”进入 AI 分析后，报告会自动保存在这里。</p></div>
+        <div v-else class="report-record-list"><article v-for="report in reportRecords" :key="report.id" class="report-record-card" :class="{ selected: selectedReport?.id === report.id }"><div><span class="paper-status">{{ report.scenario }}</span><time>{{ formatLibraryDate(report.created_at) }}</time></div><h3>{{ report.paper_title }}</h3><p>{{ report.task }}</p><footer><span>{{ report.role }}</span><button type="button" class="primary-card-action" :disabled="reportDetailLoading" @click="viewResearchReport(report)">{{ reportDetailLoading && selectedReport?.id === report.id ? '正在恢复…' : '查看报告' }}</button></footer></article></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'rag'" class="rag-workspace" aria-label="科研知识问答">
+        <div class="library-header"><div><p class="section-kicker">MULTI-PAPER RAG</p><h2>科研知识问答</h2><p>Agent 会检索论文库中的相关片段，再基于引用证据回答问题。</p></div><div class="library-header-actions"><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新论文范围' }}</button></div></div>
+        <p v-if="ragError" class="error-alert" role="alert"><span>!</span>{{ ragError }}</p>
+        <div v-if="!libraryPapers.length && !libraryLoading" class="library-empty-state"><div class="empty-illustration">⌕</div><h3>暂无可检索论文</h3><p>请先在“我的论文库”上传论文，并等待知识索引建立完成。</p></div>
+        <div v-else class="rag-content"><div class="rag-scope"><div><h3>论文检索范围</h3><p>不勾选时将检索论文库中的全部已建立索引资料。</p></div><div class="rag-paper-options"><label v-for="paper in libraryPapers" :key="paper.paper_id"><input v-model="ragSelectedPaperIds" type="checkbox" :value="paper.paper_id" :disabled="!['indexed', 'ready'].includes(paper.quality_status || paper.analysis_status)" /><span>{{ paper.title }}</span><em>{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</em></label></div></div>
+          <section class="research-task-center"><div><p class="section-kicker">RESEARCH TASK CENTER</p><h3>研究任务中心</h3><p>选择任务后，Agent 会检索选定论文并生成结构化研究报告。</p></div><div class="report-task-options"><button v-for="item in ragReportTasks" :key="item.id" type="button" :class="{ active: ragReportType === item.id }" @click="ragReportType = item.id"><b>{{ item.name }}</b><small>{{ item.description }}</small></button></div><button class="outline-button" type="button" :disabled="ragReportLoading" @click="generateResearchReport">{{ ragReportLoading ? '正在生成研究报告…' : '生成结构化报告' }}</button><p v-if="ragReportError" class="error-alert" role="alert"><span>!</span>{{ ragReportError }}</p><div v-if="ragReportResult" class="rag-report-card"><div class="rag-answer-heading"><div><p class="section-kicker">STRUCTURED RESEARCH REPORT</p><h3>研究任务结果</h3></div><span>{{ ragReportQuality?.evidence_level || 'low' }} evidence</span></div><article v-for="(value, key) in ragReportResult" :key="key"><h4>{{ key }}</h4><p v-if="typeof value === 'string'">{{ value }}</p><ul v-else><li v-for="item in value" :key="item">{{ item }}</li></ul></article><footer v-if="ragReportEvaluation">检索质量：<b>{{ ragReportEvaluation.retrieval_quality }}</b> · {{ ragReportEvaluation.retrieval_count }} 条证据 · 最高分 {{ ragReportEvaluation.highest_score }}</footer></div></section>
+          <div class="rag-question-form"><label for="rag-question">请输入科研知识问题</label><textarea id="rag-question" v-model="ragQuestion" rows="5" placeholder="例如：总结这些论文在研究方法上的差异，并说明各自的适用边界。"></textarea><button class="analyze-button" type="button" :disabled="ragLoading || !libraryPapers.length" @click="askResearchQuestion"><span v-if="ragLoading" class="spinner small-spinner"></span>{{ ragLoading ? 'Agent 正在检索论文证据…' : '开始知识问答' }}</button></div>
+          <div v-if="ragLoading" class="loading-state rag-loading"><div class="process-heading"><span class="spinner"></span><div><h3>Research Agent 正在处理问题</h3><p>正在分析问题、改写检索 Query、检索相关论文、筛选证据并生成回答。</p></div></div><ol class="loading-workflow"><li><i></i>分析研究任务</li><li><i></i>检索相关论文</li><li><i></i>筛选与重排证据</li><li><i></i>生成可信回答</li></ol></div>
+          <div v-if="ragAgentPlan && !ragLoading" class="rag-plan"><span>Agent任务类型：{{ ragAgentPlan.task_type }}</span><p>{{ ragAgentPlan.instruction }}</p><small>优化检索 Query：{{ ragAgentPlan.retrieval_query }}</small></div>
+          <section v-if="ragAgentTrace?.steps?.length" class="rag-trace" aria-label="Agent执行过程"><div class="result-section-heading"><div><p class="section-kicker">AGENT EXECUTION SUMMARY</p><h3>Agent 执行过程</h3></div><span>trace {{ ragAgentTrace.trace_id?.slice(0, 8) }}</span></div><ol><li v-for="(trace, index) in ragAgentTrace.steps" :key="trace.created_at + trace.step"><b>✓</b><div><strong>{{ index + 1 }}. {{ trace.step }}</strong><p>{{ trace.message }}</p></div></li></ol></section>
+          <section v-if="ragRetrievalEvaluation" class="rag-evaluation" aria-label="检索效果评估"><div><p class="section-kicker">RETRIEVAL QUALITY</p><h3>知识库检索质量</h3></div><span :class="ragRetrievalEvaluation.retrieval_quality">{{ ragRetrievalEvaluation.retrieval_quality }}</span><dl><div><dt>检索证据</dt><dd>{{ ragRetrievalEvaluation.retrieval_count }} 条</dd></div><div><dt>平均分</dt><dd>{{ ragRetrievalEvaluation.average_score }}</dd></div><div><dt>最高分</dt><dd>{{ ragRetrievalEvaluation.highest_score }}</dd></div></dl><small>该评分反映检索匹配质量，不代表回答事实准确率。</small></section>
+          <div v-if="ragAnswer" class="rag-answer-card"><div class="rag-answer-heading"><div><p class="section-kicker">EVIDENCE-GROUNDED ANSWER</p><h3>AI 回答</h3></div><span>检索匹配度：{{ ragConfidence }}</span></div><p>{{ ragAnswer }}</p><footer v-if="ragSourceQuality">证据等级：<b>{{ ragSourceQuality.evidence_level }}</b> · {{ ragSourceQuality.citation_count }} 条引用 · 平均分 {{ ragSourceQuality.average_score }}</footer></div>
+          <div v-if="ragSources.length" class="rag-sources"><div class="result-section-heading"><div><p class="section-kicker">RETRIEVAL SOURCES</p><h3>引用论文片段</h3></div><span>{{ ragSources.length }} 条证据</span></div><article v-for="(source, index) in ragSources" :key="source.paper_id + '-' + index" class="rag-source-card" tabindex="0" @click="showRagSource(source)"><div><span class="evidence-number">{{ index + 1 }}</span><div><h4>{{ source.paper_title }}</h4><p>章节：{{ source.section }}</p></div><strong>{{ Number(source.score).toFixed(4) }}</strong></div><blockquote>{{ source.content }}</blockquote></article></div>
+          <aside v-if="ragSelectedSource" class="rag-source-detail"><div class="library-detail-heading"><div><p class="section-kicker">SOURCE DETAIL</p><h3>{{ ragSelectedSource.paper_title }}</h3></div><button type="button" class="text-button" @click="ragSelectedSource = null">关闭</button></div><p><b>来源章节：</b>{{ ragSelectedSource.section }}</p><blockquote>{{ ragSelectedSource.content }}</blockquote><small>相似度：{{ Number(ragSelectedSource.score).toFixed(4) }}</small></aside>
+          <section class="rag-history"><div class="result-section-heading"><div><p class="section-kicker">RAG HISTORY</p><h3>历史知识问答</h3></div><button class="text-button" type="button" @click="loadRagHistory">{{ ragHistoryLoading ? '加载中' : '刷新' }}</button></div><p v-if="!ragHistory.length" class="field-hint">暂无历史知识问答。</p><article v-for="record in ragHistory" :key="record.id"><div><b>{{ record.question }}</b><time>{{ formatLibraryDate(record.created_at) }}</time></div><p>{{ record.answer }}</p><button type="button" class="text-button" @click="restoreRagHistory(record)">查看引用</button></article></section>
+        </div>
+      </section>
+
+      <div v-show="activeWorkspaceView === 'assistant'" class="assistant-workspace-view">
 
       <section class="quick-workspace" aria-label="AI Insight Workspace">
         <div><p class="section-kicker">AI INSIGHT WORKSPACE</p><h2>今天我要完成</h2><p>选择一个业务任务，工作空间会自动配置 AI 员工、场景和目标。</p></div>
@@ -581,10 +1052,10 @@ createApp({
               <p class="section-kicker">DECISION REPORT</p>
               <h2>Step 5 · {{ reportTitle }}</h2>
             </div>
-            <button v-if="result" class="outline-button" :disabled="loading" @click="analyzeDocument">重新分析</button>
+            <button v-if="result" class="outline-button" :disabled="loading || libraryAnalysisLoading" @click="analysisFromLibrary ? analyzeLibraryPaper(selectedLibraryPaper) : analyzeDocument">{{ libraryAnalysisLoading ? "正在重新分析…" : "重新分析" }}</button>
           </div>
 
-          <div v-if="loading" class="loading-state">
+          <div v-if="loading || libraryAnalysisLoading" class="loading-state">
             <div class="process-heading">
               <span class="spinner"></span>
               <div><h3>AI员工正在处理业务任务</h3><p>请求已发送，正在等待后端完成 PDF 解析、任务规划与模型分析。</p></div>
@@ -602,7 +1073,8 @@ createApp({
           <div v-else class="analysis-content">
             <section class="workspace-summary" aria-label="我的AI工作空间">
               <div><p class="section-kicker">MY AI WORKSPACE</p><h3>{{ selectedRole.workspaceName || selectedRole.name + '工作空间' }}</h3></div>
-              <div class="workspace-summary-grid"><article><span>当前任务</span><p>{{ result.user_goal || result.user_task || result.task || task }}</p></article><article><span>当前资料</span><p>{{ selectedFile?.name || '已上传文档' }}</p></article><article><span>Agent状态</span><p>已完成规划、文档分析与业务结果整理</p></article></div>
+              <div class="workspace-summary-grid"><article><span>当前任务</span><p>{{ result.user_goal || result.user_task || result.task || task }}</p></article><article><span>当前资料</span><p>{{ analysisFromLibrary ? (selectedLibraryPaper?.filename || '论文库资料') : (selectedFile?.name || '已上传文档') }}</p></article><article><span>Agent状态</span><p>{{ analysisFromLibrary ? '已完成论文库资料分析与业务结果整理' : '已完成规划、文档分析与业务结果整理' }}</p></article></div>
+              <p v-if="analysisFromLibrary" class="library-analysis-note">当前结果来自科研空间「我的论文库」，可继续在下方针对同一论文追问。</p>
             </section>
 
             <details v-if="agentTrace" class="agent-trace-summary advanced-details" aria-label="高级信息：AI如何完成这次分析">
@@ -778,6 +1250,7 @@ createApp({
           <button :disabled="!result || !question.trim() || asking" @click="askQuestion">{{ asking ? "思考中" : "发送" }} <span>→</span></button>
         </div>
       </section>
+      </div>
     </main>
   `,
 }).mount("#app");

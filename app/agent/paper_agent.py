@@ -222,8 +222,9 @@ class PaperAnalysisAgent:
         task: str,
         scenario: str = "paper",
         role: str = "researcher",
+        paper_id: str | None = None,
     ) -> dict[str, object]:
-        """Run the full agent workflow for one uploaded PDF and scenario."""
+        """Run the full Agent workflow, optionally reusing a persisted library paper ID."""
         plan, templates, scenario_config, role_config = self.understand_task(
             task, scenario, role
         )
@@ -233,7 +234,7 @@ class PaperAnalysisAgent:
                 "论文文本过长，请上传篇幅更短的论文后重试。"
             )
 
-        paper_id = str(uuid4())
+        paper_id = paper_id or str(uuid4())
         self._papers[paper_id] = paper_text
         self._conversations[paper_id] = []
         task_instruction = "\n".join(
