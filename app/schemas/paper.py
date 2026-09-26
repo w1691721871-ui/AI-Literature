@@ -13,6 +13,7 @@ class PaperListItem(BaseModel):
     filename: str
     upload_time: datetime
     analysis_status: str
+    document_type: str
     quality_status: str
     chunk_count: int
     updated_at: datetime

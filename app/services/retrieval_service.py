@@ -44,7 +44,7 @@ class RetrievalService:
         try:
             rows = list(
                 session.execute(
-                    select(PaperChunk, Paper.title)
+                    select(PaperChunk, Paper.title, Paper.document_type, Paper.filename)
                     .join(Paper, PaperChunk.paper_id == Paper.paper_id)
                     .where(PaperChunk.id.in_(score_by_chunk_id))
                 )
@@ -53,13 +53,15 @@ class RetrievalService:
             session.close()
 
         result: list[dict[str, object]] = []
-        for chunk, paper_title in rows:
+        for chunk, paper_title, document_type, filename in rows:
             if selected_ids and chunk.paper_id not in selected_ids:
                 continue
             result.append(
                 {
                     "paper_id": chunk.paper_id,
                     "paper_title": paper_title,
+                    "document_type": document_type,
+                    "filename": filename,
                     "section": chunk.section_title,
                     "content": chunk.content,
                     "semantic_score": score_by_chunk_id[chunk.id],

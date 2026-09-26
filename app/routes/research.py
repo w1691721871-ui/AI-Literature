@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from fastapi import APIRouter, File, HTTPException, Request, Response, UploadFile, status
+from fastapi import APIRouter, File, Form, HTTPException, Request, Response, UploadFile, status
 
 from app.agent.paper_agent import (
     PaperTextTooLongError,
@@ -83,6 +83,7 @@ def _list_item(paper) -> PaperListItem:
         filename=paper.filename,
         upload_time=paper.upload_time,
         analysis_status=paper.analysis_status,
+        document_type=paper.document_type,
         quality_status=paper.quality_status,
         chunk_count=chunk_count,
         updated_at=paper.updated_at,
@@ -212,7 +213,10 @@ def get_research_report(record_id: str) -> ResearchReportDetail:
 
 
 @router.post("/papers/upload", response_model=PaperListItem, status_code=status.HTTP_201_CREATED)
-async def upload_research_paper(file: UploadFile = File(...)) -> PaperListItem:
+async def upload_research_paper(
+    file: UploadFile = File(...),
+    document_type: str = Form("paper"),
+) -> PaperListItem:
     """Save a source PDF, extract text via the shared parser, and create a library record."""
     filename = file.filename or ""
     if file.content_type != "application/pdf" and not filename.lower().endswith(".pdf"):
@@ -220,9 +224,14 @@ async def upload_research_paper(file: UploadFile = File(...)) -> PaperListItem:
             status_code=status.HTTP_400_BAD_REQUEST,
             detail="文件格式不正确，请上传 PDF 文件。",
         )
+    allowed_document_types = {"paper", "patent", "experiment_report", "project_material"}
+    if document_type not in allowed_document_types:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="不支持的科研资料类型。")
 
     try:
-        paper = paper_library_service.save_uploaded_paper(await file.read(), filename)
+        paper = paper_library_service.save_uploaded_paper(
+            await file.read(), filename, document_type
+        )
         return _list_item(paper)
     except InvalidPdfError as error:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error

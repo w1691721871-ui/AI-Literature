@@ -37,6 +37,7 @@ def initialize_database() -> None:
     from app.models.agent_trace import AgentTrace  # noqa: F401
     from app.models.paper import Paper  # noqa: F401
     from app.models.paper_chunk import PaperChunk  # noqa: F401
+    from app.models.research_project import ResearchProject  # noqa: F401
     from app.models.rag_query_record import RagQueryRecord  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
@@ -50,6 +51,11 @@ def _apply_lightweight_migrations() -> None:
         with engine.begin() as connection:
             connection.execute(
                 text("ALTER TABLE papers ADD COLUMN quality_status VARCHAR(50) NOT NULL DEFAULT 'parsed'")
+            )
+    if "document_type" not in columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE papers ADD COLUMN document_type VARCHAR(50) NOT NULL DEFAULT 'paper'")
             )
 
 

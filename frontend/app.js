@@ -17,6 +17,13 @@ const QUICK_WORKSPACE_TASKS = [
   { id: "product_strategy", name: "生成产品策略", role: "product_manager", scenario: "product_document", task: "我需要基于这份产品资料梳理用户痛点、产品机会、功能建议和优先级。" },
 ];
 const TASK_HISTORY_KEY = "ai-insight-agent-task-history";
+const ACTIVITY_LOG_KEY = "researchos-activity-log";
+const DEMO_KNOWLEDGE_KEY = "researchos-demo-knowledge-initialized";
+const DEMO_KNOWLEDGE_ASSETS = [
+  { title: "Demo · 低碳胶凝材料技术路线研究", type: "论文资料", status: "Demo资料", detail: "用于展示技术路线、材料性能与研究方向的资料卡。" },
+  { title: "Demo · 低碳建筑材料制备工艺专利", type: "专利资料", status: "Demo资料", detail: "用于展示成果规划与专利方向的资料卡。" },
+  { title: "Demo · 建筑材料企业合作项目需求", type: "项目资料", status: "Demo资料", detail: "用于展示企业需求分析与项目交付流程。" },
+];
 
 function loadTaskHistory() {
   try {
@@ -30,6 +37,20 @@ function loadTaskHistory() {
 function saveTaskHistory(record) {
   const history = [record, ...loadTaskHistory()].slice(0, 8);
   window.localStorage.setItem(TASK_HISTORY_KEY, JSON.stringify(history));
+}
+
+function loadActivityLog() {
+  try {
+    const saved = JSON.parse(window.localStorage.getItem(ACTIVITY_LOG_KEY) || "[]");
+    return Array.isArray(saved) ? saved.filter((item) => item && typeof item === "object").slice(0, 30) : [];
+  } catch {
+    return [];
+  }
+}
+
+function saveActivityLog(record) {
+  const history = [record, ...loadActivityLog()].slice(0, 30);
+  window.localStorage.setItem(ACTIVITY_LOG_KEY, JSON.stringify(history));
 }
 const DEMO_CASES = [
   { name: "新能源汽车技术路线分析", role: "researcher", scenario: "paper", task: "分析新能源汽车技术路线的核心创新、技术风险和后续研究建议。" },
@@ -64,6 +85,14 @@ const SCENARIO_OPTIONS = [
     description: "识别产品定位、用户价值、功能与应用场景。",
   },
 ];
+const AGENT_ROLE_LABELS = {
+  literature: "科研文献分析师",
+  knowledge: "科研知识专家",
+  trend: "研究趋势顾问",
+  innovation: "创新分析顾问",
+  project: "项目方案顾问",
+  report: "科研报告顾问",
+};
 
 createApp({
   setup() {
@@ -78,7 +107,7 @@ createApp({
     const loading = ref(false);
     const asking = ref(false);
     const errorMessage = ref("");
-    const activeWorkspaceView = ref("assistant");
+    const activeWorkspaceView = ref("demo");
     const libraryPapers = ref([]);
     const librarySearch = ref("");
     const libraryStatusFilter = ref("all");
@@ -89,6 +118,7 @@ createApp({
     const selectedLibraryPaper = ref(null);
     const libraryPaperDetail = ref(null);
     const libraryFileInput = ref(null);
+    const libraryDocumentType = ref("paper");
     const analysisFromLibrary = ref(false);
     const researchOverview = ref(null);
     const overviewLoading = ref(false);
@@ -122,6 +152,55 @@ createApp({
     const showSimulation = ref(false);
     const selectedQuickTask = ref("");
     const taskHistory = ref(loadTaskHistory());
+    // ResearchOS is a lightweight product layer over the existing paper
+    // library and RAG services. Task output is deliberately kept in the
+    // current browser session; no new persistence subsystem is introduced.
+    const researchOsOverview = ref(null);
+    const researchOsAgents = ref([]);
+    const researchOsGoal = ref("分析低碳建筑材料未来研究方向，并给出可验证的创新机会和项目成果路径。");
+    const researchOsSelectedAgents = ref(["literature", "knowledge", "trend", "innovation", "project", "report"]);
+    const researchOsTaskResult = ref(null);
+    const researchOsTaskLoading = ref(false);
+    const researchOsError = ref("");
+    const researchBi = ref(null);
+    const researchBiLoading = ref(false);
+    const researchProjects = ref([]);
+    const projectLoading = ref(false);
+    const projectError = ref("");
+    const projectMatching = ref(false);
+    const projectMatchResult = ref(null);
+    const projectForm = ref({ name: "", enterprise_requirement: "", research_goal: "", technology_route: "", paper_plan: "", patent_plan: "", outcome_management: "", status: "planning" });
+    const valueAssessment = ref(null);
+    const valueAssessmentLoading = ref(false);
+    const labProfile = ref(null);
+    const labProfileLoading = ref(false);
+    const evidenceItems = ref([]);
+    const evidenceLoading = ref(false);
+    const evidenceError = ref("");
+    const systemStatus = ref(null);
+    const systemStatusLoading = ref(false);
+    const systemStatusError = ref("");
+    const activityLogs = ref(loadActivityLog());
+    const demoKnowledgeInitialized = ref(window.localStorage.getItem(DEMO_KNOWLEDGE_KEY) === "true");
+    const advisorAudience = ref("enterprise_partner");
+    const advisorRoles = [
+      { id: "mentor", name: "导师", description: "关注研究方向、创新价值与成果路径。" },
+      { id: "student", name: "学生", description: "关注学习资料、研究任务与下一步实验。" },
+      { id: "research_admin", name: "科研管理员", description: "关注科研资产、项目状态与成果沉淀。" },
+      { id: "enterprise_partner", name: "企业合作方", description: "关注需求匹配、技术路线与预期交付。" },
+    ];
+    const demoStarted = ref(false);
+    const demoSteps = [
+      { id: "need", title: "企业需求输入", detail: "开发低碳建筑材料，兼顾工程适用性与科研成果。", view: "projects" },
+      { id: "master", title: "Research Master 任务拆解", detail: "分配知识检索、趋势、创新、项目规划与报告任务。", view: "tasks" },
+      { id: "timeline", title: "Agent Timeline 展示协作", detail: "以用户可理解的摘要展示各专项 Agent 的执行状态和输出。", view: "timeline" },
+      { id: "match", title: "实验室能力匹配", detail: "Project Agent 基于团队资料输出能力匹配与风险。", view: "projects" },
+      { id: "evidence", title: "Evidence Center 复核依据", detail: "展示来源文件、资料类型、章节片段与关联 Agent。", view: "evidence" },
+      { id: "route", title: "技术路线与创新机会", detail: "基于检索证据生成技术建议与创新辅助判断。", view: "tasks" },
+      { id: "delivery", title: "项目规划与交付中心", detail: "组织技术路线、论文专利规划和阶段性交付物。", view: "delivery" },
+      { id: "outcome", title: "FDE 解决方案报告", detail: "汇总客户需求、能力匹配、分析依据与成果规划。", view: "fde-report" },
+      { id: "value", title: "客户价值总结", detail: "说明企业、实验室和高校在协同交付中的价值。", view: "customer-value" },
+    ];
 
     const selectedScenario = computed(() => (
       SCENARIO_OPTIONS.find((item) => item.id === scenario.value) || SCENARIO_OPTIONS[0]
@@ -148,6 +227,104 @@ createApp({
     const readyPaperCount = computed(() => libraryPapers.value
       .filter((paper) => ["ready", "indexed"].includes(paper.quality_status || paper.analysis_status))
       .length);
+    const researchOsSections = computed(() => {
+      const report = researchOsTaskResult.value;
+      if (!report) return [];
+      return [
+        ["文献分析", report.literature_analysis],
+        ["知识洞察", report.knowledge_insights],
+        ["趋势判断", report.trend_insights],
+        ["创新机会", report.innovation_opportunities],
+        ["项目与成果规划", report.project_plan],
+        ["科研决策报告", report.report],
+      ].filter(([, value]) => value && typeof value === "object");
+    });
+    const agentTimeline = computed(() => {
+      if (researchOsTaskResult.value?.master_plan?.workflow_steps?.length) {
+        const runByAgent = new Map((researchOsTaskResult.value.agent_runs || [])
+          .map((run) => [run.agent, run]));
+        return researchOsTaskResult.value.master_plan.workflow_steps.map((step) => {
+          const run = runByAgent.get(step.agent);
+          return {
+            agent: step.agent,
+            status: run?.status || "completed",
+            action: step.action,
+            summary: run?.message || step.purpose,
+          };
+        });
+      }
+      if (projectMatchResult.value?.agent_trace?.length) {
+        return projectMatchResult.value.agent_trace.map((trace) => ({
+          agent: trace.agent,
+          status: trace.status || "completed",
+          action: "企业需求匹配",
+          summary: trace.message,
+        }));
+      }
+      return demoSteps.map((item) => ({
+        agent: item.id === "master" ? "Research Master" : "待调度专项 Agent",
+        status: "pending",
+        action: item.title,
+        summary: item.detail,
+      }));
+    });
+    const aiActivityStream = computed(() => {
+      const status = researchOsTaskLoading.value ? "working"
+        : researchOsTaskResult.value ? "completed" : "ready";
+      const label = status === "working" ? "处理中" : status === "completed" ? "已完成" : "待执行";
+      return [
+        { agent: "Research Master", action: "理解企业需求与研究目标", status, label },
+        { agent: "Knowledge Agent", action: "检索实验室科研资料", status, label },
+        { agent: "Innovation Agent", action: "分析创新机会与验证方向", status, label },
+        { agent: "Project Agent", action: "组织项目方案与成果路径", status, label },
+      ];
+    });
+    const agentTeamCards = computed(() => [
+      {
+        id: "master",
+        name: "Research Master",
+        name_cn: "科研项目负责人",
+        description: "理解科研目标，编排专项 Agent 协作流程，并汇总可复核的决策输出。",
+        purpose: "统一任务规划与交付协调",
+      },
+      ...researchOsAgents.value.map((agent) => ({
+        ...agent,
+        name_cn: AGENT_ROLE_LABELS[agent.id] || agent.name_cn,
+      })),
+    ]);
+    const evidenceCenterItems = computed(() => {
+      const currentItems = [];
+      const addSources = (sources, relatedAgent, basis) => {
+        (Array.isArray(sources) ? sources : []).forEach((source) => {
+          if (!source || typeof source !== "object") return;
+          currentItems.push({
+            paper_id: source.paper_id || "",
+            source_file: source.filename || source.paper_title || "未命名资料",
+            paper_title: source.paper_title || "未命名资料",
+            document_type: source.document_type || "paper",
+            section: source.section || "正文",
+            content: source.content || "暂无可展示片段。",
+            related_agent: relatedAgent,
+            basis,
+            score: source.score,
+          });
+        });
+      };
+      addSources(researchOsTaskResult.value?.sources, "Research Master / 专项 Agent", "科研任务分析依据");
+      addSources(projectMatchResult.value?.sources, "Project Agent", "企业需求匹配依据");
+      addSources(labProfile.value?.sources, "Knowledge Agent", "实验室能力画像依据");
+      const combined = [...currentItems, ...evidenceItems.value];
+      const seen = new Set();
+      return combined.filter((item) => {
+        const key = `${item.paper_id}-${item.section}-${item.related_agent}`;
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+    });
+    const visibleDemoKnowledgeAssets = computed(() => (
+      demoKnowledgeInitialized.value ? DEMO_KNOWLEDGE_ASSETS : []
+    ));
 
     const fileSizeLabel = computed(() => {
       if (!selectedFile.value) return "";
@@ -334,13 +511,315 @@ createApp({
       activeWorkspaceView.value = view;
       libraryError.value = "";
       reportsError.value = "";
-      if (view === "library") await loadLibraryPapers();
-      if (view === "reports") await loadResearchReports();
-      if (view === "rag") {
+      if (view === "knowledge") await loadLibraryPapers();
+      if (view === "outcomes") await loadResearchReports();
+      if (view === "insights") {
         await loadLibraryPapers();
         await loadRagHistory();
       }
+      if (view === "dashboard" || view === "tasks" || view === "agents") {
+        await loadResearchOsData();
+      }
+      if (view === "projects") await loadResearchProjects();
+      if (view === "bi") await loadResearchBi();
+      if (view === "evidence") await loadEvidenceCenter();
+      if (view === "lab-profile") await loadResearchBi();
+      if (view === "system") await loadSystemStatus();
       void loadResearchOverview();
+    }
+
+    async function loadResearchOsData() {
+      try {
+        const [overviewResponse, agentsResponse] = await Promise.all([
+          fetchWithTimeout(`${API_BASE_URL}/researchos/overview`, { method: "GET" }),
+          fetchWithTimeout(`${API_BASE_URL}/researchos/agents`, { method: "GET" }),
+        ]);
+        researchOsOverview.value = await readResponse(overviewResponse);
+        const agentData = await readResponse(agentsResponse);
+        researchOsAgents.value = Array.isArray(agentData.agents) ? agentData.agents : [];
+      } catch (error) {
+        researchOsError.value = error.message || "ResearchOS 工作空间暂时无法加载。";
+      }
+    }
+
+    function recordActivity(action, detail) {
+      const record = { action, detail, created_at: new Date().toISOString() };
+      saveActivityLog(record);
+      activityLogs.value = loadActivityLog();
+    }
+
+    async function loadSystemStatus() {
+      if (systemStatusLoading.value) return;
+      systemStatusLoading.value = true;
+      systemStatusError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/system-status`, { method: "GET" });
+        systemStatus.value = await readResponse(response);
+      } catch (error) {
+        systemStatusError.value = error.message || "系统状态暂时无法加载。";
+      } finally {
+        systemStatusLoading.value = false;
+      }
+    }
+
+    function initializeDemoKnowledge() {
+      if (!demoKnowledgeInitialized.value) {
+        window.localStorage.setItem(DEMO_KNOWLEDGE_KEY, "true");
+        demoKnowledgeInitialized.value = true;
+        recordActivity("Demo 知识库初始化", "已加载低碳建筑材料案例的论文、专利与项目资料展示卡。");
+      }
+      activeWorkspaceView.value = "system";
+    }
+
+    function toggleResearchOsAgent(agentId) {
+      const selected = researchOsSelectedAgents.value;
+      researchOsSelectedAgents.value = selected.includes(agentId)
+        ? selected.filter((item) => item !== agentId)
+        : [...selected, agentId];
+    }
+
+    function applyResearchOsDemo() {
+      researchOsGoal.value = "面向某高校建筑材料实验室，分析低碳建筑材料未来研究方向，识别技术趋势、潜在创新机会，并规划可形成的论文、专利与研究任务。";
+      researchOsSelectedAgents.value = ["literature", "knowledge", "trend", "innovation", "project", "report"];
+      researchOsTaskResult.value = null;
+      researchOsError.value = "已填充预设科研任务。请确保论文库已有相关已索引资料后开始运行。";
+      activeWorkspaceView.value = "tasks";
+    }
+
+    async function runResearchOsTask() {
+      const goal = researchOsGoal.value.trim();
+      if (!goal || researchOsTaskLoading.value) return;
+      researchOsTaskLoading.value = true;
+      researchOsError.value = "";
+      researchOsTaskResult.value = null;
+      recordActivity("科研任务创建", goal);
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/tasks/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            user_goal: goal,
+            selected_agents: researchOsSelectedAgents.value,
+            paper_ids: [],
+          }),
+        });
+        researchOsTaskResult.value = await readResponse(response);
+        recordActivity("Agent 执行完成", "Research Master 已完成科研任务编排与专项分析输出。");
+      } catch (error) {
+        researchOsError.value = error.message || "科研任务执行失败，请稍后重试。";
+      } finally {
+        researchOsTaskLoading.value = false;
+      }
+    }
+
+    async function assessResearchValue() {
+      if (!researchOsGoal.value.trim() || valueAssessmentLoading.value) return;
+      valueAssessmentLoading.value = true;
+      researchOsError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/value-assessment`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ research_goal: researchOsGoal.value.trim(), paper_ids: [] }),
+        });
+        valueAssessment.value = await readResponse(response);
+      } catch (error) {
+        researchOsError.value = error.message || "科研价值评估失败。";
+      } finally {
+        valueAssessmentLoading.value = false;
+      }
+    }
+
+    async function generateLabProfile() {
+      if (labProfileLoading.value) return;
+      labProfileLoading.value = true;
+      researchOsError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/lab-profile/generate`, { method: "POST" });
+        labProfile.value = await readResponse(response);
+      } catch (error) {
+        researchOsError.value = error.message || "实验室能力画像生成失败。";
+      } finally {
+        labProfileLoading.value = false;
+      }
+    }
+
+    async function loadEvidenceCenter() {
+      if (evidenceLoading.value) return;
+      evidenceLoading.value = true;
+      evidenceError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/evidence?limit=24`, { method: "GET" });
+        const data = await readResponse(response);
+        evidenceItems.value = Array.isArray(data.items) ? data.items : [];
+      } catch (error) {
+        evidenceError.value = error.message || "证据中心暂时无法加载。";
+      } finally {
+        evidenceLoading.value = false;
+      }
+    }
+
+    function documentTypeLabel(documentType) {
+      const labels = {
+        paper: "论文",
+        patent: "专利",
+        experiment_report: "实验报告",
+        project_material: "项目资料",
+      };
+      return labels[documentType] || "科研资料";
+    }
+
+    function knowledgeAssetSummary(paper) {
+      const status = paper?.quality_status || paper?.analysis_status;
+      if (["ready", "indexed"].includes(status)) {
+        return "资料已完成解析与知识索引，可进入多论文检索、创新机会分析和项目规划。";
+      }
+      if (status === "parsed") {
+        return "资料已完成文本解析，等待建立知识索引后参与团队知识探索。";
+      }
+      return "资料正在准备中，完成解析后可进入 AI 科研工作流。";
+    }
+
+    function knowledgeAssetAgents(paper) {
+      const status = paper?.quality_status || paper?.analysis_status;
+      return ["Knowledge Agent", ...( ["ready", "indexed"].includes(status) ? ["Research Master"] : ["等待索引"] )];
+    }
+
+    function applyFdeDeliveryDemo() {
+      projectForm.value = {
+        name: "低碳建筑材料企业横向项目",
+        enterprise_requirement: "企业希望开发低碳建筑材料，兼顾材料性能、工程适用性与可形成的科研成果。",
+        research_goal: "识别实验室技术匹配方向、潜在创新机会和可验证的研究任务。",
+        technology_route: "以团队知识库证据为基础，形成材料路线与验证建议。",
+        paper_plan: "围绕材料机理、性能验证与工程适用性规划论文方向。",
+        patent_plan: "围绕配方、制备工艺或应用方法评估可申请的专利方向。",
+        outcome_management: "形成阶段技术交流材料、研究任务清单与成果规划。",
+        status: "需求分析",
+      };
+      projectMatchResult.value = null;
+      projectError.value = "已填充 FDE 演示案例。创建项目后可运行 Project Agent 需求匹配。";
+      activeWorkspaceView.value = "projects";
+    }
+
+    function startDemoMode() {
+      projectForm.value = {
+        name: "低碳建筑材料企业横向项目",
+        enterprise_requirement: "企业希望开发低碳建筑材料，兼顾材料性能、工程适用性与可形成的科研成果。",
+        research_goal: "识别实验室技术匹配方向、潜在创新机会和可验证的研究任务。",
+        technology_route: "以团队知识库证据为基础，形成材料路线与验证建议。",
+        paper_plan: "围绕材料机理、性能验证与工程适用性规划论文方向。",
+        patent_plan: "围绕配方、制备工艺或应用方法评估可申请的专利方向。",
+        outcome_management: "形成阶段技术交流材料、研究任务清单与成果规划。",
+        status: "需求分析",
+      };
+      researchOsGoal.value = researchOsGoal.value.trim() || "面向低碳建筑材料企业需求，分析实验室技术匹配、技术路线、创新机会和成果规划。";
+      researchOsSelectedAgents.value = ["literature", "knowledge", "trend", "innovation", "project", "report"];
+      demoStarted.value = true;
+      activeWorkspaceView.value = "demo";
+    }
+
+    function openDemoStep(step) {
+      activeWorkspaceView.value = step.view;
+    }
+
+    function projectDeliveryStage(project) {
+      if (projectMatchResult.value?.projectName === project.name) return "方案已生成";
+      if (project.paper_plan || project.patent_plan) return "成果规划中";
+      if (project.technology_route) return "技术路线设计";
+      if (project.enterprise_requirement) return "需求分析";
+      return "项目创建";
+    }
+
+    function selectAdvisorScenario(scenarioId) {
+      if (scenarioId === "enterprise") {
+        applyFdeDeliveryDemo();
+        return;
+      }
+      if (scenarioId === "explore") {
+        researchOsGoal.value = "分析低碳建筑材料未来研究方向，识别技术趋势、创新机会与下一步验证任务。";
+        researchOsSelectedAgents.value = ["literature", "knowledge", "trend", "innovation", "report"];
+        activeWorkspaceView.value = "tasks";
+        return;
+      }
+      activeWorkspaceView.value = "knowledge";
+    }
+
+    async function loadResearchBi() {
+      if (researchBiLoading.value) return;
+      researchBiLoading.value = true;
+      projectError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/bi`, { method: "GET" });
+        researchBi.value = await readResponse(response);
+      } catch (error) {
+        projectError.value = error.message || "科研 BI 数据加载失败。";
+      } finally {
+        researchBiLoading.value = false;
+      }
+    }
+
+    async function loadResearchProjects() {
+      if (projectLoading.value) return;
+      projectLoading.value = true;
+      projectError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/projects`, { method: "GET" });
+        const data = await readResponse(response);
+        researchProjects.value = Array.isArray(data) ? data : [];
+      } catch (error) {
+        projectError.value = error.message || "科研项目加载失败。";
+      } finally {
+        projectLoading.value = false;
+      }
+    }
+
+    async function createResearchProject() {
+      if (projectLoading.value || !projectForm.value.name.trim()) {
+        if (!projectForm.value.name.trim()) projectError.value = "请先填写项目名称。";
+        return;
+      }
+      projectLoading.value = true;
+      projectError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/projects`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(projectForm.value),
+        });
+        researchProjects.value = [await readResponse(response), ...researchProjects.value];
+        recordActivity("项目更新", `已创建科研项目：${projectForm.value.name}`);
+        projectForm.value = { name: "", enterprise_requirement: "", research_goal: "", technology_route: "", paper_plan: "", patent_plan: "", outcome_management: "", status: "planning" };
+      } catch (error) {
+        projectError.value = error.message || "科研项目创建失败。";
+      } finally {
+        projectLoading.value = false;
+      }
+    }
+
+    async function runProjectMatch(project) {
+      if (!project?.id || projectMatching.value) return;
+      const requirement = project.enterprise_requirement?.trim();
+      if (!requirement) {
+        projectError.value = "请先在项目中填写企业需求，再运行需求匹配。";
+        return;
+      }
+      projectMatching.value = true;
+      projectError.value = "";
+      projectMatchResult.value = null;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/projects/${project.id}/match`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ enterprise_requirement: requirement, paper_ids: [] }),
+        });
+        projectMatchResult.value = {
+          ...await readResponse(response),
+          projectName: project.name,
+          enterprise_requirement: requirement,
+        };
+        recordActivity("Agent 执行完成", `Project Agent 已完成「${project.name}」的企业需求匹配。`);
+      } catch (error) {
+        projectError.value = error.message || "需求匹配执行失败。";
+      } finally {
+        projectMatching.value = false;
+      }
     }
 
     async function askResearchQuestion() {
@@ -447,6 +926,7 @@ createApp({
         ragReportQuality.value = data.source_quality && typeof data.source_quality === "object" ? data.source_quality : null;
         ragReportTrace.value = data.agent_trace && typeof data.agent_trace === "object" ? data.agent_trace : null;
         ragReportEvaluation.value = data.retrieval_evaluation && typeof data.retrieval_evaluation === "object" ? data.retrieval_evaluation : null;
+        recordActivity("报告生成", `已生成${RESEARCH_REPORT_TASKS.find((item) => item.id === ragReportType.value)?.name || "研究"}报告。`);
       } catch (error) {
         ragReportError.value = error.message || "研究报告生成失败，请稍后重试。";
       } finally {
@@ -541,12 +1021,14 @@ createApp({
       try {
         const formData = new FormData();
         formData.append("file", file);
+        formData.append("document_type", libraryDocumentType.value);
         const response = await fetchWithTimeout(`${API_BASE_URL}/research/papers/upload`, {
           method: "POST",
           body: formData,
         });
         selectedLibraryPaper.value = await readResponse(response);
         libraryPaperDetail.value = null;
+        recordActivity("知识库资料上传", `已上传${libraryDocumentType.value}资料：${file.name}`);
         await loadLibraryPapers();
         void loadResearchOverview();
       } catch (error) {
@@ -777,6 +1259,8 @@ createApp({
     }
 
     void loadResearchOverview();
+    void loadResearchOsData();
+    void loadResearchBi();
 
     return {
       agentDecision,
@@ -811,6 +1295,7 @@ createApp({
       knowledgeChunkTotal,
       readyPaperCount,
       libraryFileInput,
+      libraryDocumentType,
       libraryLoading,
       libraryStatusLabel,
       libraryPaperDetail,
@@ -852,6 +1337,62 @@ createApp({
       reportsError,
       reportsLoading,
       researchOverview,
+      researchOsAgents,
+      researchOsError,
+      researchOsGoal,
+      researchOsOverview,
+      researchOsSections,
+      agentTimeline,
+      aiActivityStream,
+      agentTeamCards,
+      evidenceCenterItems,
+      evidenceError,
+      evidenceLoading,
+      systemStatus,
+      systemStatusLoading,
+      systemStatusError,
+      activityLogs,
+      demoKnowledgeInitialized,
+      visibleDemoKnowledgeAssets,
+      researchOsSelectedAgents,
+      researchOsTaskLoading,
+      researchOsTaskResult,
+      researchBi,
+      researchBiLoading,
+      researchProjects,
+      projectError,
+      projectForm,
+      projectLoading,
+      projectMatchResult,
+      projectMatching,
+      valueAssessment,
+      valueAssessmentLoading,
+      labProfile,
+      labProfileLoading,
+      documentTypeLabel,
+      knowledgeAssetSummary,
+      knowledgeAssetAgents,
+      advisorAudience,
+      advisorRoles,
+      demoStarted,
+      demoSteps,
+      applyResearchOsDemo,
+      applyFdeDeliveryDemo,
+      startDemoMode,
+      openDemoStep,
+      projectDeliveryStage,
+      selectAdvisorScenario,
+      assessResearchValue,
+      createResearchProject,
+      loadResearchBi,
+      loadResearchProjects,
+      runProjectMatch,
+      generateLabProfile,
+      loadEvidenceCenter,
+      loadSystemStatus,
+      initializeDemoKnowledge,
+      runResearchOsTask,
+      toggleResearchOsAgent,
       overviewLoading,
       resetTask,
       result,
@@ -895,38 +1436,81 @@ createApp({
     <main class="app-shell">
       <header class="workspace-header">
         <nav class="top-navigation" aria-label="主导航">
-          <button class="brand-button" type="button" @click="openWorkspaceView('assistant')"><span class="brand-orb">✦</span><span>AI Research Agent</span></button>
-          <div class="top-navigation-links"><button type="button" :class="{ active: activeWorkspaceView === 'assistant' }" @click="openWorkspaceView('assistant')">AI助手</button><button type="button" :class="{ active: activeWorkspaceView === 'library' }" @click="openWorkspaceView('library')">论文库</button><button type="button" :class="{ active: activeWorkspaceView === 'reports' }" @click="openWorkspaceView('reports')">研究报告</button><button type="button" :class="{ active: activeWorkspaceView === 'rag' }" @click="openWorkspaceView('rag')">知识问答</button></div>
-          <span class="top-navigation-status"><i></i> Online</span>
+          <button class="brand-button" type="button" @click="openWorkspaceView('dashboard')"><span class="brand-orb">✦</span><span>ResearchOS</span></button>
+          <div class="top-navigation-links"><button type="button" :class="{ active: activeWorkspaceView === 'demo' }" @click="startDemoMode">现场演示</button><button type="button" :class="{ active: activeWorkspaceView === 'tasks' || activeWorkspaceView === 'assistant' }" @click="openWorkspaceView('tasks')">AI助手</button><button type="button" :class="{ active: activeWorkspaceView === 'knowledge' }" @click="openWorkspaceView('knowledge')">知识空间</button><button type="button" :class="{ active: activeWorkspaceView === 'timeline' || activeWorkspaceView === 'agents' }" @click="openWorkspaceView('agents')">Agent团队</button><button type="button" :class="{ active: activeWorkspaceView === 'projects' || activeWorkspaceView === 'delivery' }" @click="openWorkspaceView('projects')">科研项目</button><button type="button" :class="{ active: activeWorkspaceView === 'fde-report' || activeWorkspaceView === 'evidence' || activeWorkspaceView === 'customer-value' }" @click="openWorkspaceView('fde-report')">解决方案</button><button type="button" :class="{ active: activeWorkspaceView === 'bi' || activeWorkspaceView === 'lab-profile' || activeWorkspaceView === 'insights' }" @click="openWorkspaceView('bi')">科研洞察</button><button type="button" :class="{ active: activeWorkspaceView === 'system' }" @click="openWorkspaceView('system')">系统状态</button></div>
+          <span class="top-navigation-status"><i></i> ResearchOS v1.0</span>
         </nav>
-        <div v-if="activeWorkspaceView === 'assistant'" class="minimal-hero">
-          <h1>AI Research Agent</h1>
-          <p>让 AI 帮助你理解论文、探索知识、生成研究洞察。</p>
-          <div class="hero-tags" aria-label="核心能力"><span>📄 论文分析</span><span>🔍 知识检索</span><span>🧠 研究生成</span></div>
-          <label class="hero-input"><span>✦</span><input v-model="task" placeholder="上传论文后，告诉 AI 你想研究什么" /><button type="button" @click="openWorkspaceView('assistant')">开始</button></label>
+        <div v-if="activeWorkspaceView === 'dashboard'" class="minimal-hero researchos-hero">
+          <p class="section-kicker">AI RESEARCH CONSULTANT</p><h1>ResearchOS 科研顾问</h1>
+          <p>从企业需求出发，连接实验室知识资产、技术路线与科研成果规划。</p>
+          <div class="hero-tags" aria-label="核心价值"><span>需求理解</span><span>技术路线</span><span>成果规划</span></div>
+          <div class="researchos-hero-actions"><button type="button" class="primary-card-action" @click="applyFdeDeliveryDemo">体验低碳材料企业合作案例</button><button type="button" class="outline-button" @click="openWorkspaceView('tasks')">探索研究方向</button></div>
         </div>
       </header>
 
-      <section v-if="activeWorkspaceView === 'library'" class="library-workspace" aria-label="我的论文库">
-        <div class="library-header"><div><p class="section-kicker">MY PAPER LIBRARY</p><h2>我的论文库</h2><p>已保存并解析的科研资料，可直接进入 AI助手分析。</p></div><div class="library-header-actions"><label class="library-upload-button" :class="{ busy: libraryUploading }"><input ref="libraryFileInput" type="file" accept="application/pdf,.pdf" :disabled="libraryUploading" @change="uploadLibraryPaper" /><span>{{ libraryUploading ? '正在保存论文…' : '＋ 上传论文' }}</span></label><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新列表' }}</button></div></div>
+      <section v-if="activeWorkspaceView === 'demo'" class="demo-stage ai-workspace-hero" aria-label="悟帆比赛现场演示模式">
+        <div class="workspace-hero-copy">
+          <p class="section-eyebrow">RESEARCHOS AI WORKSPACE · 悟帆比赛现场模式</p>
+          <h1>让科研知识<br /><em>转化为创新决策。</em></h1>
+          <p>连接高校科研能力与企业创新需求，帮助团队完成从研究方向发现到成果规划全过程。</p>
+          <div class="hero-goal-input"><span>✦</span><input v-model="researchOsGoal" aria-label="科研目标" placeholder="请输入您的科研目标、企业需求或研究问题" /><button type="button" @click="startDemoMode">开始协作</button></div>
+          <div class="hero-quick-actions"><button type="button" @click="applyFdeDeliveryDemo"><b>企业需求分析</b><small>生成产学研合作方案</small></button><button type="button" @click="selectAdvisorScenario('explore')"><b>研究方向探索</b><small>发现趋势与创新机会</small></button><button type="button" @click="openWorkspaceView('knowledge')"><b>实验室知识管理</b><small>沉淀团队科研资产</small></button></div>
+        </div>
+        <aside class="ai-task-space">
+          <div class="ai-task-space-head"><div><span>现场案例</span><h2>低碳建筑材料企业合作</h2></div><i>AI 协作中</i></div>
+          <p class="task-demand">企业需求：寻找低碳建筑材料研发方案，兼顾工程适用性与科研成果。</p>
+          <div class="agent-orbit"><span>Research<br />Master</span><i>Knowledge<br />Agent</i><i>Innovation<br />Agent</i><i>Project<br />Agent</i></div>
+          <section class="ai-activity-stream" aria-label="AI Activity Stream"><div><span>AI Activity</span><b>{{ researchOsTaskLoading ? 'AI 团队正在协作' : researchOsTaskResult ? '本次协作已完成' : '等待任务启动' }}</b></div><article v-for="item in aiActivityStream" :key="item.agent" :class="item.status"><i></i><p><strong>{{ item.agent }}</strong>{{ item.action }}</p><em>{{ item.label }}</em></article></section>
+          <div class="demo-report-preview"><div><span>输出目标</span><b>FDE 解决方案报告</b></div><button type="button" @click="openWorkspaceView('fde-report')">查看报告 →</button></div>
+        </aside>
+        <div class="demo-flow-board workspace-flow-board"><article v-for="(item, index) in demoSteps" :key="item.id" class="demo-flow-step"><span class="demo-step-number">{{ index + 1 }}</span><div><h3>{{ item.title }}</h3><p>{{ item.detail }}</p></div><button class="text-button" type="button" @click="openDemoStep(item)">打开</button></article></div>
+        <p class="demo-boundary">一键演示仅预填真实任务与项目资料；能力匹配、技术路线、创新机会和报告结论仍需通过已有 Agent 基于上传资料实际生成。</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'dashboard'" class="researchos-dashboard" aria-label="ResearchOS 科研驾驶舱">
+        <div class="dashboard-heading"><div><p class="section-kicker">RESEARCH COMMAND CENTER</p><h2>科研驾驶舱</h2><p>将团队已上传的科研资料转化为可复核的知识、洞察和行动建议。</p></div><span>某高校建筑材料实验室 · 示例工作空间</span></div>
+        <section class="advisor-entry"><div><p class="section-kicker">WHO IS USING RESEARCHOS</p><h3>选择你的角色视角</h3><p>{{ advisorRoles.find((item) => item.id === advisorAudience)?.description }}</p></div><div class="advisor-role-options"><button v-for="item in advisorRoles" :key="item.id" type="button" :class="{ active: advisorAudience === item.id }" @click="advisorAudience = item.id">{{ item.name }}</button></div></section>
+        <section class="advisor-scenarios"><article><span>01</span><h3>企业需求分析</h3><p>从企业需求到实验室能力匹配、技术建议与成果路径。</p><button type="button" @click="selectAdvisorScenario('enterprise')">进入 FDE 交付</button></article><article><span>02</span><h3>研究方向探索</h3><p>从团队资料中归纳趋势、创新机会与验证任务。</p><button type="button" @click="selectAdvisorScenario('explore')">开始探索</button></article><article><span>03</span><h3>实验室知识管理</h3><p>统一管理论文、专利、实验报告和项目资料。</p><button type="button" @click="selectAdvisorScenario('knowledge')">管理资料</button></article></section>
+        <div class="dashboard-stat-grid"><article><span>科研论文</span><strong>{{ researchOsOverview?.paper_count ?? libraryPapers.length }}</strong><small>当前已纳入知识空间</small></article><article><span>知识片段</span><strong>{{ researchOsOverview?.knowledge_chunk_count ?? knowledgeChunkTotal }}</strong><small>用于检索与证据引用</small></article><article><span>索引就绪</span><strong>{{ researchOsOverview?.ready_paper_count ?? readyPaperCount }}</strong><small>可参与多论文问答</small></article><article><span>研究报告</span><strong>{{ researchOverview?.analysis_count ?? 0 }}</strong><small>历史分析成果</small></article></div>
+        <div class="researchos-dashboard-grid"><section class="dashboard-card"><p class="section-kicker">AI RESEARCH INSIGHT</p><h3>从资料到研究决策</h3><ol class="researchos-flow"><li>上传论文与科研资料</li><li>Research Master 理解目标并编排任务</li><li>专项 Agent 基于知识库检索证据</li><li>生成趋势、创新机会与成果规划建议</li></ol><button class="outline-button" type="button" @click="openWorkspaceView('knowledge')">管理科研知识库</button></section><section class="dashboard-card accent-card"><p class="section-kicker">FDE DELIVERY CASE</p><h3>低碳建筑材料企业需求</h3><p>企业需求 → 实验室匹配 → 技术路线 → 创新机会 → 项目规划 → 成果预测。</p><button class="primary-card-action" type="button" @click="applyFdeDeliveryDemo">启动完整 FDE 演示</button><small>实际结果必须由已上传资料和 Agent 调用生成。</small></section></div>
+        <div class="researchos-dashboard-grid lifecycle-preview"><section class="dashboard-card"><p class="section-kicker">PROJECT LIFECYCLE</p><h3>科研项目生命周期</h3><div class="lifecycle-strip"><span>项目创建</span><i>→</i><span>研究目标</span><i>→</i><span>技术路线</span><i>→</i><span>论文 / 专利规划</span><i>→</i><span>成果管理</span></div><button class="outline-button" type="button" @click="openWorkspaceView('projects')">进入科研项目中心</button></section><section class="dashboard-card"><p class="section-kicker">RESEARCH BI</p><h3>科研资产与技术路线</h3><p>查看当前资料构成、知识片段、项目数与基于资料的趋势分析入口。</p><button class="outline-button" type="button" @click="openWorkspaceView('bi')">打开科研 BI 驾驶舱</button></section></div>
+        <section class="lab-profile-card"><div><p class="section-kicker">LAB PROFILE</p><h3>实验室科研能力画像</h3><p>由 Knowledge Agent 根据已上传资料归纳研究方向、核心能力、成果线索与合作方向。</p></div><button class="outline-button" type="button" :disabled="labProfileLoading" @click="generateLabProfile">{{ labProfileLoading ? '生成中…' : '生成能力画像' }}</button><div v-if="labProfile" class="lab-profile-grid"><article><h4>研究方向</h4><ul><li v-for="item in labProfile.research_directions" :key="item">{{ item }}</li></ul></article><article><h4>核心能力</h4><ul><li v-for="item in labProfile.core_capabilities" :key="item">{{ item }}</li></ul></article><article><h4>成果线索</h4><ul><li v-for="item in labProfile.research_outputs" :key="item">{{ item }}</li></ul></article><article><h4>合作方向</h4><ul><li v-for="item in labProfile.collaboration_directions" :key="item">{{ item }}</li></ul></article></div><small v-if="labProfile">{{ labProfile.boundary_note }}</small></section>
+        <p v-if="researchOsError" class="error-alert"><span>!</span>{{ researchOsError }}</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'tasks'" class="researchos-task-center" aria-label="科研任务中心">
+        <div class="dashboard-heading"><div><p class="section-kicker">RESEARCH TASK CENTER</p><h2>科研任务中心</h2><p>Research Master 会先理解目标，再调度所选专项 Agent，并依据团队资料生成可复核结果。</p></div><button class="outline-button" type="button" @click="openWorkspaceView('assistant')">单篇文献分析工作台</button></div>
+        <p v-if="researchOsError" class="error-alert"><span>!</span>{{ researchOsError }}</p>
+        <div class="researchos-task-layout"><section class="task-config-card"><label for="researchos-goal">研究需求</label><textarea id="researchos-goal" v-model="researchOsGoal" rows="6" placeholder="例如：分析低碳建筑材料未来研究方向"></textarea><div class="agent-select-heading"><span>选择参与任务的 Agent</span><button class="text-button" type="button" @click="applyResearchOsDemo">填充比赛案例</button></div><div class="researchos-agent-selector"><button v-for="agent in researchOsAgents" :key="agent.id" type="button" :class="{ active: researchOsSelectedAgents.includes(agent.id) }" @click="toggleResearchOsAgent(agent.id)"><b>{{ agent.name_cn }}</b><small>{{ agent.description }}</small></button></div><button class="analyze-button" type="button" :disabled="researchOsTaskLoading" @click="runResearchOsTask"><span v-if="researchOsTaskLoading" class="spinner small-spinner"></span>{{ researchOsTaskLoading ? 'ResearchOS 正在协作…' : '启动多 Agent 科研任务' }}</button></section>
+          <section class="researchos-result-card"><div v-if="researchOsTaskLoading" class="loading-state"><span class="spinner"></span><h3>Research Master 正在编排任务</h3><ol class="loading-workflow"><li><i></i>理解科研目标</li><li><i></i>检索团队知识库</li><li><i></i>调度专项 Agent</li><li><i></i>生成科研决策报告</li></ol></div><div v-else-if="!researchOsTaskResult" class="empty-state"><div class="empty-illustration">✦</div><h3>等待科研任务</h3><p>上传相关论文后，输入一个研究目标，获得基于团队知识资产的科研辅助结果。</p></div><div v-else class="researchos-result"><p class="section-kicker">RESEARCH DECISION REPORT</p><h3>科研决策结论</h3><p class="researchos-executive-summary">{{ researchOsTaskResult.executive_summary }}</p><section class="agent-run-board"><h4>Agent 执行状态</h4><article v-for="run in researchOsTaskResult.agent_runs || []" :key="run.agent"><b>✓</b><div><strong>{{ run.agent }}</strong><p>{{ run.message }}</p></div><span>{{ run.status === 'completed' ? '已完成' : run.status }}</span></article></section><details open class="master-plan-card"><summary>Research Master 执行流程</summary><ol><li v-for="step in researchOsTaskResult.master_plan?.workflow_steps || []" :key="step.step"><b>{{ step.step }}</b><div><strong>{{ step.action }}</strong><p>{{ step.agent }} · {{ step.purpose }}</p></div></li></ol></details><section v-for="section in researchOsSections" :key="section[0]" class="researchos-output-section"><h4>{{ section[0] }}</h4><dl><template v-for="(value, key) in section[1]" :key="key"><dt>{{ key }}</dt><dd v-if="Array.isArray(value)"><ul><li v-for="item in value" :key="item">{{ item }}</li></ul></dd><dd v-else>{{ value }}</dd></template></dl></section><details v-if="researchOsTaskResult.sources?.length" class="master-plan-card"><summary>证据来源（{{ researchOsTaskResult.sources.length }}）</summary><article v-for="source in researchOsTaskResult.sources" :key="source.paper_id + source.section"><b>{{ source.paper_title }}</b><span>{{ source.section }} · {{ source.score }}</span><p>{{ source.content }}</p></article></details><p class="trace-boundary">{{ researchOsTaskResult.boundary_note }}</p></div></section></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'projects'" class="researchos-projects" aria-label="科研项目中心"><div class="dashboard-heading"><div><p class="section-kicker">RESEARCH PROJECT LIFECYCLE</p><h2>科研项目中心</h2><p>把企业需求、研究目标、技术路线、论文专利规划和成果管理放在同一条项目生命周期中。</p></div></div><p v-if="projectError" class="error-alert"><span>!</span>{{ projectError }}</p><div class="project-workspace"><section class="task-config-card"><label>新建科研项目</label><input v-model="projectForm.name" placeholder="项目名称，例如：低碳建筑材料关键技术研发" /><textarea v-model="projectForm.enterprise_requirement" rows="4" placeholder="企业需求：例如开发绿色建筑材料并验证工程适用性"></textarea><textarea v-model="projectForm.research_goal" rows="3" placeholder="研究目标"></textarea><textarea v-model="projectForm.technology_route" rows="3" placeholder="技术路线（可后续完善）"></textarea><textarea v-model="projectForm.paper_plan" rows="2" placeholder="论文规划"></textarea><textarea v-model="projectForm.patent_plan" rows="2" placeholder="专利规划"></textarea><textarea v-model="projectForm.outcome_management" rows="2" placeholder="成果管理"></textarea><button class="analyze-button" type="button" :disabled="projectLoading" @click="createResearchProject">{{ projectLoading ? '保存中…' : '创建科研项目' }}</button></section><section class="project-list-panel"><div v-if="projectLoading && !researchProjects.length" class="loading-state"><span class="spinner"></span><p>正在读取项目…</p></div><div v-else-if="!researchProjects.length" class="empty-state"><div class="empty-illustration">◫</div><h3>暂无科研项目</h3><p>创建项目后，可用 Project Agent 评估企业需求与实验室能力匹配。</p></div><article v-for="project in researchProjects" :key="project.id" class="project-card"><div><span>{{ project.status }}</span><time>{{ formatLibraryDate(project.updated_at) }}</time></div><h3>{{ project.name }}</h3><p>{{ project.research_goal || project.enterprise_requirement || '尚未补充项目目标。' }}</p><footer><span>论文：{{ project.paper_plan ? '已规划' : '待规划' }} · 专利：{{ project.patent_plan ? '已规划' : '待规划' }}</span><button class="primary-card-action" type="button" :disabled="projectMatching" @click="runProjectMatch(project)">{{ projectMatching ? '匹配中…' : '需求匹配' }}</button></footer></article></section></div><section v-if="projectMatchResult" class="project-match-result"><p class="section-kicker">PROJECT AGENT RESULT</p><h3>{{ projectMatchResult.projectName }} · 横向需求匹配</h3><div class="project-match-grid"><article><h4>实验室能力匹配</h4><ul><li v-for="item in projectMatchResult.lab_capability_match" :key="item">{{ item }}</li></ul></article><article><h4>技术方案建议</h4><ul><li v-for="item in projectMatchResult.technical_solution_suggestions" :key="item">{{ item }}</li></ul></article><article><h4>预期成果规划</h4><dl><template v-for="(value,key) in projectMatchResult.expected_outcome_plan" :key="key"><dt>{{ key }}</dt><dd>{{ Array.isArray(value) ? value.join('、') : value }}</dd></template></dl></article><article><h4>风险与待确认问题</h4><ul><li v-for="item in projectMatchResult.risks_and_questions" :key="item">{{ item }}</li></ul></article></div><section class="agent-run-board"><h4>Project Agent 执行过程</h4><article v-for="trace in projectMatchResult.agent_trace" :key="trace.agent"><b>✓</b><div><strong>{{ trace.agent }}</strong><p>{{ trace.message }}</p></div><span>已完成</span></article></section><p class="trace-boundary">{{ projectMatchResult.boundary_note }}</p></section></section>
+
+      <section v-if="activeWorkspaceView === 'bi'" class="researchos-bi" aria-label="科研BI驾驶舱"><div class="dashboard-heading"><div><p class="section-kicker">RESEARCH BUSINESS INTELLIGENCE</p><h2>科研 BI 驾驶舱</h2><p>从团队已沉淀资料中查看科研资产、成果统计与技术路线状态。</p></div><button class="outline-button" type="button" :disabled="researchBiLoading" @click="loadResearchBi">{{ researchBiLoading ? '刷新中…' : '刷新数据' }}</button></div><p v-if="projectError" class="error-alert"><span>!</span>{{ projectError }}</p><div v-if="researchBi" class="bi-grid"><article><p>科研论文 / 资料</p><strong>{{ researchBi.research_assets?.papers || 0 }}</strong><span>已入库科研资产</span></article><article><p>知识片段</p><strong>{{ researchBi.research_assets?.knowledge_chunks || 0 }}</strong><span>可用于 Agent 检索</span></article><article><p>科研项目</p><strong>{{ researchBi.research_assets?.projects || 0 }}</strong><span>生命周期管理中</span></article></div><div v-if="researchBi" class="researchos-dashboard-grid"><section class="dashboard-card"><p class="section-kicker">ASSET DISTRIBUTION</p><h3>科研资料构成</h3><ul class="bi-list"><li v-for="item in researchBi.asset_distribution" :key="item.document_type"><span>{{ item.document_type }}</span><b>{{ item.count }}</b></li></ul><p v-if="!researchBi.asset_distribution?.length">暂无已入库资料。</p></section><section class="dashboard-card"><p class="section-kicker">TECHNOLOGY ROADMAP</p><h3>技术路线图</h3><ol class="researchos-flow"><li v-for="item in researchBi.technology_roadmap" :key="item">{{ item }}</li></ol></section><section class="dashboard-card"><p class="section-kicker">RESEARCH HOTSPOTS</p><h3>研究热点分析</h3><p>{{ researchBi.trend_boundary }}</p><ul class="bi-list"><li v-for="title in researchBi.latest_assets" :key="title"><span>{{ title }}</span></li></ul><button class="outline-button" type="button" @click="openWorkspaceView('tasks')">运行趋势分析任务</button></section></div></section>
+
+      <section v-if="activeWorkspaceView === 'agents'" class="researchos-agents" aria-label="AI Agent中心"><div class="dashboard-heading"><div><p class="section-kicker">AI RESEARCH TEAM</p><h2>AI 科研团队</h2><p>每位 AI 成员承担清晰角色，共享团队知识库证据，在 Research Master 的编排下完成科研协作。</p></div><button class="outline-button" type="button" @click="openWorkspaceView('timeline')">查看工作流</button></div><div class="master-architecture team-member-grid"><article v-for="agent in agentTeamCards" :key="agent.id"><div class="team-member-avatar">{{ agent.name.slice(0, 1) }}</div><p>{{ agent.name }}</p><h3>{{ agent.name_cn }}</h3><span>{{ agent.description }}</span><small>{{ agent.purpose }}</small><footer>知识依据 · 协作输出</footer></article></div></section>
+
+      <section v-if="activeWorkspaceView === 'knowledge'" class="library-workspace" aria-label="科研知识库">
+        <div class="library-header"><div><p class="section-kicker">LAB KNOWLEDGE BASE</p><h2>科研知识库</h2><p>已保存并解析的团队科研资料，可直接进入 AI 助手或参与多论文检索。</p></div><div class="library-header-actions"><select v-model="libraryDocumentType" aria-label="科研资料类型"><option value="paper">论文</option><option value="patent">专利</option><option value="experiment_report">实验报告</option><option value="project_material">项目资料</option></select><label class="library-upload-button" :class="{ busy: libraryUploading }"><input ref="libraryFileInput" type="file" accept="application/pdf,.pdf" :disabled="libraryUploading" @change="uploadLibraryPaper" /><span>{{ libraryUploading ? '正在保存资料…' : '＋ 上传 PDF 资料' }}</span></label><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新列表' }}</button></div></div>
         <div v-if="libraryPapers.length" class="library-toolbar"><label><span>⌕</span><input v-model="librarySearch" type="search" placeholder="搜索论文标题或文件名" /></label><select v-model="libraryStatusFilter" aria-label="按知识库状态筛选"><option value="all">全部状态</option><option value="ready">Ready</option><option value="indexed">Indexed</option><option value="parsed">Parsed</option><option value="failed">Failed</option></select><small>共 {{ filteredLibraryPapers.length }} / {{ libraryPapers.length }} 篇资料</small></div>
         <p v-if="libraryError" class="error-alert" role="alert"><span>!</span>{{ libraryError }}</p>
         <div v-if="libraryLoading && !libraryPapers.length" class="library-empty-state"><span class="spinner"></span><p>正在加载论文库…</p></div>
         <div v-else-if="!libraryPapers.length" class="library-empty-state"><div class="empty-illustration">▣</div><h3>暂无科研资料，上传第一篇论文开始分析</h3><p>上传可提取文本的 PDF 后，它会成为科研知识空间中的一份资料。</p></div>
         <div v-else-if="!filteredLibraryPapers.length" class="library-empty-state"><div class="empty-illustration">⌕</div><h3>没有匹配的科研资料</h3><p>试试调整关键词或知识库状态筛选条件。</p></div>
-        <div v-else class="library-layout"><div class="paper-card-list"><article v-for="paper in filteredLibraryPapers" :key="paper.paper_id" class="paper-library-card" :class="{ selected: selectedLibraryPaper?.paper_id === paper.paper_id }"><div class="paper-card-top"><span class="paper-status">{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</span><details class="paper-more"><summary aria-label="更多操作">•••</summary><button type="button" @click="deleteLibraryPaper(paper)">删除论文</button></details></div><h3>{{ paper.title }}</h3><p class="paper-filename">{{ paper.filename }}</p><div class="paper-meta"><span>{{ paper.chunk_count ?? 0 }} 个知识片段</span><span>{{ formatLibraryDate(paper.updated_at || paper.upload_time) }}</span></div><div class="paper-card-actions"><button type="button" class="primary-card-action" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(paper)">{{ libraryAnalysisLoading && selectedLibraryPaper?.paper_id === paper.paper_id ? '分析中…' : '分析' }}</button><button type="button" class="text-button" @click="viewLibraryPaper(paper)">详情</button></div></article></div><aside v-if="libraryPaperDetail" class="library-detail-panel"><div class="library-detail-heading"><div><p class="section-kicker">PAPER DETAIL</p><h3>{{ libraryPaperDetail.title }}</h3></div><button type="button" class="text-button" @click="libraryPaperDetail = null">关闭</button></div><dl><div><dt>文件名</dt><dd>{{ libraryPaperDetail.filename }}</dd></div><div><dt>知识库状态</dt><dd>{{ libraryPaperDetail.quality_status || libraryStatusLabel(libraryPaperDetail.analysis_status) }}</dd></div><div><dt>知识片段</dt><dd>{{ libraryPaperDetail.chunk_count ?? 0 }} 个</dd></div><div><dt>更新时间</dt><dd>{{ formatLibraryDate(libraryPaperDetail.updated_at || libraryPaperDetail.upload_time) }}</dd></div><div><dt>文本长度</dt><dd>{{ formatTextLength(libraryPaperDetail.text_length) }}</dd></div></dl><button type="button" class="analyze-button" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(libraryPaperDetail)">{{ libraryAnalysisLoading ? '正在进入 AI助手分析…' : '进入 AI 分析' }}</button></aside></div>
+        <div v-else class="library-layout"><div class="paper-card-list"><article v-for="paper in filteredLibraryPapers" :key="paper.paper_id" class="paper-library-card knowledge-asset-card" :class="{ selected: selectedLibraryPaper?.paper_id === paper.paper_id }"><div class="paper-card-top"><span class="paper-status">{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</span><details class="paper-more"><summary aria-label="更多操作">•••</summary><button type="button" @click="deleteLibraryPaper(paper)">删除资料</button></details></div><h3>{{ paper.title }}</h3><p class="paper-filename">{{ documentTypeLabel(paper.document_type) }} · {{ paper.filename }}</p><div class="knowledge-summary"><span>AI 就绪说明</span><p>{{ knowledgeAssetSummary(paper) }}</p></div><div class="knowledge-tags"><span v-for="agent in knowledgeAssetAgents(paper)" :key="agent">{{ agent }}</span><span>{{ paper.chunk_count ?? 0 }} 个知识片段</span></div><div class="paper-card-actions"><button type="button" class="primary-card-action" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(paper)">{{ libraryAnalysisLoading && selectedLibraryPaper?.paper_id === paper.paper_id ? '分析中…' : '进入分析' }}</button><button type="button" class="text-button" @click="viewLibraryPaper(paper)">查看资料</button></div></article></div><aside v-if="libraryPaperDetail" class="library-detail-panel"><div class="library-detail-heading"><div><p class="section-kicker">KNOWLEDGE ASSET DETAIL</p><h3>{{ libraryPaperDetail.title }}</h3></div><button type="button" class="text-button" @click="libraryPaperDetail = null">关闭</button></div><dl><div><dt>资料类型</dt><dd>{{ documentTypeLabel(libraryPaperDetail.document_type) }}</dd></div><div><dt>文件名</dt><dd>{{ libraryPaperDetail.filename }}</dd></div><div><dt>知识库状态</dt><dd>{{ libraryPaperDetail.quality_status || libraryStatusLabel(libraryPaperDetail.analysis_status) }}</dd></div><div><dt>知识片段</dt><dd>{{ libraryPaperDetail.chunk_count ?? 0 }} 个</dd></div><div><dt>更新时间</dt><dd>{{ formatLibraryDate(libraryPaperDetail.updated_at || libraryPaperDetail.upload_time) }}</dd></div><div><dt>文本长度</dt><dd>{{ formatTextLength(libraryPaperDetail.text_length) }}</dd></div></dl><button type="button" class="analyze-button" :disabled="libraryAnalysisLoading" @click="analyzeLibraryPaper(libraryPaperDetail)">{{ libraryAnalysisLoading ? '正在进入 AI助手分析…' : '进入 AI 分析' }}</button></aside></div>
       </section>
 
-      <section v-if="activeWorkspaceView === 'reports'" class="research-reports" aria-label="研究报告历史">
-        <div class="library-header"><div><p class="section-kicker">RESEARCH REPORTS</p><h2>研究报告</h2><p>这里保存从论文库进入 AI 助手后生成的分析记录。查看报告会回到原有 AI助手结果区。</p></div><div class="library-header-actions"><button class="outline-button" type="button" :disabled="reportsLoading" @click="loadResearchReports">{{ reportsLoading ? '刷新中' : '刷新报告' }}</button></div></div>
+      <section v-if="activeWorkspaceView === 'outcomes'" class="research-reports" aria-label="成果规划">
+        <div class="library-header"><div><p class="section-kicker">OUTCOME PLANNING</p><h2>成果规划</h2><p>这里保留从知识资产生成的历史分析成果；查看后会回到原有 AI 助手结果区。</p></div><div class="library-header-actions"><button class="outline-button" type="button" :disabled="reportsLoading" @click="loadResearchReports">{{ reportsLoading ? '刷新中' : '刷新报告' }}</button></div></div>
         <p v-if="reportsError" class="error-alert" role="alert"><span>!</span>{{ reportsError }}</p>
         <div v-if="reportsLoading && !reportRecords.length" class="library-empty-state"><span class="spinner"></span><p>正在读取研究报告…</p></div>
         <div v-else-if="!reportRecords.length" class="library-empty-state"><div class="empty-illustration">▤</div><h3>暂无历史研究报告</h3><p>从“我的论文库”进入 AI 分析后，报告会自动保存在这里。</p></div>
         <div v-else class="report-record-list"><article v-for="report in reportRecords" :key="report.id" class="report-record-card" :class="{ selected: selectedReport?.id === report.id }"><div><span class="paper-status">{{ report.scenario }}</span><time>{{ formatLibraryDate(report.created_at) }}</time></div><h3>{{ report.paper_title }}</h3><p>{{ report.task }}</p><footer><span>{{ report.role }}</span><button type="button" class="primary-card-action" :disabled="reportDetailLoading" @click="viewResearchReport(report)">{{ reportDetailLoading && selectedReport?.id === report.id ? '正在恢复…' : '查看报告' }}</button></footer></article></div>
       </section>
 
-      <section v-if="activeWorkspaceView === 'rag'" class="rag-workspace" aria-label="科研知识问答">
-        <div class="library-header"><div><p class="section-kicker">MULTI-PAPER RAG</p><h2>科研知识问答</h2><p>Agent 会检索论文库中的相关片段，再基于引用证据回答问题。</p></div><div class="library-header-actions"><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新论文范围' }}</button></div></div>
+      <section v-if="activeWorkspaceView === 'insights'" class="rag-workspace" aria-label="科研洞察">
+        <div class="library-header"><div><p class="section-kicker">RESEARCH INSIGHTS</p><h2>科研洞察</h2><p>Research Agent 会检索团队知识库中的相关片段，再基于引用证据回答问题。</p></div><div class="library-header-actions"><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新论文范围' }}</button></div></div>
         <p v-if="ragError" class="error-alert" role="alert"><span>!</span>{{ ragError }}</p>
         <div v-if="!libraryPapers.length && !libraryLoading" class="library-empty-state"><div class="empty-illustration">⌕</div><h3>暂无可检索论文</h3><p>请先在“我的论文库”上传论文，并等待知识索引建立完成。</p></div>
         <div v-else class="rag-content"><section class="knowledge-status-strip" aria-label="当前知识库状态"><div><span>论文</span><strong>{{ libraryPapers.length }}</strong><small>篇资料</small></div><div><span>知识片段</span><strong>{{ knowledgeChunkTotal }}</strong><small>个可检索片段</small></div><div><span>已就绪</span><strong>{{ readyPaperCount }}</strong><small>篇论文</small></div></section><details class="rag-scope compact-details"><summary>选择论文范围</summary><div class="rag-paper-options"><label v-for="paper in libraryPapers" :key="paper.paper_id"><input v-model="ragSelectedPaperIds" type="checkbox" :value="paper.paper_id" :disabled="!['indexed', 'ready'].includes(paper.quality_status || paper.analysis_status)" /><span>{{ paper.title }}</span><em>{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</em></label></div></details>
@@ -941,6 +1525,60 @@ createApp({
           <aside v-if="ragSelectedSource" class="rag-source-detail"><div class="library-detail-heading"><div><p class="section-kicker">SOURCE DETAIL</p><h3>{{ ragSelectedSource.paper_title }}</h3></div><button type="button" class="text-button" @click="ragSelectedSource = null">关闭</button></div><p><b>来源章节：</b>{{ ragSelectedSource.section }}</p><blockquote>{{ ragSelectedSource.content }}</blockquote><small>相似度：{{ Number(ragSelectedSource.score).toFixed(4) }}</small></aside>
           <section class="rag-history"><div class="result-section-heading"><div><p class="section-kicker">RAG HISTORY</p><h3>历史知识问答</h3></div><button class="text-button" type="button" @click="loadRagHistory">{{ ragHistoryLoading ? '加载中' : '刷新' }}</button></div><p v-if="!ragHistory.length" class="field-hint">暂无历史知识问答。</p><article v-for="record in ragHistory" :key="record.id"><div><b>{{ record.question }}</b><time>{{ formatLibraryDate(record.created_at) }}</time></div><p>{{ record.answer }}</p><button type="button" class="text-button" @click="restoreRagHistory(record)">查看引用</button></article></section>
         </div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'tasks' && researchOsTaskResult" class="value-agent-card task-value-entry"><div><p class="section-kicker">VALUE AGENT</p><h3>科研价值评估</h3><p>对当前研究方向的资料覆盖、创新机会和成果路径进行辅助判断。</p></div><button class="outline-button" type="button" :disabled="valueAssessmentLoading" @click="assessResearchValue">{{ valueAssessmentLoading ? '评估中…' : '运行 Value Agent' }}</button><div v-if="valueAssessment" class="value-agent-grid"><article v-for="item in [['研究热度',valueAssessment.research_heat],['创新潜力',valueAssessment.innovation_potential],['成果潜力',valueAssessment.outcome_potential]]" :key="item[0]"><h4>{{ item[0] }} <span :class="item[1].level">{{ item[1].level }}</span></h4><p>{{ item[1].explanation }}</p></article></div><p v-if="valueAssessment" class="trace-boundary">{{ valueAssessment.boundary_note }}</p></section>
+
+      <section v-if="activeWorkspaceView === 'bi' && researchBi" class="bi-visual-board"><section><p class="section-kicker">RESEARCH HOTSPOT TREND</p><h3>热点趋势图</h3><div class="bar-chart"><div v-for="item in researchBi.asset_distribution" :key="item.document_type"><span :style="{ height: Math.max(12, item.count * 24) + 'px' }"></span><small>{{ item.document_type }}</small></div></div><p>柱状高度表示当前已入库资料类型数量，不代表外部领域热度。</p></section><section><p class="section-kicker">OUTCOME CONVERSION</p><h3>成果转化漏斗</h3><ol class="funnel-list"><li v-for="item in researchBi.outcome_funnel" :key="item.stage"><span>{{ item.stage }}</span><b>{{ item.count }}</b></li></ol></section><section><p class="section-kicker">LAB CAPABILITY</p><h3>科研能力雷达</h3><div class="radar-list"><div v-for="item in researchBi.capability_radar" :key="item.name"><span>{{ item.name }}</span><i><b :style="{ width: item.score + '%' }"></b></i><em>{{ item.score }}</em></div></div><p>评分反映本地资料、项目与成果规划覆盖度，不代表实验室真实能力评级。</p></section></section>
+
+      <section v-if="activeWorkspaceView === 'fde-report'" class="fde-report" aria-label="FDE解决方案报告"><div class="dashboard-heading"><div><p class="section-kicker">FDE SOLUTION DELIVERY</p><h2>FDE 解决方案报告</h2><p>将客户需求、实验室知识资产与 Agent 输出整合为一份可沟通的科研合作交付物。</p></div><button class="outline-button" type="button" @click="applyFdeDeliveryDemo">填充低碳材料案例</button></div><div v-if="!projectMatchResult" class="fde-report-empty"><div class="empty-illustration">◈</div><h3>等待 FDE 交付结果</h3><p>在“客户需求”中创建低碳建筑材料项目并运行需求匹配后，这里会自动汇总真实结果。</p><button class="primary-card-action" type="button" @click="openWorkspaceView('projects')">前往客户需求中心</button></div><div v-else class="fde-report-sheet"><header><span>ResearchOS · 科研合作方案</span><h3>{{ projectMatchResult.projectName }}</h3><p>{{ projectMatchResult.enterprise_requirement }}</p></header><section><b>01</b><div><h4>客户需求理解</h4><p>{{ projectMatchResult.enterprise_requirement }}</p></div></section><section><b>02</b><div><h4>实验室能力匹配</h4><ul><li v-for="item in projectMatchResult.lab_capability_match" :key="item">{{ item }}</li></ul></div></section><section><b>03</b><div><h4>技术路线与方案建议</h4><ul><li v-for="item in projectMatchResult.technical_solution_suggestions" :key="item">{{ item }}</li></ul></div></section><section><b>04</b><div><h4>创新机会</h4><p v-if="researchOsTaskResult?.innovation_opportunities">{{ researchOsTaskResult.innovation_opportunities }}</p><p v-else>运行 Research Master 的“创新发现 Agent”后将在此展示基于资料的创新机会。</p></div></section><section><b>05</b><div><h4>成果规划</h4><dl><template v-for="(value,key) in projectMatchResult.expected_outcome_plan" :key="key"><dt>{{ key }}</dt><dd>{{ Array.isArray(value) ? value.join('、') : value }}</dd></template></dl></div></section><section class="fde-evidence"><b>06</b><div><h4>分析依据</h4><p>以下章节级片段支撑客户需求匹配、技术路线与成果规划建议。</p><ul><li v-for="source in projectMatchResult.sources || []" :key="source.paper_id + source.section">{{ source.paper_title }} · {{ documentTypeLabel(source.document_type) }} · {{ source.section }}</li></ul><p v-if="!(projectMatchResult.sources || []).length">现有团队资料不足，暂无可展示的分析依据。</p></div></section><footer>{{ projectMatchResult.boundary_note }}</footer></div></section>
+
+      <section v-if="activeWorkspaceView === 'system'" class="system-center" aria-label="系统状态中心">
+        <div class="dashboard-heading"><div><p class="section-kicker">SYSTEM STATUS CENTER</p><h2>系统状态中心</h2><p>{{ systemStatus?.version || 'ResearchOS v1.0' }} · {{ systemStatus?.platform_name || 'AI科研创新决策平台' }}</p></div><button class="outline-button" type="button" :disabled="systemStatusLoading" @click="loadSystemStatus">{{ systemStatusLoading ? '检查中…' : '刷新状态' }}</button></div>
+        <p v-if="systemStatusError" class="error-alert"><span>!</span>{{ systemStatusError }}</p>
+        <div v-if="systemStatus" class="system-status-grid"><article v-for="service in systemStatus.services" :key="service.id"><header><span :class="service.status">{{ service.status === 'ready' || service.status === 'configured' ? '正常' : service.status === 'empty' ? '待初始化' : '需配置' }}</span><b>{{ service.name }}</b></header><p>{{ service.detail }}</p></article></div>
+        <section class="demo-knowledge-panel"><div><p class="section-kicker">DEMO KNOWLEDGE BASE</p><h3>低碳建筑材料案例资料</h3><p>用于比赛现场讲解知识库、项目资料和产学研协作流程。</p></div><button class="primary-card-action" type="button" @click="initializeDemoKnowledge">{{ demoKnowledgeInitialized ? 'Demo资料已加载' : '初始化 Demo 知识库' }}</button><div v-if="visibleDemoKnowledgeAssets.length" class="demo-asset-grid"><article v-for="asset in visibleDemoKnowledgeAssets" :key="asset.title"><span>{{ asset.status }}</span><h4>{{ asset.title }}</h4><small>{{ asset.type }}</small><p>{{ asset.detail }}</p></article></div><p class="demo-boundary">这些是明确标注的界面展示资料，不会自动写入真实论文库、FAISS 索引或作为 Agent 的科研证据。需要真实分析时，请上传实际可解析的资料。</p></section>
+        <section class="activity-log-panel"><div class="result-section-heading"><div><p class="section-kicker">ACTIVITY LOG</p><h3>用户操作日志</h3></div><span>{{ activityLogs.length }} 条</span></div><div v-if="!activityLogs.length" class="activity-empty">暂无操作记录。创建任务、执行 Agent、生成报告或更新项目后会在此显示。</div><ol v-else class="activity-list"><li v-for="item in activityLogs" :key="item.created_at + item.action"><b>{{ item.action }}</b><span>{{ item.detail }}</span><time>{{ formatLibraryDate(item.created_at) }}</time></li></ol></section>
+        <p class="demo-boundary">操作日志仅保存在当前浏览器的 localStorage 中，用于现场演示；清除浏览器数据后会被移除。</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'timeline'" class="agent-timeline-center" aria-label="Agent执行时间线">
+        <div class="dashboard-heading"><div><p class="section-kicker">AGENT TIMELINE</p><h2>AI 团队执行时间线</h2><p>展示面向用户的任务协作摘要，而非模型内部思维过程。</p></div><button class="outline-button" type="button" @click="openWorkspaceView('tasks')">运行科研任务</button></div>
+        <div class="timeline-board"><article v-for="(item, index) in agentTimeline" :key="item.agent + item.action + index" :class="item.status"><span class="timeline-index">{{ index + 1 }}</span><div><p>{{ item.agent }}</p><h3>{{ item.action }}</h3><small>{{ item.summary }}</small></div><b>{{ item.status === 'completed' ? '已完成' : item.status === 'pending' ? '待运行' : item.status }}</b></article></div>
+        <p class="demo-boundary">时间线仅反映 ResearchOS 已执行或待执行的产品流程；专项结论需在 Agent 实际运行并检索到团队资料后生成。</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'evidence'" class="evidence-center" aria-label="Research Evidence Center">
+        <div class="dashboard-heading"><div><p class="section-kicker">RESEARCH EVIDENCE CENTER</p><h2>科研证据中心</h2><p>将 Agent 输出关联到已上传科研资料的章节级片段，帮助科研人员复核分析依据。</p></div><button class="outline-button" type="button" :disabled="evidenceLoading" @click="loadEvidenceCenter">{{ evidenceLoading ? '加载中…' : '刷新证据' }}</button></div>
+        <p v-if="evidenceError" class="error-alert"><span>!</span>{{ evidenceError }}</p>
+        <div v-if="!evidenceCenterItems.length && !evidenceLoading" class="delivery-empty"><div class="empty-illustration">⌘</div><h3>暂无可展示的证据片段</h3><p>请先上传并完成科研资料索引，或运行科研任务、项目需求匹配、实验室画像生成。</p><button class="outline-button" type="button" @click="openWorkspaceView('knowledge')">前往科研知识库</button></div>
+        <div v-else class="evidence-card-grid"><article v-for="(item, index) in evidenceCenterItems" :key="item.paper_id + '-' + item.section + '-' + item.related_agent + '-' + index" class="evidence-center-card"><header><span>{{ documentTypeLabel(item.document_type) }}</span><b>{{ item.related_agent }}</b></header><h3>{{ item.paper_title }}</h3><p class="evidence-meta">来源文件：{{ item.source_file }} · 章节：{{ item.section }}</p><blockquote>{{ item.content }}</blockquote><footer><span>分析依据：{{ item.basis }}</span><em v-if="item.score !== undefined">匹配度 {{ Number(item.score).toFixed(4) }}</em></footer></article></div>
+        <p class="demo-boundary">证据中心展示的是资料章节级摘要，不是精准页码引用或完整原文溯源；资料不足时，系统不应把推测当作科研事实。</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'lab-profile'" class="lab-profile-center" aria-label="实验室数字画像">
+        <div class="dashboard-heading"><div><p class="section-kicker">DIGITAL LAB PROFILE</p><h2>实验室数字画像</h2><p>基于团队已上传资料与项目记录，形成可核验的科研能力展示入口。</p></div><button class="primary-card-action" type="button" :disabled="labProfileLoading" @click="generateLabProfile">{{ labProfileLoading ? '生成中…' : '生成能力画像' }}</button></div>
+        <div class="lab-profile-overview"><article><span>研究方向</span><strong>{{ labProfile?.research_directions?.length ?? 0 }}</strong><small>来自已检索资料</small></article><article><span>科研资料</span><strong>{{ researchBi?.research_assets?.papers ?? 0 }}</strong><small>已入库资产</small></article><article><span>知识片段</span><strong>{{ researchBi?.research_assets?.knowledge_chunks ?? 0 }}</strong><small>支持检索引用</small></article><article><span>科研项目</span><strong>{{ researchBi?.research_assets?.projects ?? 0 }}</strong><small>生命周期记录</small></article></div>
+        <div v-if="!labProfile && !labProfileLoading" class="delivery-empty"><div class="empty-illustration">◌</div><h3>等待基于资料生成的实验室画像</h3><p>系统不会预设实验室能力。上传并完成索引的资料越充分，画像越有可复核依据。</p></div>
+        <div v-else-if="labProfile" class="lab-profile-result"><p class="profile-summary">{{ labProfile.profile_summary }}</p><div class="lab-profile-grid"><article><h3>研究方向</h3><ul><li v-for="item in labProfile.research_directions" :key="item">{{ item }}</li></ul></article><article><h3>核心能力</h3><ul><li v-for="item in labProfile.core_capabilities" :key="item">{{ item }}</li></ul></article><article><h3>成果资产</h3><ul><li v-for="item in labProfile.research_outputs" :key="item">{{ item }}</li></ul></article><article><h3>企业合作推荐</h3><ul><li v-for="item in labProfile.collaboration_directions" :key="item">{{ item }}</li></ul></article></div><section class="digital-radar"><h3>科研能力覆盖度</h3><div v-if="researchBi?.capability_radar?.length" class="radar-list"><div v-for="item in researchBi.capability_radar" :key="item.name"><span>{{ item.name }}</span><i><b :style="{ width: item.score + '%' }"></b></i><em>{{ item.score }}</em></div></div><p>覆盖度来自当前本地资料、知识片段、项目与成果规划数量，不代表实验室真实评级或外部排名。</p></section><section class="evidence-inline"><h3>画像分析依据</h3><ul><li v-for="source in labProfile.sources || []" :key="source.paper_id + source.section">{{ source.paper_title }} · {{ documentTypeLabel(source.document_type) }} · {{ source.section }}</li></ul></section><p class="trace-boundary">{{ labProfile.boundary_note }}</p></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'commercial'" class="commercial-center" aria-label="ResearchOS商业方案">
+        <div class="dashboard-heading"><div><p class="section-kicker">COMMERCIALIZATION VIEW</p><h2>ResearchOS 商业方案</h2><p>面向科研知识管理、科研协作和产学研需求匹配的产品化表达。</p></div></div>
+        <div class="commercial-plan-grid"><article><span>实验室版</span><h3>服务高校课题组</h3><ul><li>科研知识库</li><li>AI 科研助手</li><li>项目与成果管理</li></ul><p>价值：减少资料整理成本，沉淀可复用的团队知识。</p></article><article><span>学院版</span><h3>服务科研管理部门</h3><ul><li>多实验室管理入口</li><li>科研资产分析</li><li>科研能力画像</li></ul><p>价值：形成面向管理者的科研资产与能力展示视图。</p></article><article><span>产学研合作版</span><h3>服务企业研发部门</h3><ul><li>企业需求匹配</li><li>高校能力发现</li><li>联合研发方案生成</li></ul><p>价值：支持从需求澄清到科研合作方案的协作交付。</p></article></div>
+        <section class="commercial-value-strip"><div><b>客户价值</b><span>更快理解可合作的科研能力与项目风险。</span></div><div><b>产品价值</b><span>把分散科研资料转化为有证据支撑的协作入口。</span></div><div><b>商业模式</b><span>按实验室、学院或产学研协作场景提供产品与交付服务。</span></div></section><p class="demo-boundary">此页面用于展示产品定位与可服务场景，不代表已验证的市场规模、客户数量、收入或生产部署案例。</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'delivery'" class="delivery-center" aria-label="项目交付中心">
+        <div class="dashboard-heading"><div><p class="section-kicker">PROJECT DELIVERY CENTER</p><h2>项目交付中心</h2><p>以项目生命周期组织需求、技术路线、成果规划与 FDE 解决方案交付。</p></div><button class="primary-card-action" type="button" @click="startDemoMode">载入比赛案例</button></div>
+        <div v-if="!researchProjects.length" class="delivery-empty"><div class="empty-illustration">◌</div><h3>尚无项目交付记录</h3><p>载入低碳建筑材料案例后，在客户需求中心创建项目，即可开始形成真实交付物。</p><button class="outline-button" type="button" @click="openWorkspaceView('projects')">前往客户需求中心</button></div>
+        <div v-else class="delivery-list"><article v-for="project in researchProjects" :key="project.id" class="delivery-card"><div class="delivery-card-heading"><div><span class="paper-status">{{ projectDeliveryStage(project) }}</span><h3>{{ project.name }}</h3></div><time>更新于 {{ formatLibraryDate(project.updated_at) }}</time></div><div class="delivery-meta"><div><span>项目阶段</span><b>{{ projectDeliveryStage(project) }}</b></div><div><span>协同负责人</span><b>项目负责人 · ResearchOS Project Agent</b></div><div><span>当前状态</span><b>{{ project.status || 'active' }}</b></div></div><section><h4>当前交付物</h4><ul><li>企业需求：{{ project.enterprise_requirement || '待补充' }}</li><li>技术路线：{{ project.technology_route || '待通过能力匹配生成' }}</li><li>论文规划：{{ project.paper_plan || '待规划' }}</li><li>专利规划：{{ project.patent_plan || '待规划' }}</li><li>成果管理：{{ project.outcome_management || '待规划' }}</li></ul></section><footer><button class="outline-button" type="button" :disabled="projectMatching" @click="runProjectMatch(project)">生成 / 更新交付物</button><button class="primary-card-action" type="button" @click="openWorkspaceView('fde-report')">查看 FDE 报告</button></footer></article></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'customer-value'" class="customer-value-center" aria-label="客户价值总结">
+        <div class="dashboard-heading"><div><p class="section-kicker">FDE VALUE SUMMARY</p><h2>客户价值总结</h2><p>把资料理解、科研协作和成果规划放入同一条可沟通的交付路径。</p></div><button class="outline-button" type="button" @click="openWorkspaceView('fde-report')">查看方案报告</button></div>
+        <div class="customer-value-grid"><article><span>企业价值</span><h3>更快完成需求澄清</h3><p>基于项目资料整理技术关注点、实施风险和后续沟通问题，辅助企业与实验室对齐合作范围。</p></article><article><span>实验室价值</span><h3>沉淀可复用知识资产</h3><p>将论文与科研资料纳入知识库，支持能力匹配、技术路线讨论和研究成果规划。</p></article><article><span>高校价值</span><h3>形成协同交付路径</h3><p>用项目生命周期串联企业需求、研究任务、论文专利规划与阶段性成果管理。</p></article></div>
+        <p class="demo-boundary">以上为产品价值设计与协作方式说明，不代表已验证的量化业务成效；具体结论须结合项目资料与实际验收确认。</p>
       </section>
 
       <div v-show="activeWorkspaceView === 'assistant'" class="assistant-workspace-view">

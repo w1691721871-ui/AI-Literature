@@ -23,12 +23,14 @@ from app.services.pdf_service import (
     extract_pdf_text,
 )
 from app.routes.research import router as research_router
+from app.routes.researchos import router as researchos_router
 
 
-app = FastAPI(title="AI Insight Agent · Enterprise AI Employee Workspace")
+app = FastAPI(title="ResearchOS · AI科研创新决策平台")
 paper_agent = PaperAnalysisAgent()
 app.state.paper_agent = paper_agent
 app.include_router(research_router)
+app.include_router(researchos_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 app.add_middleware(

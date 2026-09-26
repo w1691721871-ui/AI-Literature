@@ -31,7 +31,12 @@ class PaperLibraryService:
         initialize_database()
         self._session_factory = session_factory
 
-    def save_uploaded_paper(self, file_content: bytes, filename: str) -> Paper:
+    def save_uploaded_paper(
+        self,
+        file_content: bytes,
+        filename: str,
+        document_type: str = "paper",
+    ) -> Paper:
         """Extract text with the shared PDF service, then persist file and metadata."""
         paper_text = extract_pdf_text(file_content)
         paper_id = str(uuid4())
@@ -43,6 +48,7 @@ class PaperLibraryService:
             file_path=stored_file_path,
             text_content=paper_text,
             analysis_status="parsed",
+            document_type=document_type,
         )
         session: Session = self._session_factory()
         try:

@@ -353,6 +353,16 @@ def complete_research_prompt(prompt: str, json_mode: bool = False) -> str:
     return _request_model(prompt, json_mode=json_mode)
 
 
+def decode_research_json(response_text: str) -> dict[str, object]:
+    """Decode a compatible-model JSON object for independent Agent modules.
+
+    The parser already handles Markdown fences and explanatory text.  Exporting
+    this small wrapper keeps new orchestration modules from duplicating the
+    model-output tolerance logic.
+    """
+    return _decode_json_object(response_text)
+
+
 def generate_research_report(
     report_type: str,
     sources: list[dict[str, object]],

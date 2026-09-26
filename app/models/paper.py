@@ -37,6 +37,12 @@ class Paper(Base):
     quality_status: Mapped[str] = mapped_column(
         String(50), nullable=False, default="parsed"
     )
+    # All current knowledge assets are uploaded as text-extractable PDFs, but
+    # this tag lets a lab distinguish papers, patents, experiment reports and
+    # project material without adding a separate storage system.
+    document_type: Mapped[str] = mapped_column(
+        String(50), nullable=False, default="paper"
+    )
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now
     )
