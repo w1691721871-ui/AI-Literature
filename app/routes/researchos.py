@@ -16,6 +16,17 @@ from app.schemas.research_project import (
     ResearchProjectInput,
     ResearchProjectResponse,
 )
+from app.schemas.decision_loop import (
+    KnowledgeStatusUpdate,
+    ResearchActionCreate,
+    ResearchActionResponse,
+    ResearchActionUpdate,
+    ResearchDecisionCreate,
+    ResearchDecisionResponse,
+    ResearchOutcomeCreate,
+    ResearchOutcomeResponse,
+    ResearchOutcomeUpdate,
+)
 from app.services.embedding_service import EmbeddingConfigurationError, EmbeddingRequestError
 from app.services.llm_service import LLMConfigurationError, LLMRequestError
 from app.services.database import SessionLocal, initialize_database
@@ -24,12 +35,21 @@ from app.services.research_project_service import (
     ResearchProjectNotFoundError,
     ResearchProjectService,
 )
+from app.services.research_action_service import ResearchActionNotFoundError, ResearchActionService
+from app.services.research_outcome_service import (
+    ResearchOutcomeNotFoundError,
+    ResearchOutcomeProjectNotFoundError,
+    ResearchOutcomeSourceActionNotFoundError,
+    ResearchOutcomeService,
+)
 
 
 router = APIRouter(prefix="/researchos", tags=["researchos"])
 master_agent = ResearchMasterAgent()
 project_service = ResearchProjectService()
 evidence_center_service = EvidenceCenterService()
+research_action_service = ResearchActionService()
+research_outcome_service = ResearchOutcomeService()
 
 
 def _project_response(project: ResearchProject) -> ResearchProjectResponse:
@@ -97,7 +117,7 @@ def get_system_status() -> dict[str, object]:
 
     model_configured = bool(os.getenv("DASHSCOPE_API_KEY"))
     return {
-        "version": "ResearchOS v1.0",
+        "version": "ResearchOS v1.1",
         "platform_name": "AI科研创新决策平台",
         "services": [
             {
@@ -247,6 +267,86 @@ def delete_research_project(project_id: str) -> Response:
     except ResearchProjectNotFoundError as error:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
     return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/actions", response_model=ResearchActionResponse, status_code=status.HTTP_201_CREATED)
+def create_research_action(request_body: ResearchActionCreate) -> dict[str, object]:
+    """Save a user-approved next action with its explicit Agent/result context."""
+    return research_action_service.create_action(request_body)
+
+
+@router.get("/actions", response_model=list[ResearchActionResponse])
+def list_research_actions(project_id: str | None = None) -> list[dict[str, object]]:
+    return research_action_service.list_actions(project_id)
+
+
+@router.put("/actions/{action_id}", response_model=ResearchActionResponse)
+def update_research_action(action_id: str, request_body: ResearchActionUpdate) -> dict[str, object]:
+    try:
+        return research_action_service.update_action(action_id, request_body)
+    except ResearchActionNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到该科研行动") from error
+
+
+@router.post("/decisions", response_model=ResearchDecisionResponse)
+def save_research_decision(request_body: ResearchDecisionCreate) -> dict[str, object]:
+    """Record the user's adoption, modification, or rejection of an AI suggestion."""
+    try:
+        return research_action_service.save_decision(request_body)
+    except ResearchActionNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到需要确认的科研行动") from error
+
+
+@router.get("/decisions", response_model=list[ResearchDecisionResponse])
+def list_research_decisions(project_id: str | None = None) -> list[dict[str, object]]:
+    return research_action_service.list_decisions(project_id)
+
+
+@router.post("/projects/{project_id}/outcomes", response_model=ResearchOutcomeResponse, status_code=status.HTTP_201_CREATED)
+def create_project_outcome(project_id: str, request_body: ResearchOutcomeCreate) -> dict[str, object]:
+    try:
+        return research_outcome_service.create_outcome(project_id, request_body)
+    except ResearchOutcomeProjectNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到该科研项目") from error
+    except ResearchOutcomeSourceActionNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="来源行动不存在或不属于该项目") from error
+
+
+@router.get("/projects/{project_id}/outcomes", response_model=list[ResearchOutcomeResponse])
+def list_project_outcomes(project_id: str) -> list[dict[str, object]]:
+    try:
+        project_service.get_project(project_id)
+        return research_outcome_service.list_outcomes(project_id)
+    except ResearchProjectNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到该科研项目") from error
+
+
+@router.put("/outcomes/{outcome_id}", response_model=ResearchOutcomeResponse)
+def update_project_outcome(outcome_id: str, request_body: ResearchOutcomeUpdate) -> dict[str, object]:
+    try:
+        return research_outcome_service.update_outcome(outcome_id, request_body)
+    except ResearchOutcomeNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到该科研成果") from error
+    except ResearchOutcomeSourceActionNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="来源行动不存在") from error
+
+
+@router.delete("/outcomes/{outcome_id}", status_code=status.HTTP_204_NO_CONTENT)
+def delete_project_outcome(outcome_id: str) -> Response:
+    try:
+        research_outcome_service.delete_outcome(outcome_id)
+    except ResearchOutcomeNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到该科研成果") from error
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post("/outcomes/{outcome_id}/knowledge-status", response_model=ResearchOutcomeResponse)
+def update_outcome_knowledge_status(outcome_id: str, request_body: KnowledgeStatusUpdate) -> dict[str, object]:
+    """Record asset organization readiness; this does not trigger RAG indexing."""
+    try:
+        return research_outcome_service.update_knowledge_status(outcome_id, request_body)
+    except ResearchOutcomeNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="未找到该科研成果") from error
 
 
 @router.post("/projects/{project_id}/match")

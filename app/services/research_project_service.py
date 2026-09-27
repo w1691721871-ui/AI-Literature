@@ -4,6 +4,9 @@ from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.models.research_project import ResearchProject
+from app.models.research_action import ResearchAction
+from app.models.research_decision import ResearchDecision
+from app.models.research_outcome import ResearchOutcome
 from app.services.database import SessionLocal, initialize_database
 
 
@@ -71,6 +74,17 @@ class ResearchProjectService:
             record = session.get(ResearchProject, project_id)
             if record is None:
                 raise ResearchProjectNotFoundError("科研项目不存在或已被删除。")
+            # These v1.1 records are project-scoped operational state. Remove
+            # them with the project so the local SQLite workspace has no
+            # orphaned actions, decisions, or planned outcomes.
+            action_ids = list(session.scalars(select(ResearchAction.id).where(ResearchAction.project_id == project_id)))
+            if action_ids:
+                for decision in session.scalars(select(ResearchDecision).where(ResearchDecision.action_id.in_(action_ids))):
+                    session.delete(decision)
+                for action in session.scalars(select(ResearchAction).where(ResearchAction.id.in_(action_ids))):
+                    session.delete(action)
+            for outcome in session.scalars(select(ResearchOutcome).where(ResearchOutcome.project_id == project_id)):
+                session.delete(outcome)
             session.delete(record)
             session.commit()
         except Exception:

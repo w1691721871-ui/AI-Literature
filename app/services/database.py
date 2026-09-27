@@ -38,6 +38,9 @@ def initialize_database() -> None:
     from app.models.paper import Paper  # noqa: F401
     from app.models.paper_chunk import PaperChunk  # noqa: F401
     from app.models.research_project import ResearchProject  # noqa: F401
+    from app.models.research_action import ResearchAction  # noqa: F401
+    from app.models.research_decision import ResearchDecision  # noqa: F401
+    from app.models.research_outcome import ResearchOutcome  # noqa: F401
     from app.models.rag_query_record import RagQueryRecord  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
@@ -57,6 +60,16 @@ def _apply_lightweight_migrations() -> None:
             connection.execute(
                 text("ALTER TABLE papers ADD COLUMN document_type VARCHAR(50) NOT NULL DEFAULT 'paper'")
             )
+    action_columns = {column["name"] for column in inspect(engine).get_columns("research_actions")}
+    if "rationale" not in action_columns:
+        with engine.begin() as connection:
+            connection.execute(
+                text("ALTER TABLE research_actions ADD COLUMN rationale TEXT NOT NULL DEFAULT ''")
+            )
+    outcome_columns = {column["name"] for column in inspect(engine).get_columns("research_outcomes")}
+    if "source_action_id" not in outcome_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE research_outcomes ADD COLUMN source_action_id VARCHAR(36)"))
 
 
 def get_database_session() -> Generator[Session, None, None]:

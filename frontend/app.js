@@ -170,6 +170,17 @@ createApp({
     const projectMatching = ref(false);
     const projectMatchResult = ref(null);
     const projectForm = ref({ name: "", enterprise_requirement: "", research_goal: "", technology_route: "", paper_plan: "", patent_plan: "", outcome_management: "", status: "planning" });
+    // Research decision loop: actions are created only from visible Agent output.
+    const researchActions = ref([]);
+    const researchDecisions = ref([]);
+    const actionLoading = ref(false);
+    const actionError = ref("");
+    const decisionNotes = ref({});
+    const selectedOutcomeProjectId = ref("");
+    const projectOutcomes = ref([]);
+    const outcomeLoading = ref(false);
+    const outcomeError = ref("");
+    const outcomeForm = ref({ outcome_type: "论文", title: "", status: "规划中", description: "", source_action_id: "" });
     const valueAssessment = ref(null);
     const valueAssessmentLoading = ref(false);
     const labProfile = ref(null);
@@ -239,6 +250,19 @@ createApp({
         ["科研决策报告", report.report],
       ].filter(([, value]) => value && typeof value === "object");
     });
+    const actionableTaskSuggestions = computed(() => {
+      const report = researchOsTaskResult.value;
+      if (!report) return [];
+      const collect = (value) => Array.isArray(value) ? value : typeof value === "string" ? [value] : [];
+      return [
+        ["Innovation Agent", report.innovation_opportunities],
+        ["Project Agent", report.project_plan],
+      ].flatMap(([sourceAgent, payload]) => Object.values(payload || {})
+        .flatMap(collect)
+        .map((title) => ({ sourceAgent, title: String(title).trim() }))
+        .filter((item) => item.title && item.title !== "未执行"))
+        .slice(0, 8);
+    });
     const agentTimeline = computed(() => {
       if (researchOsTaskResult.value?.master_plan?.workflow_steps?.length) {
         const runByAgent = new Map((researchOsTaskResult.value.agent_runs || [])
@@ -272,11 +296,14 @@ createApp({
       const status = researchOsTaskLoading.value ? "working"
         : researchOsTaskResult.value ? "completed" : "ready";
       const label = status === "working" ? "处理中" : status === "completed" ? "已完成" : "待执行";
+      const hasAdoptedAction = researchDecisions.value.some((item) => item.decision === "已采纳" || item.decision === "已修改");
+      const hasAction = researchActions.value.length > 0;
       return [
         { agent: "Research Master", action: "理解企业需求与研究目标", status, label },
         { agent: "Knowledge Agent", action: "检索实验室科研资料", status, label },
         { agent: "Innovation Agent", action: "分析创新机会与验证方向", status, label },
         { agent: "Project Agent", action: "组织项目方案与成果路径", status, label },
+        { agent: "决策闭环", action: hasAdoptedAction ? "建议已确认，进入项目执行" : hasAction ? "AI 建议已生成，等待负责人确认" : "等待形成有依据的行动建议", status: hasAdoptedAction ? "completed" : hasAction ? "working" : "ready", label: hasAdoptedAction ? "已确认" : hasAction ? "待确认" : "待生成" },
       ];
     });
     const agentTeamCards = computed(() => [
@@ -521,6 +548,10 @@ createApp({
         await loadResearchOsData();
       }
       if (view === "projects") await loadResearchProjects();
+      if (view === "outcome-center") {
+        await loadResearchProjects();
+        await loadResearchActions();
+      }
       if (view === "bi") await loadResearchBi();
       if (view === "evidence") await loadEvidenceCenter();
       if (view === "lab-profile") await loadResearchBi();
@@ -765,6 +796,10 @@ createApp({
         const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/projects`, { method: "GET" });
         const data = await readResponse(response);
         researchProjects.value = Array.isArray(data) ? data : [];
+        if (!selectedOutcomeProjectId.value && researchProjects.value.length) {
+          selectedOutcomeProjectId.value = researchProjects.value[0].id;
+          await loadProjectOutcomes();
+        }
       } catch (error) {
         projectError.value = error.message || "科研项目加载失败。";
       } finally {
@@ -785,6 +820,7 @@ createApp({
           body: JSON.stringify(projectForm.value),
         });
         researchProjects.value = [await readResponse(response), ...researchProjects.value];
+        if (!selectedOutcomeProjectId.value) selectedOutcomeProjectId.value = researchProjects.value[0].id;
         recordActivity("项目更新", `已创建科研项目：${projectForm.value.name}`);
         projectForm.value = { name: "", enterprise_requirement: "", research_goal: "", technology_route: "", paper_plan: "", patent_plan: "", outcome_management: "", status: "planning" };
       } catch (error) {
@@ -814,12 +850,183 @@ createApp({
           projectName: project.name,
           enterprise_requirement: requirement,
         };
+        selectedOutcomeProjectId.value = project.id;
+        await Promise.all([loadResearchActions(project.id), loadProjectOutcomes()]);
         recordActivity("Agent 执行完成", `Project Agent 已完成「${project.name}」的企业需求匹配。`);
       } catch (error) {
         projectError.value = error.message || "需求匹配执行失败。";
       } finally {
         projectMatching.value = false;
       }
+    }
+
+    function actionEvidenceFromSources(sources) {
+      return (Array.isArray(sources) ? sources : []).slice(0, 3).map((source) => ({
+        evidence_id: [source.paper_id, source.section].filter(Boolean).join(":") || "",
+        source: source.filename || source.paper_title || source.source_file || "已上传科研资料",
+        chapter: source.section || "正文",
+        agent: source.related_agent || "Knowledge Agent",
+        score: typeof source.score === "number" ? source.score : null,
+        title: source.paper_title || source.source_file || "已上传科研资料",
+        detail: [source.section, source.document_type].filter(Boolean).join(" · ") || "章节级资料依据",
+      }));
+    }
+
+    function actionRationale(sourceAgent, sources) {
+      const evidenceCount = actionEvidenceFromSources(sources).length;
+      if (evidenceCount) {
+        return `${sourceAgent} 基于当前已展示的 Agent 输出及 ${evidenceCount} 条资料依据形成该建议；建议仍需由科研负责人确认，并结合后续验证推进。`;
+      }
+      return `${sourceAgent} 已形成该建议，但当前没有可验证资料返回；建议先补充资料或人工核验后再推进。`;
+    }
+
+    async function loadResearchActions(projectId = "") {
+      if (actionLoading.value) return;
+      actionLoading.value = true;
+      actionError.value = "";
+      try {
+        const suffix = projectId ? `?project_id=${encodeURIComponent(projectId)}` : "";
+        const [actionsResponse, decisionsResponse] = await Promise.all([
+          fetchWithTimeout(`${API_BASE_URL}/researchos/actions${suffix}`, { method: "GET" }),
+          fetchWithTimeout(`${API_BASE_URL}/researchos/decisions${suffix}`, { method: "GET" }),
+        ]);
+        researchActions.value = await readResponse(actionsResponse);
+        researchDecisions.value = await readResponse(decisionsResponse);
+      } catch (error) {
+        actionError.value = error.message || "科研行动暂时无法加载。";
+      } finally {
+        actionLoading.value = false;
+      }
+    }
+
+    function decisionForAction(actionId) {
+      return researchDecisions.value.find((item) => item.action_id === actionId);
+    }
+
+    function actionTitle(actionId) {
+      return researchActions.value.find((item) => item.id === actionId)?.title || "来源行动已不可用";
+    }
+
+    async function createActionFromSuggestion(suggestion, sourceAgent, sourceContext, sources, projectId = "") {
+      const title = String(suggestion || "").trim();
+      if (!title || !String(sourceContext || "").trim()) {
+        actionError.value = "该建议缺少可复核的 Agent 输出上下文，无法创建行动。";
+        return;
+      }
+      actionLoading.value = true;
+      actionError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/actions`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            project_id: projectId || null,
+            title,
+            description: "由现有 Agent 分析结果转化为待确认行动；请由科研负责人确认后执行。",
+            source_agent: sourceAgent,
+            source_context: String(sourceContext).slice(0, 8000),
+            evidence_refs: actionEvidenceFromSources(sources),
+            rationale: actionRationale(sourceAgent, sources),
+          }),
+        });
+        const created = await readResponse(response);
+        researchActions.value = [created, ...researchActions.value];
+        recordActivity("行动建议创建", `已从 ${sourceAgent} 输出创建行动：${title}`);
+      } catch (error) {
+        actionError.value = error.message || "创建科研行动失败。";
+      } finally {
+        actionLoading.value = false;
+      }
+    }
+
+    async function updateResearchAction(action, updates) {
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/actions/${action.id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates),
+        });
+        const updated = await readResponse(response);
+        researchActions.value = researchActions.value.map((item) => item.id === updated.id ? updated : item);
+      } catch (error) {
+        actionError.value = error.message || "更新行动状态失败。";
+      }
+    }
+
+    async function recordResearchDecision(action, decision) {
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/decisions`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ action_id: action.id, decision, decided_by: "科研负责人", note: decisionNotes.value[action.id] || "" }),
+        });
+        const saved = await readResponse(response);
+        researchDecisions.value = [saved, ...researchDecisions.value.filter((item) => item.action_id !== action.id)];
+        recordActivity("人工确认", `科研负责人对行动「${action.title}」标记为${decision}。`);
+      } catch (error) {
+        actionError.value = error.message || "保存确认结果失败。";
+      }
+    }
+
+    async function loadProjectOutcomes() {
+      if (!selectedOutcomeProjectId.value || outcomeLoading.value) return;
+      outcomeLoading.value = true;
+      outcomeError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/projects/${selectedOutcomeProjectId.value}/outcomes`, { method: "GET" });
+        projectOutcomes.value = await readResponse(response);
+      } catch (error) {
+        outcomeError.value = error.message || "项目成果暂时无法加载。";
+      } finally {
+        outcomeLoading.value = false;
+      }
+    }
+
+    async function createProjectOutcome() {
+      if (!selectedOutcomeProjectId.value || !outcomeForm.value.title.trim() || outcomeLoading.value) {
+        outcomeError.value = "请选择项目并填写成果名称。";
+        return;
+      }
+      outcomeLoading.value = true;
+      outcomeError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/projects/${selectedOutcomeProjectId.value}/outcomes`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(outcomeForm.value),
+        });
+        projectOutcomes.value = [await readResponse(response), ...projectOutcomes.value];
+        recordActivity("成果规划更新", `已新增${outcomeForm.value.outcome_type}成果：${outcomeForm.value.title}`);
+        outcomeForm.value = { outcome_type: "论文", title: "", status: "规划中", description: "", source_action_id: "" };
+      } catch (error) {
+        outcomeError.value = error.message || "创建成果失败。";
+      } finally {
+        outcomeLoading.value = false;
+      }
+    }
+
+    async function updateProjectOutcome(outcome, updates) {
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/outcomes/${outcome.id}`, {
+          method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(updates),
+        });
+        const updated = await readResponse(response);
+        projectOutcomes.value = projectOutcomes.value.map((item) => item.id === updated.id ? updated : item);
+      } catch (error) { outcomeError.value = error.message || "更新成果失败。"; }
+    }
+
+    async function updateOutcomeKnowledgeStatus(outcome, knowledgeStatus) {
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/outcomes/${outcome.id}/knowledge-status`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ knowledge_status: knowledgeStatus }),
+        });
+        const updated = await readResponse(response);
+        projectOutcomes.value = projectOutcomes.value.map((item) => item.id === updated.id ? updated : item);
+      } catch (error) { outcomeError.value = error.message || "更新知识资产状态失败。"; }
+    }
+
+    async function deleteProjectOutcome(outcome) {
+      if (!window.confirm(`确认删除成果「${outcome.title}」吗？`)) return;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/outcomes/${outcome.id}`, { method: "DELETE" });
+        if (!response.ok) await readResponse(response);
+        projectOutcomes.value = projectOutcomes.value.filter((item) => item.id !== outcome.id);
+        recordActivity("成果规划更新", `已删除成果：${outcome.title}`);
+      } catch (error) { outcomeError.value = error.message || "删除成果失败。"; }
     }
 
     async function askResearchQuestion() {
@@ -1342,6 +1549,7 @@ createApp({
       researchOsGoal,
       researchOsOverview,
       researchOsSections,
+      actionableTaskSuggestions,
       agentTimeline,
       aiActivityStream,
       agentTeamCards,
@@ -1365,6 +1573,16 @@ createApp({
       projectLoading,
       projectMatchResult,
       projectMatching,
+      researchActions,
+      researchDecisions,
+      actionLoading,
+      actionError,
+      decisionNotes,
+      selectedOutcomeProjectId,
+      projectOutcomes,
+      outcomeLoading,
+      outcomeError,
+      outcomeForm,
       valueAssessment,
       valueAssessmentLoading,
       labProfile,
@@ -1386,6 +1604,17 @@ createApp({
       createResearchProject,
       loadResearchBi,
       loadResearchProjects,
+      loadResearchActions,
+      decisionForAction,
+      actionTitle,
+      createActionFromSuggestion,
+      updateResearchAction,
+      recordResearchDecision,
+      loadProjectOutcomes,
+      createProjectOutcome,
+      updateProjectOutcome,
+      updateOutcomeKnowledgeStatus,
+      deleteProjectOutcome,
       runProjectMatch,
       generateLabProfile,
       loadEvidenceCenter,
@@ -1437,8 +1666,8 @@ createApp({
       <header class="workspace-header">
         <nav class="top-navigation" aria-label="主导航">
           <button class="brand-button" type="button" @click="openWorkspaceView('dashboard')"><span class="brand-orb">✦</span><span>ResearchOS</span></button>
-          <div class="top-navigation-links"><button type="button" :class="{ active: activeWorkspaceView === 'demo' }" @click="startDemoMode">现场演示</button><button type="button" :class="{ active: activeWorkspaceView === 'tasks' || activeWorkspaceView === 'assistant' }" @click="openWorkspaceView('tasks')">AI助手</button><button type="button" :class="{ active: activeWorkspaceView === 'knowledge' }" @click="openWorkspaceView('knowledge')">知识空间</button><button type="button" :class="{ active: activeWorkspaceView === 'timeline' || activeWorkspaceView === 'agents' }" @click="openWorkspaceView('agents')">Agent团队</button><button type="button" :class="{ active: activeWorkspaceView === 'projects' || activeWorkspaceView === 'delivery' }" @click="openWorkspaceView('projects')">科研项目</button><button type="button" :class="{ active: activeWorkspaceView === 'fde-report' || activeWorkspaceView === 'evidence' || activeWorkspaceView === 'customer-value' }" @click="openWorkspaceView('fde-report')">解决方案</button><button type="button" :class="{ active: activeWorkspaceView === 'bi' || activeWorkspaceView === 'lab-profile' || activeWorkspaceView === 'insights' }" @click="openWorkspaceView('bi')">科研洞察</button><button type="button" :class="{ active: activeWorkspaceView === 'system' }" @click="openWorkspaceView('system')">系统状态</button></div>
-          <span class="top-navigation-status"><i></i> ResearchOS v1.0</span>
+          <div class="top-navigation-links"><button type="button" :class="{ active: activeWorkspaceView === 'demo' }" @click="startDemoMode">现场演示</button><button type="button" :class="{ active: activeWorkspaceView === 'tasks' || activeWorkspaceView === 'assistant' }" @click="openWorkspaceView('tasks')">AI助手</button><button type="button" :class="{ active: activeWorkspaceView === 'knowledge' }" @click="openWorkspaceView('knowledge')">知识空间</button><button type="button" :class="{ active: activeWorkspaceView === 'timeline' || activeWorkspaceView === 'agents' }" @click="openWorkspaceView('agents')">Agent团队</button><button type="button" :class="{ active: activeWorkspaceView === 'projects' || activeWorkspaceView === 'delivery' }" @click="openWorkspaceView('projects')">科研项目</button><button type="button" :class="{ active: activeWorkspaceView === 'fde-report' || activeWorkspaceView === 'evidence' || activeWorkspaceView === 'customer-value' }" @click="openWorkspaceView('fde-report')">解决方案</button><button type="button" :class="{ active: activeWorkspaceView === 'bi' || activeWorkspaceView === 'lab-profile' || activeWorkspaceView === 'insights' }" @click="openWorkspaceView('bi')">科研洞察</button><button type="button" :class="{ active: activeWorkspaceView === 'outcome-center' }" @click="openWorkspaceView('outcome-center')">科研成果</button><button type="button" :class="{ active: activeWorkspaceView === 'system' }" @click="openWorkspaceView('system')">系统状态</button></div>
+          <span class="top-navigation-status"><i></i> ResearchOS v1.1</span>
         </nav>
         <div v-if="activeWorkspaceView === 'dashboard'" class="minimal-hero researchos-hero">
           <p class="section-kicker">AI RESEARCH CONSULTANT</p><h1>ResearchOS 科研顾问</h1>
@@ -1533,8 +1762,30 @@ createApp({
 
       <section v-if="activeWorkspaceView === 'fde-report'" class="fde-report" aria-label="FDE解决方案报告"><div class="dashboard-heading"><div><p class="section-kicker">FDE SOLUTION DELIVERY</p><h2>FDE 解决方案报告</h2><p>将客户需求、实验室知识资产与 Agent 输出整合为一份可沟通的科研合作交付物。</p></div><button class="outline-button" type="button" @click="applyFdeDeliveryDemo">填充低碳材料案例</button></div><div v-if="!projectMatchResult" class="fde-report-empty"><div class="empty-illustration">◈</div><h3>等待 FDE 交付结果</h3><p>在“客户需求”中创建低碳建筑材料项目并运行需求匹配后，这里会自动汇总真实结果。</p><button class="primary-card-action" type="button" @click="openWorkspaceView('projects')">前往客户需求中心</button></div><div v-else class="fde-report-sheet"><header><span>ResearchOS · 科研合作方案</span><h3>{{ projectMatchResult.projectName }}</h3><p>{{ projectMatchResult.enterprise_requirement }}</p></header><section><b>01</b><div><h4>客户需求理解</h4><p>{{ projectMatchResult.enterprise_requirement }}</p></div></section><section><b>02</b><div><h4>实验室能力匹配</h4><ul><li v-for="item in projectMatchResult.lab_capability_match" :key="item">{{ item }}</li></ul></div></section><section><b>03</b><div><h4>技术路线与方案建议</h4><ul><li v-for="item in projectMatchResult.technical_solution_suggestions" :key="item">{{ item }}</li></ul></div></section><section><b>04</b><div><h4>创新机会</h4><p v-if="researchOsTaskResult?.innovation_opportunities">{{ researchOsTaskResult.innovation_opportunities }}</p><p v-else>运行 Research Master 的“创新发现 Agent”后将在此展示基于资料的创新机会。</p></div></section><section><b>05</b><div><h4>成果规划</h4><dl><template v-for="(value,key) in projectMatchResult.expected_outcome_plan" :key="key"><dt>{{ key }}</dt><dd>{{ Array.isArray(value) ? value.join('、') : value }}</dd></template></dl></div></section><section class="fde-evidence"><b>06</b><div><h4>分析依据</h4><p>以下章节级片段支撑客户需求匹配、技术路线与成果规划建议。</p><ul><li v-for="source in projectMatchResult.sources || []" :key="source.paper_id + source.section">{{ source.paper_title }} · {{ documentTypeLabel(source.document_type) }} · {{ source.section }}</li></ul><p v-if="!(projectMatchResult.sources || []).length">现有团队资料不足，暂无可展示的分析依据。</p></div></section><footer>{{ projectMatchResult.boundary_note }}</footer></div></section>
 
+      <section v-if="activeWorkspaceView === 'projects' && selectedOutcomeProjectId" class="project-outcome-preview" aria-label="项目成果路径">
+        <div class="decision-loop-heading"><div><p class="section-kicker">PROJECT OUTCOME PATH</p><h3>成果路径</h3><p>项目成果从规划到知识资产整理的当前状态。</p></div><select v-model="selectedOutcomeProjectId" @change="loadProjectOutcomes"><option v-for="project in researchProjects" :key="project.id" :value="project.id">{{ project.name }}</option></select></div>
+        <div v-if="!projectOutcomes.length" class="decision-loop-empty"><b>尚无成果路径记录</b><p>可在“科研成果”中新增论文、专利、技术报告或实验成果。</p></div><ol v-else class="project-outcome-mini-path"><li v-for="outcome in projectOutcomes" :key="outcome.id"><i></i><div><b>{{ outcome.outcome_type }} · {{ outcome.title }}</b><span>{{ outcome.status }} · 知识状态：{{ outcome.knowledge_status }}</span></div></li></ol><button class="outline-button" type="button" @click="openWorkspaceView('outcome-center')">管理科研成果</button>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'tasks' && researchOsTaskResult" class="agent-action-bridge" aria-label="将科研任务建议转为行动">
+        <div><p class="section-kicker">RESEARCH MASTER → ACTION CENTER</p><h3>将创新与项目规划建议交由负责人确认</h3><p>以下条目来自已执行的 Research Master 协作结果；未运行任务或资料不足时不会生成建议。</p></div>
+        <div v-if="actionableTaskSuggestions.length" class="agent-suggestion-list"><article v-for="item in actionableTaskSuggestions" :key="item.sourceAgent + item.title"><p><small>{{ item.sourceAgent }}</small>{{ item.title }}</p><button class="outline-button" type="button" :disabled="actionLoading" @click="createActionFromSuggestion(item.title, item.sourceAgent, researchOsTaskResult.executive_summary || researchOsGoal, researchOsTaskResult.sources)">纳入行动</button></article></div><p v-else class="demo-boundary">当前任务尚未返回可转化的行动建议；请先运行包含 Innovation Agent 或 Project Agent 的科研任务。</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'projects' && projectMatchResult" class="agent-action-bridge" aria-label="将项目建议转为行动">
+        <div><p class="section-kicker">PROJECT AGENT → ACTION CENTER</p><h3>将有依据的方案建议纳入下一步行动</h3><p>仅把当前 Project Agent 已生成的技术建议转为待人工确认事项，并保留资料来源。</p></div>
+        <div class="agent-suggestion-list"><article v-for="suggestion in projectMatchResult.technical_solution_suggestions || []" :key="suggestion"><p>{{ suggestion }}</p><button class="outline-button" type="button" :disabled="actionLoading" @click="createActionFromSuggestion(suggestion, 'Project Agent', projectMatchResult.enterprise_requirement, projectMatchResult.sources, selectedOutcomeProjectId)">纳入行动</button></article></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'outcome-center'" class="decision-loop-center" aria-label="科研成果与决策闭环">
+        <div class="dashboard-heading"><div><p class="section-kicker">RESEARCH DECISION LOOP</p><h2>科研成果</h2><p>将有依据的 AI 建议交由科研负责人确认，再同步推进论文、专利、技术报告或实验成果。</p></div><button class="outline-button" type="button" @click="openWorkspaceView('projects')">查看科研项目</button></div>
+        <p v-if="actionError || outcomeError" class="error-alert"><span>!</span>{{ actionError || outcomeError }}</p>
+        <section class="decision-loop-panel"><div class="decision-loop-heading"><div><p class="section-kicker">HUMAN-IN-THE-LOOP</p><h3>AI 建议与人工确认</h3></div><button class="outline-button" type="button" :disabled="actionLoading" @click="loadResearchActions()">{{ actionLoading ? '刷新中…' : '刷新行动' }}</button></div><div v-if="!researchActions.length && !actionLoading" class="decision-loop-empty"><b>暂无待确认行动</b><p>在 FDE 解决方案报告或 Research Master 任务结果中，将有证据支撑的建议加入行动中心。</p></div><article v-for="action in researchActions" :key="action.id" class="research-action-card"><header><div><span>{{ action.status }}</span><strong>{{ action.source_agent }}</strong></div><time>{{ formatLibraryDate(action.created_at) }}</time></header><h4>{{ action.title }}</h4><p>{{ action.description || '待负责人根据该建议安排下一步行动。' }}</p><details class="action-evidence-details"><summary>查看分析依据</summary><section><h5>建议形成依据</h5><p>{{ action.rationale || '暂无可读分析说明。' }}</p></section><section><h5>Evidence 引用</h5><div v-if="action.evidence_refs?.length" class="action-evidence-list"><article v-for="ref in action.evidence_refs" :key="ref.evidence_id || ref.title + ref.detail"><b>{{ ref.evidence_id || '未提供 Evidence ID' }}</b><p>来源：{{ ref.source || ref.title || '未提供来源文件' }}</p><p>章节：{{ ref.chapter || ref.detail || '未提供章节' }}</p><p>来源 Agent：{{ ref.agent || action.source_agent }}</p><p v-if="ref.score !== null && ref.score !== undefined">匹配度：{{ (Number(ref.score) * 100).toFixed(0) }}%</p><p v-else>匹配度：暂无可验证资料</p></article></div><p v-else>暂无可验证资料。该建议需先补充资料或人工核验后再推进。</p><button v-if="action.evidence_refs?.length" type="button" class="text-button" @click="openWorkspaceView('evidence')">查看 Evidence Center →</button></section></details><section class="action-next-step"><h5>下一步行动</h5><select :value="action.status" @change="updateResearchAction(action, { status: $event.target.value })"><option>待执行</option><option>进行中</option><option>已完成</option><option>已取消</option></select></section><section class="action-confirmation"><h5>人工确认</h5><div class="action-controls"><input v-model="decisionNotes[action.id]" placeholder="确认说明（可选）" /><button type="button" @click="recordResearchDecision(action, '已采纳')">采纳建议</button><button type="button" @click="recordResearchDecision(action, '已修改')">修改后采纳</button><button type="button" class="quiet-danger" @click="recordResearchDecision(action, '已拒绝')">拒绝</button></div></section><footer v-if="decisionForAction(action.id)">人工决定：<b>{{ decisionForAction(action.id).decision }}</b><span v-if="decisionForAction(action.id).note"> · {{ decisionForAction(action.id).note }}</span></footer></article></section>
+        <section class="decision-loop-panel outcome-panel"><div class="decision-loop-heading"><div><p class="section-kicker">PROJECT OUTCOMES</p><h3>成果路径</h3></div><select v-model="selectedOutcomeProjectId" @change="loadProjectOutcomes"><option value="">选择科研项目</option><option v-for="project in researchProjects" :key="project.id" :value="project.id">{{ project.name }}</option></select></div><div v-if="!researchProjects.length" class="decision-loop-empty"><b>尚未创建科研项目</b><p>先在科研项目中心创建项目，再规划成果路径。</p></div><template v-else><form class="outcome-create-form" @submit.prevent="createProjectOutcome"><select v-model="outcomeForm.outcome_type"><option>论文</option><option>专利</option><option>技术报告</option><option>实验成果</option></select><input v-model="outcomeForm.title" placeholder="成果名称，例如：低碳材料耐久性验证技术报告" /><select v-model="outcomeForm.status"><option>规划中</option><option>进行中</option><option>已完成</option><option>已提交</option><option>已归档</option></select><textarea v-model="outcomeForm.description" rows="2" placeholder="成果说明（可选）"></textarea><select v-model="outcomeForm.source_action_id"><option value="">来源行动（可选）</option><option v-for="action in researchActions.filter(item => !item.project_id || item.project_id === selectedOutcomeProjectId)" :key="action.id" :value="action.id">{{ action.title }}</option></select><button class="primary-card-action" type="submit" :disabled="outcomeLoading">{{ outcomeLoading ? '保存中…' : '新增成果' }}</button></form><div v-if="!projectOutcomes.length && !outcomeLoading" class="decision-loop-empty"><b>当前项目尚无成果记录</b><p>成果状态用于管理交付过程；“已沉淀”仅记录知识资产整理状态，不会自动写入 RAG 索引。</p></div><div class="outcome-path"><article v-for="outcome in projectOutcomes" :key="outcome.id"><i></i><div><span>{{ outcome.outcome_type }} · {{ outcome.status }}</span><h4>{{ outcome.title }}</h4><p>{{ outcome.description || '暂无成果说明。' }}</p><p v-if="outcome.source_action_id" class="outcome-source-action">来源行动：{{ actionTitle(outcome.source_action_id) }}</p><p v-else class="outcome-source-action">来源行动：未关联</p><div class="outcome-controls"><select :value="outcome.status" @change="updateProjectOutcome(outcome, { status: $event.target.value })"><option>规划中</option><option>进行中</option><option>已完成</option><option>已提交</option><option>已归档</option></select><select :value="outcome.knowledge_status" @change="updateOutcomeKnowledgeStatus(outcome, $event.target.value)"><option>未沉淀</option><option>待整理</option><option>已沉淀</option></select><button type="button" class="quiet-danger" @click="deleteProjectOutcome(outcome)">删除</button></div></div></article></div><p class="demo-boundary">知识资产状态仅记录成果整理准备度。完成资料整理、文本解析与索引后，才可按现有知识库流程进入检索范围。</p></template></section>
+      </section>
+
       <section v-if="activeWorkspaceView === 'system'" class="system-center" aria-label="系统状态中心">
-        <div class="dashboard-heading"><div><p class="section-kicker">SYSTEM STATUS CENTER</p><h2>系统状态中心</h2><p>{{ systemStatus?.version || 'ResearchOS v1.0' }} · {{ systemStatus?.platform_name || 'AI科研创新决策平台' }}</p></div><button class="outline-button" type="button" :disabled="systemStatusLoading" @click="loadSystemStatus">{{ systemStatusLoading ? '检查中…' : '刷新状态' }}</button></div>
+        <div class="dashboard-heading"><div><p class="section-kicker">SYSTEM STATUS CENTER</p><h2>系统状态中心</h2><p>{{ systemStatus?.version || 'ResearchOS v1.1' }} · {{ systemStatus?.platform_name || 'AI科研创新决策平台' }}</p></div><button class="outline-button" type="button" :disabled="systemStatusLoading" @click="loadSystemStatus">{{ systemStatusLoading ? '检查中…' : '刷新状态' }}</button></div>
         <p v-if="systemStatusError" class="error-alert"><span>!</span>{{ systemStatusError }}</p>
         <div v-if="systemStatus" class="system-status-grid"><article v-for="service in systemStatus.services" :key="service.id"><header><span :class="service.status">{{ service.status === 'ready' || service.status === 'configured' ? '正常' : service.status === 'empty' ? '待初始化' : '需配置' }}</span><b>{{ service.name }}</b></header><p>{{ service.detail }}</p></article></div>
         <section class="demo-knowledge-panel"><div><p class="section-kicker">DEMO KNOWLEDGE BASE</p><h3>低碳建筑材料案例资料</h3><p>用于比赛现场讲解知识库、项目资料和产学研协作流程。</p></div><button class="primary-card-action" type="button" @click="initializeDemoKnowledge">{{ demoKnowledgeInitialized ? 'Demo资料已加载' : '初始化 Demo 知识库' }}</button><div v-if="visibleDemoKnowledgeAssets.length" class="demo-asset-grid"><article v-for="asset in visibleDemoKnowledgeAssets" :key="asset.title"><span>{{ asset.status }}</span><h4>{{ asset.title }}</h4><small>{{ asset.type }}</small><p>{{ asset.detail }}</p></article></div><p class="demo-boundary">这些是明确标注的界面展示资料，不会自动写入真实论文库、FAISS 索引或作为 Agent 的科研证据。需要真实分析时，请上传实际可解析的资料。</p></section>

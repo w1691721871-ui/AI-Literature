@@ -1,5 +1,5 @@
-const CACHE_NAME = "researchos-workspace-v19";
-const APP_SHELL = ["./", "./index.html", "./styles.css?v=19", "./app.js?v=19", "./manifest.json"];
+const CACHE_NAME = "researchos-workspace-v22";
+const APP_SHELL = ["./", "./index.html", "./styles.css?v=22", "./app.js?v=22", "./manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
