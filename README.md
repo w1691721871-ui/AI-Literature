@@ -1,8 +1,18 @@
-# ResearchOS v1.1
+# ResearchOS v5.0
 
-> AI 科研决策闭环平台。
+> AI Research Solution Platform · AI 科研决策与执行平台。
 
-ResearchOS 是用于比赛展示与校招实践的科研组织智能平台原型，面向高校实验室、科研机构和产学研合作场景。它保留单篇深度分析能力，并增加团队论文库、多论文 RAG 知识问答、结构化研究报告、引用证据、可解释执行摘要与人工确认的科研决策闭环。
+ResearchOS 是面向高校实验室、企业研发团队和产学研合作场景的 AI 科研决策与执行平台原型。它把研究目标、授权资料、可解释分析与人工确认组织成可演练的 FDE 解决方案交付流程。
+
+核心能力包括：
+
+- **Multi-Agent**：Research Master 编排文献、知识、趋势、创新、项目与报告专项能力。
+- **Research Worker Agent Loop**：以受控工具完成任务理解、规划、执行、观察、评估与待人工确认的交付物。
+- **RAG + FAISS**：基于已上传并索引的资料进行多论文知识检索与研究问答。
+- **Evidence + Human-in-the-loop**：以章节级资料提示支撑建议；没有资料时明确提示不足，建议须由负责人确认。
+- **FDE Solution Delivery Workflow**：覆盖客户需求配置、需求映射、实施风险、交付报告与验收演练。
+
+本项目用于比赛展示与校招实践，不是生产系统；不虚构用户数量、准确率、商业收入或企业落地案例。
 
 本项目用于比赛展示，不是生产系统；不虚构用户数量、准确率、商业收入或企业落地案例。
 
@@ -82,6 +92,49 @@ Research Project → Outcome（论文 / 专利 / 技术报告 / 实验成果）
 ```
 
 该脚本只使用用户已授权上传的资料；没有真实资料时会输出“等待用户上传真实科研PDF”并停止。当前仓库不声明已完成真实科研资料的端到端验收。
+
+## v3 自主科研 AI 员工
+
+ResearchOS v3 将 v2 的受控自主执行能力升级为 **AI Research Worker**：它不替代科研负责人，而是在一个可解释、可复核的循环中完成目标理解、真实工作区感知、任务规划、允许工具调用、结果观察、资料覆盖检查、下一步重规划和交付物整理。
+
+```text
+科研目标
+  ↓
+Goal Understanding → Environment Awareness → Planning → Execution
+  ↓                                      ↑           ↓
+Observation → Result Evaluation → Reflection → Replanning
+  ↓
+待负责人确认的科研交付物
+```
+
+- **执行状态持久化**：`autonomous_research_runs` 保存当前步骤、当前工具、已完成任务、工具摘要、失败原因、下一步计划与用户可读时间线；不保存 Chain of Thought、Prompt、Token 或 API 鉴权信息。
+- **真实环境感知**：`research_workspace/` 仅扫描实际存在的 PDF、DOCX、TXT、CSV、XLSX 文件，生成文件类型与数量画像；研究方向仅是文件名线索，不作为科研事实。
+- **长期记忆与知识库分离**：Research Memory 只保存实验室资料数量、标题线索和历史任务等组织上下文；论文内容证据仍来自既有论文库、Chunk、FAISS 和 RAG。
+- **工具反馈回路**：每项计划记录工具选择原因。检索不足时先尝试可追溯的回退检索；仍无资料时明确提示补充资料，而不是生成没有依据的结论。
+- **人工确认边界**：Project Tool 仅生成待确认建议，不会自动创建真实 Project、Action、Decision 或 Outcome。
+
+## v2 自主科研执行 Agent
+
+在保留 v1.1 的 Evidence 与 Human-in-the-loop 闭环基础上，ResearchOS v2 增加 **Research Brain**：用户输入科研目标后，系统根据当前已索引论文和受限科研工作区资料，动态生成任务计划、选择允许的工具、执行资料检索与专项分析，并检查证据是否充足。
+
+```text
+科研目标
+  ↓
+Research Brain → Task Planner → Tool Router
+  ↓                    ↓
+Knowledge Tool / File Tool / Data Analysis Tool / Document Tool / Project Tool
+  ↓
+Research Master + 已有专项 Agent
+  ↓
+Result Evaluation / Reflection → 可复核交付物或“需要补充资料”
+```
+
+- **自主但受控**：工具均为显式允许的科研工具；不执行任意 Shell 命令、不控制用户电脑、不读取 `research_workspace/` 之外的文件。
+- **动态计划**：根据目标关键词、知识库就绪状态和工作区资产选择 Knowledge、Literature、Trend、Innovation、Project、Report Agent，而不是要求用户手工固定编排。
+- **反思与调整**：检索证据不足时会先尝试原始目标检索，并在结果中明确提示补充资料或人工复核；不会虚构科研结论。
+- **执行记录**：`autonomous_research_runs` 持久化用户可理解的任务计划、工具状态、执行时间线、反思与交付物，不保存模型思维链、Prompt、Token 或鉴权信息。
+- **科研工作区**：在项目根目录的 `research_workspace/` 放入 PDF、DOCX、TXT、CSV 或 XLSX 后，File Tool 可发现资料；CSV/XLSX 仅做结构摘要。需要成为 RAG 证据的资料仍应通过论文库上传并完成索引。
+- **项目安全边界**：Project Tool 只形成待负责人确认的项目建议；不会自动创建 Project、Action、Decision 或 Outcome。
 
 ## RAG v3 科研知识能力
 
@@ -259,7 +312,7 @@ py -m http.server 5173 --directory frontend
 在 Render 创建 Blueprint 或 Web Service 后，在服务的 **Environment** 中设置以下变量：
 
 ```text
-DASHSCOPE_API_KEY=<在 Render 控制台填写，不要写入仓库>
+DASHSCOPE_API_KEY=your_api_key_here
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL=qwen-plus
 EMBEDDING_MODEL=text-embedding-v4
@@ -271,6 +324,42 @@ EMBEDDING_DIMENSIONS=1024
 前端可作为 Render Static Site 部署 `frontend/` 目录。但静态前端的 API 地址和 FastAPI CORS 允许来源必须对应实际的 Render 域名；如果创建新的服务域名，需要在部署前同步检查这两项配置。
 
 ## 当前限制
+
+## ResearchOS v4.2：科研智能工作平台
+
+ResearchOS v4.2 在既有 Research Master、Research Worker、RAG 与 Evidence 能力之上，增加面向实验室和产学研协作的产品层：
+
+- **Research Workspace**：用工作空间名称、展示型成员角色、项目/文档/执行记录概览组织科研协作；当前不包含登录或真实权限校验。
+- **Research Task Center**：管理文献分析、数据分析、企业需求分析与技术路线规划任务，并可关联既有 Worker 执行记录、Evidence 数量和输出报告。
+- **Client Delivery Center**：将 Worker 的已有资料和 Evidence 摘要整理为交付预览，可导出标明“AI辅助生成，需人工审核”的 PDF。
+- **Agent Monitor**：基于本地 Worker 运行记录展示执行次数、任务状态、平均耗时和允许工具调用次数；不展示 Prompt、Token 或模型思维链。
+
+产品定位：**ResearchOS · AI科研决策与执行平台**。它面向高校实验室、科研机构与企业合作场景，解决科研资料管理、技术需求匹配和资料分析效率问题。技术栈为 Vue 3、FastAPI、Qwen/DashScope、RAG + FAISS、SQLite，以及 Research Worker 的受控执行能力；可信边界由 Evidence 与 Human Review 保证。
+
+## FDE Delivery Scenario
+
+ResearchOS v4.3 增加 **FDE 交付中心**，用于演练解决方案工程师为企业与高校实验室实施 AI 科研平台的全过程：
+
+```text
+需求调研 → 方案设计 → 系统配置 → 测试验证 → 上线交付
+```
+
+该页面展示客户需求分类、实施任务、系统模块映射与《Implementation Acceptance Report》。交付报告始终标注“AI辅助生成，需客户确认”。低碳建筑材料案例是 **Demo资料**，不会写入真实知识库、不会作为科研 Evidence，也不代表真实客户或科研成果。
+
+## ResearchOS v5.0：FDE Solution Delivery Workflow
+
+v5.0 将既有科研智能能力组织为面向 FDE 面试展示的客户解决方案流程，强调方案工程与交付边界，而不是新增模型或自动化决策权限：
+
+```text
+客户场景配置 → 需求映射 → 实施风险识别 → FDE Delivery Report → 客户确认
+```
+
+- **FDE Configuration Center**：为高校实验室、企业研发中心或产学研平台选择知识库、文献管理、数据分析、技术路线规划与成果管理需求，并生成模块映射、实施步骤和验收标准。
+- **Requirement Mapping Center**：以“客户业务问题 → 解决方案 → ResearchOS 模块”展示 FDE 的需求澄清过程。
+- **Implementation Risk Center**：在资料质量、AI 可信、用户使用与项目实施四个维度提示风险、潜在影响与建议。
+- **FDE Delivery Report**：汇总客户背景、当前问题、需求分析、系统方案、实施计划、验收标准和风险说明；所有内容标注为 **Demo** 和“AI辅助生成，需要客户确认”。
+
+这些页面仅用于方案演练，既不写入客户环境，也不构成真实科研、合规或故障判断。
 
 - 不使用 LangChain、Chroma、Milvus、Redis 或生产级向量数据库；多论文 RAG 使用 SQLite + 本地 FAISS，适合小规模 Demo。
 - 向量索引会在论文上传或删除后整体重建，不适合高并发生产环境。

@@ -35,6 +35,12 @@ def initialize_database() -> None:
     # Importing models registers them with Base.metadata without a circular import.
     from app.models.analysis_record import AnalysisRecord  # noqa: F401
     from app.models.agent_trace import AgentTrace  # noqa: F401
+    from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
+    from app.models.research_memory import ResearchMemory  # noqa: F401
+    from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401
+    from app.models.research_worker_context import ResearchWorkerContext  # noqa: F401
+    from app.models.research_workspace import ResearchWorkspace  # noqa: F401
+    from app.models.research_task import ResearchTask  # noqa: F401
     from app.models.paper import Paper  # noqa: F401
     from app.models.paper_chunk import PaperChunk  # noqa: F401
     from app.models.research_project import ResearchProject  # noqa: F401
@@ -70,6 +76,29 @@ def _apply_lightweight_migrations() -> None:
     if "source_action_id" not in outcome_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE research_outcomes ADD COLUMN source_action_id VARCHAR(36)"))
+    run_columns = {column["name"] for column in inspect(engine).get_columns("autonomous_research_runs")}
+    run_additions = {
+        "environment_profile": "TEXT NOT NULL DEFAULT '{}'",
+        "memory_snapshot": "TEXT NOT NULL DEFAULT '{}'",
+        "current_step": "VARCHAR(300) NOT NULL DEFAULT '等待执行'",
+        "current_tool": "VARCHAR(100) NOT NULL DEFAULT ''",
+        "completed_tasks": "TEXT NOT NULL DEFAULT '[]'",
+        "next_plan": "TEXT NOT NULL DEFAULT '[]'",
+        "failure_reason": "TEXT NOT NULL DEFAULT ''",
+    }
+    for name, definition in run_additions.items():
+        if name not in run_columns:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE autonomous_research_runs ADD COLUMN {name} {definition}"))
+    worker_columns = {column["name"] for column in inspect(engine).get_columns("research_worker_runs")}
+    worker_additions = {
+        "current_phase": "VARCHAR(40) NOT NULL DEFAULT 'planning'",
+        "execution_history": "TEXT NOT NULL DEFAULT '[]'",
+    }
+    for name, definition in worker_additions.items():
+        if name not in worker_columns:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE research_worker_runs ADD COLUMN {name} {definition}"))
 
 
 def get_database_session() -> Generator[Session, None, None]:

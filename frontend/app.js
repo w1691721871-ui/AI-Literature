@@ -93,6 +93,26 @@ const AGENT_ROLE_LABELS = {
   project: "项目方案顾问",
   report: "科研报告顾问",
 };
+const FDE_SCENARIO_DATA = {
+  "高校实验室": {
+    background: "实验室需要沉淀分散的论文、实验与项目资料，并缩短企业合作项目的前期准备。",
+    problem: "资料理解与技术路线讨论主要依赖人工整理，研究资产难以复用。",
+    solution: "以 Research Workspace 组织授权资料，结合知识空间、受控执行和人工审核形成交付流程。",
+    mapping: ["科研资料分散", "知识空间 + 文献管理", "Research Workspace / Knowledge Space"],
+  },
+  "企业研发中心": {
+    background: "企业研发团队需要更快核验技术资料、识别合作方向，并保持方案输出可追溯。",
+    problem: "技术资料、需求与验证结论之间缺少统一的协作视图。",
+    solution: "以企业需求为入口，映射受控分析、Evidence 复核与项目交付材料。",
+    mapping: ["技术需求匹配", "受控资料分析 + Evidence", "Research Worker / Evidence Center"],
+  },
+  "产学研平台": {
+    background: "平台需要让高校研究能力、企业需求和合作成果路径在同一流程中可讨论、可复核。",
+    problem: "供需信息与项目成果规划存在协作断层，验收口径不易统一。",
+    solution: "通过需求映射、项目规划与 Human Review 建立可沟通的协作闭环。",
+    mapping: ["供需协同困难", "需求分析 + 项目成果规划", "Research Master / Project Center"],
+  },
+};
 
 createApp({
   setup() {
@@ -162,6 +182,72 @@ createApp({
     const researchOsTaskResult = ref(null);
     const researchOsTaskLoading = ref(false);
     const researchOsError = ref("");
+    // ResearchOS v3: user-visible execution state only; never model reasoning.
+    const autonomousGoal = ref("帮助低碳建筑材料实验室寻找企业合作创新方向，并形成待负责人确认的技术路线与成果规划。");
+    const autonomousRun = ref(null);
+    const autonomousRuns = ref([]);
+    const autonomousTools = ref([]);
+    const autonomousMemory = ref(null);
+    const autonomousLoading = ref(false);
+    const autonomousError = ref("");
+    // ResearchOS v4: a separate bounded execution workspace, backed by the
+    // Research Worker API rather than the Research Master orchestration API.
+    const workerGoal = ref("分析低碳建筑材料实验数据，并生成企业技术合作方案。");
+    const workerRun = ref(null);
+    const workerTools = ref([]);
+    const workerTimeline = ref([]);
+    const workerLoading = ref(false);
+    const workerError = ref("");
+    const workerReviewDecision = ref("");
+    const workerReviewNote = ref("");
+    // v4.2 enterprise workspace layer: display roles only, no login/authorization.
+    const workspaces = ref([]);
+    const activeResearchWorkspace = ref(null);
+    const workspaceName = ref("低碳建筑材料科研协作空间");
+    const workspaceLoading = ref(false);
+    const workspaceError = ref("");
+    const researchTasks = ref([]);
+    const taskName = ref("");
+    const taskType = ref("企业需求分析");
+    const taskCenterLoading = ref(false);
+    const agentMonitor = ref(null);
+    const deliveryPreview = ref(null);
+    const deliveryLoading = ref(false);
+    // v4.3: scenario-only FDE implementation rehearsal. It never changes customer data.
+    const fdeStageIndex = ref(0);
+    const fdeTaskStatuses = ref(["待开始", "待开始", "待开始", "待开始", "待开始"]);
+    const fdeAcceptanceReady = ref(false);
+    // v4.4: a presentation-only five-minute FDE solution walkthrough.
+    const fdeDemoStep = ref(0);
+    const fdeArchitectureSelection = ref("Research Master");
+    const fdeArchitectureDescriptions = {
+      "用户需求": "把企业目标、资料现状和协作痛点转成可讨论的实施输入。",
+      "Research Master": "负责已有多 Agent 工作流的任务理解与编排；本演示不会实际运行模型。",
+      "Research Worker": "负责受控文件理解、工具执行摘要和待人工复核交付物。",
+      "Tools": "File、Knowledge、Data、Document 等已有受控工具，不执行任意系统操作。",
+      "RAG知识库": "仅检索用户上传并完成索引的资料。",
+      "Evidence": "提供章节级资料提示；资料不足时明确显示暂无可验证资料。",
+      "Human Review": "由负责人审核建议，不会自动替代科研或项目决策。",
+      "交付报告": "形成 AI辅助生成、需人工审核的沟通与实施材料。",
+    };
+    // v5.0: presentation-only FDE solution configuration and diagnosis.
+    const fdeClientType = ref("高校实验室");
+    const fdeSelectedNeeds = ref(["知识库建设", "文献管理"]);
+    const fdeConfigurationResult = ref(null);
+    const fdeProblemInput = ref("");
+    const fdeDiagnosisResult = ref(null);
+    // v5.0 final FDE presentation: scenario reports are client-facing
+    // demonstration artifacts only. They never alter tenant configuration.
+    const fdeDeliveryScenario = ref("高校实验室");
+    const fdeDeliveryReport = ref(null);
+    const fdeScenarioOptions = Object.keys(FDE_SCENARIO_DATA);
+    const fdeScenarioProfile = computed(() => FDE_SCENARIO_DATA[fdeDeliveryScenario.value] || FDE_SCENARIO_DATA["高校实验室"]);
+    const implementationRisks = computed(() => [
+      { name: "数据质量风险", reason: "资料可能缺少必要字段、可提取文本或明确授权范围。", impact: "知识检索与交付内容只能提示资料不足，不能据此形成科研结论。", recommendation: "先核验资料来源、完整性与授权范围，再建立知识空间。" },
+      { name: "AI可信风险", reason: "输出可能缺少可验证 Evidence，或检索资料覆盖不足。", impact: "建议不能作为已验证的技术或科研事实。", recommendation: "要求展示 Evidence，并由负责人通过 Human Review 确认。" },
+      { name: "用户使用风险", reason: "客户未明确任务目标、验收口径或角色分工。", impact: "实施范围可能扩大，交付预期可能不一致。", recommendation: "在需求调研阶段确认目标、职责、资料边界和验收标准。" },
+      { name: "项目实施风险", reason: "真实客户资料接入、索引状态和培训节奏可能不一致。", impact: "上线验证可能延期，需分阶段推进。", recommendation: "采用小范围授权资料试运行，并以受控任务和客户验收逐步扩展。" },
+    ]);
     const researchBi = ref(null);
     const researchBiLoading = ref(false);
     const researchProjects = ref([]);
@@ -547,6 +633,11 @@ createApp({
       if (view === "dashboard" || view === "tasks" || view === "agents") {
         await loadResearchOsData();
       }
+      if (view === "autonomous") await loadAutonomousWorkspace();
+      if (view === "worker") await loadResearchWorkerWorkspace();
+      if (view === "workspace" || view === "task-center") await loadEnterpriseWorkspace();
+      if (view === "agent-monitor") await loadAgentMonitor();
+      if (view === "delivery-center") await loadClientDelivery();
       if (view === "projects") await loadResearchProjects();
       if (view === "outcome-center") {
         await loadResearchProjects();
@@ -641,6 +732,172 @@ createApp({
       } finally {
         researchOsTaskLoading.value = false;
       }
+    }
+
+    async function loadAutonomousWorkspace() {
+      autonomousError.value = "";
+      try {
+        const [runsResponse, toolsResponse, memoryResponse] = await Promise.all([
+          fetchWithTimeout(`${API_BASE_URL}/researchos/autonomous-runs`, { method: "GET" }),
+          fetchWithTimeout(`${API_BASE_URL}/researchos/autonomous-runs/tools`, { method: "GET" }),
+          fetchWithTimeout(`${API_BASE_URL}/researchos/research-memory`, { method: "GET" }),
+        ]);
+        autonomousRuns.value = await readResponse(runsResponse);
+        const toolData = await readResponse(toolsResponse);
+        autonomousTools.value = Array.isArray(toolData.tools) ? toolData.tools : [];
+        autonomousMemory.value = await readResponse(memoryResponse);
+      } catch (error) {
+        autonomousError.value = error.message || "自主科研工作空间暂时无法加载。";
+      }
+    }
+
+    async function runAutonomousResearch() {
+      const goal = autonomousGoal.value.trim();
+      if (!goal || autonomousLoading.value) return;
+      autonomousLoading.value = true;
+      autonomousError.value = "";
+      autonomousRun.value = null;
+      recordActivity("自主科研任务创建", goal);
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/autonomous-runs`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ goal, paper_ids: [], generate_docx: false }),
+        });
+        autonomousRun.value = await readResponse(response);
+        autonomousRuns.value = [autonomousRun.value, ...autonomousRuns.value.filter((item) => item.id !== autonomousRun.value.id)];
+        recordActivity("自主科研任务完成", autonomousRun.value.status === "completed" ? "Research Brain 已完成受控工具调用与研究交付。" : "Research Brain 已完成资料覆盖检查，等待补充可验证依据。");
+      } catch (error) {
+        autonomousError.value = error.message || "自主科研任务执行失败，请稍后重试。";
+      } finally {
+        autonomousLoading.value = false;
+      }
+    }
+
+    async function loadResearchWorkerWorkspace() {
+      workerError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/research-worker/tools`, { method: "GET" });
+        const data = await readResponse(response);
+        workerTools.value = Array.isArray(data.tools) ? data.tools : [];
+      } catch (error) {
+        workerError.value = error.message || "Research Worker 工具状态暂时无法加载。";
+      }
+    }
+
+    async function loadEnterpriseWorkspace() {
+      workspaceLoading.value = true; workspaceError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/workspaces`, { method: "GET" });
+        workspaces.value = await readResponse(response);
+        activeResearchWorkspace.value = activeResearchWorkspace.value || workspaces.value[0] || null;
+        if (activeResearchWorkspace.value) await loadResearchTasks();
+      } catch (error) { workspaceError.value = error.message || "工作空间暂时无法加载。"; }
+      finally { workspaceLoading.value = false; }
+    }
+
+    async function createResearchWorkspace() {
+      const name = workspaceName.value.trim(); if (!name || workspaceLoading.value) return;
+      workspaceLoading.value = true; workspaceError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/workspaces`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name }) });
+        activeResearchWorkspace.value = await readResponse(response); workspaces.value = [activeResearchWorkspace.value, ...workspaces.value];
+        recordActivity("Research Workspace 已创建", name); await loadResearchTasks();
+      } catch (error) { workspaceError.value = error.message || "创建工作空间失败。"; }
+      finally { workspaceLoading.value = false; }
+    }
+
+    async function loadResearchTasks() {
+      if (!activeResearchWorkspace.value) return;
+      taskCenterLoading.value = true;
+      try { const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/tasks?workspace_id=${encodeURIComponent(activeResearchWorkspace.value.id)}`, { method: "GET" }); researchTasks.value = await readResponse(response); }
+      catch (error) { workspaceError.value = error.message || "任务中心暂时无法加载。"; }
+      finally { taskCenterLoading.value = false; }
+    }
+
+    async function createResearchTask() {
+      if (!activeResearchWorkspace.value || !taskName.value.trim()) return;
+      taskCenterLoading.value = true;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/workspaces/${activeResearchWorkspace.value.id}/tasks`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: taskName.value.trim(), task_type: taskType.value, worker_run_id: workerRun.value?.run_id || "" }) });
+        researchTasks.value = [await readResponse(response), ...researchTasks.value]; taskName.value = "";
+      } catch (error) { workspaceError.value = error.message || "创建科研任务失败。"; }
+      finally { taskCenterLoading.value = false; }
+    }
+
+    async function loadAgentMonitor() {
+      try { const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/agent-monitor`, { method: "GET" }); agentMonitor.value = await readResponse(response); }
+      catch (error) { workspaceError.value = error.message || "Agent监控面板暂时无法加载。"; }
+    }
+
+    async function loadClientDelivery() {
+      if (!workerRun.value?.run_id) return;
+      deliveryLoading.value = true;
+      try { const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/client-delivery/${workerRun.value.run_id}`, { method: "GET" }); deliveryPreview.value = await readResponse(response); }
+      catch (error) { workspaceError.value = error.message || "交付报告暂时无法生成。"; }
+      finally { deliveryLoading.value = false; }
+    }
+
+    async function exportClientDelivery() {
+      if (!workerRun.value?.run_id || deliveryLoading.value) return;
+      deliveryLoading.value = true;
+      try { const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/client-delivery/export`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ worker_run_id: workerRun.value.run_id }) }); const data = await readResponse(response); recordActivity("客户交付报告已导出", `${data.path} · ${data.notice}`); window.alert(`PDF 已生成：${data.path}\n${data.notice}`); }
+      catch (error) { workspaceError.value = error.message || "导出报告失败。"; }
+      finally { deliveryLoading.value = false; }
+    }
+
+    async function refreshResearchWorkerRun(runId) {
+      const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/research-worker/${runId}`, { method: "GET" });
+      workerRun.value = await readResponse(response);
+      const timelineResponse = await fetchWithTimeout(`${API_BASE_URL}/researchos/research-worker/${runId}/timeline`, { method: "GET" });
+      workerTimeline.value = await readResponse(timelineResponse);
+      return workerRun.value;
+    }
+
+    async function runResearchWorker() {
+      const goal = workerGoal.value.trim();
+      if (!goal || workerLoading.value) return;
+      workerLoading.value = true;
+      workerError.value = "";
+      workerRun.value = null;
+      workerTimeline.value = [];
+      workerReviewDecision.value = "";
+      workerReviewNote.value = "";
+      recordActivity("科研执行任务创建", goal);
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/research-worker/run`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ goal }),
+        });
+        const created = await readResponse(response);
+        await refreshResearchWorkerRun(created.run_id);
+        recordActivity("科研执行任务完成", workerRun.value.status === "completed" ? "Research Worker 已生成待复核交付物。" : "Research Worker 等待补充可验证资料或人工确认。");
+      } catch (error) {
+        workerError.value = error.message || "Research Worker 执行失败，请稍后重试。";
+      } finally {
+        workerLoading.value = false;
+      }
+    }
+
+    function applyWorkerTemplate(template) {
+      workerGoal.value = template;
+      workerRun.value = null;
+      workerTimeline.value = [];
+      workerError.value = "";
+      workerReviewDecision.value = "";
+      workerReviewNote.value = "";
+    }
+
+    function applyWorkerDemo() {
+      applyWorkerTemplate("【Demo案例】寻找低碳建筑材料性能优化方案：扫描资料、分析已有实验数据、检索知识库，并生成待人工确认的技术路线建议。");
+      activeWorkspaceView.value = "worker";
+    }
+
+    function reviewResearchWorker(decision) {
+      workerReviewDecision.value = decision;
+      const labels = { accepted: "接受建议", modified: "修改后接受", rejected: "驳回建议" };
+      recordActivity("Research Worker 人工审核", `${labels[decision] || decision}；仅记录审核意图，不会自动创建 Action。`);
     }
 
     async function assessResearchValue() {
@@ -744,8 +1001,107 @@ createApp({
       };
       researchOsGoal.value = researchOsGoal.value.trim() || "面向低碳建筑材料企业需求，分析实验室技术匹配、技术路线、创新机会和成果规划。";
       researchOsSelectedAgents.value = ["literature", "knowledge", "trend", "innovation", "project", "report"];
+      workerGoal.value = "【Demo案例】企业希望提升低碳建筑材料性能：扫描已有资料、检索知识库、引用 Evidence，并生成待人工审核的交付报告。";
+      workerRun.value = null;
+      deliveryPreview.value = null;
+      recordActivity("企业客户演示模式", "已加载低碳建筑材料 Demo 流程；展示内容不代表真实科研成果。");
       demoStarted.value = true;
       activeWorkspaceView.value = "demo";
+    }
+
+    function openFdeDeliveryRehearsal() {
+      fdeStageIndex.value = 0;
+      fdeTaskStatuses.value = ["待开始", "待开始", "待开始", "待开始", "待开始"];
+      fdeAcceptanceReady.value = false;
+      recordActivity("FDE交付演练已启动", "低碳建筑材料 Demo 场景；不写入客户数据或生成真实科研结论。");
+      activeWorkspaceView.value = "fde-delivery";
+    }
+
+    function startFdeSolutionDemo() {
+      fdeDemoStep.value = 0;
+      fdeArchitectureSelection.value = "Research Master";
+      recordActivity("FDE解决方案演示已启动", "五分钟演示为产品说明流程，不调用模型、不生成真实科研结论。")
+      activeWorkspaceView.value = "fde-demo";
+    }
+
+    function nextFdeDemoStep() {
+      fdeDemoStep.value = Math.min(fdeDemoStep.value + 1, 4);
+    }
+
+    function previousFdeDemoStep() {
+      fdeDemoStep.value = Math.max(fdeDemoStep.value - 1, 0);
+    }
+
+    function toggleFdeNeed(need) {
+      fdeSelectedNeeds.value = fdeSelectedNeeds.value.includes(need)
+        ? fdeSelectedNeeds.value.filter((item) => item !== need)
+        : [...fdeSelectedNeeds.value, need];
+    }
+
+    function generateFdeConfiguration() {
+      const needs = fdeSelectedNeeds.value;
+      const mappings = {
+        "知识库建设": "Knowledge Space + RAG + FAISS（仅索引授权上传资料）",
+        "文献管理": "论文库 + 解析状态 + 研究报告历史",
+        "数据分析": "Research Worker 的受控 File/Data Tool",
+        "技术路线规划": "Research Master + Evidence + Human Review",
+        "成果管理": "Action / Decision / Project / Outcome 闭环",
+      };
+      fdeConfigurationResult.value = {
+        client_analysis: `${fdeClientType.value}需要将选定资料能力组织为可验证的协作流程。`,
+        module_mapping: needs.map((item) => `${item}：${mappings[item]}`),
+        implementation_steps: ["确认客户授权资料范围与数据边界", "创建独立 Research Workspace", "按需配置知识空间与受控任务", "以 Evidence 和人工审核完成验收"],
+        acceptance_criteria: ["资料状态可见且来源范围明确", "任务输出包含资料依据或明确资料不足", "人工确认后才进入后续项目/成果流程"],
+        boundary_note: "Demo方案，仅用于 FDE 解决方案说明；不会自动修改真实系统配置。",
+      };
+      recordActivity("FDE配置方案已生成", `客户类型：${fdeClientType.value}；所选需求：${needs.join("、") || "未选择"}。`);
+    }
+
+    function diagnoseFdeProblem() {
+      const problem = fdeProblemInput.value.trim();
+      if (!problem) return;
+      const text = problem.toLowerCase();
+      const hasEvidence = text.includes("证据") || text.includes("引用");
+      const hasIndex = text.includes("检索") || text.includes("索引") || text.includes("知识库");
+      fdeDiagnosisResult.value = {
+        possible_causes: hasEvidence ? ["资料尚未完成索引", "当前任务缺少可引用章节级资料", "需要核验资料授权范围"] : hasIndex ? ["知识库资料数量不足", "文档解析或索引状态未就绪", "问题范围需要更具体"] : ["需要进一步确认客户资料、目标和当前操作步骤"],
+        checks: ["检查资料是否已上传、解析并处于可检索状态", "检查 Evidence 是否来自授权资料", "检查任务目标是否明确且处于允许的工具边界内"],
+        recommendations: ["先补充或核验资料，再运行受控分析", "用 Evidence 和人工审核确认输出，不将 Demo 内容视为科研结论"],
+        customer_confirmation: ["请客户确认资料授权范围", "请客户确认业务目标和验收口径"],
+        boundary_note: "这是基于输入关键词的 Demo 诊断清单，不代表真实系统故障定位或科研结论。",
+      };
+      recordActivity("FDE问题诊断已生成", "已生成需客户确认的检查清单。" );
+    }
+
+    function generateFdeDeliveryReport() {
+      const profile = fdeScenarioProfile.value;
+      const configuredNeeds = fdeConfigurationResult.value?.module_mapping || fdeSelectedNeeds.value.map((item) => `${item}：已纳入 Demo 方案范围`);
+      fdeDeliveryReport.value = {
+        customer_background: profile.background,
+        current_problem: profile.problem,
+        requirement_analysis: `围绕 ${fdeDeliveryScenario.value} 的资料协作、可解释分析与人工审核需求，形成受控实施方案。`,
+        system_solution: profile.solution,
+        module_mapping: configuredNeeds,
+        implementation_plan: ["需求调研：确认客户目标、授权资料范围与验收口径", "方案配置：创建演示 Workspace 并选择所需模块", "测试验证：运行受控任务，检查 Evidence 与人工审核流程", "交付确认：输出实施说明，由客户负责人确认"],
+        acceptance_criteria: ["客户可查看需求到模块的映射关系", "输出包含 Evidence 或明确提示暂无可验证资料", "所有建议均保留人工确认，不自动创建真实项目或成果"],
+        risk_note: "Demo 报告仅用于 FDE 方案沟通。真实实施需以客户授权资料、实际验收和负责人确认作为依据。",
+      };
+      recordActivity("FDE交付报告已生成", `${fdeDeliveryScenario.value} Demo 场景的客户交付方案已整理。`);
+    }
+
+    function selectFdeDeliveryScenario(scenarioName) {
+      if (!FDE_SCENARIO_DATA[scenarioName]) return;
+      fdeDeliveryScenario.value = scenarioName;
+      fdeClientType.value = scenarioName;
+      fdeDeliveryReport.value = null;
+      recordActivity("FDE场景已切换", `${scenarioName} Demo 场景已选中。`);
+    }
+
+    function advanceFdeStage() {
+      const next = Math.min(fdeStageIndex.value + 1, 4);
+      fdeTaskStatuses.value = fdeTaskStatuses.value.map((status, index) => index < next ? "完成" : index === next ? "执行中" : status);
+      fdeStageIndex.value = next;
+      if (next === 4) fdeAcceptanceReady.value = true;
     }
 
     function openDemoStep(step) {
@@ -1565,6 +1921,49 @@ createApp({
       researchOsSelectedAgents,
       researchOsTaskLoading,
       researchOsTaskResult,
+      autonomousGoal,
+      autonomousRun,
+      autonomousRuns,
+      autonomousTools,
+      autonomousMemory,
+      autonomousLoading,
+      autonomousError,
+      workerGoal,
+      workerRun,
+      workerTools,
+      workerTimeline,
+      workerLoading,
+      workerError,
+      workerReviewDecision,
+      workerReviewNote,
+      workspaces,
+      activeResearchWorkspace,
+      workspaceName,
+      workspaceLoading,
+      workspaceError,
+      researchTasks,
+      taskName,
+      taskType,
+      taskCenterLoading,
+      agentMonitor,
+      deliveryPreview,
+      deliveryLoading,
+      fdeStageIndex,
+      fdeTaskStatuses,
+      fdeAcceptanceReady,
+      fdeDemoStep,
+      fdeArchitectureSelection,
+      fdeArchitectureDescriptions,
+      fdeClientType,
+      fdeSelectedNeeds,
+      fdeConfigurationResult,
+      fdeProblemInput,
+      fdeDiagnosisResult,
+      fdeDeliveryScenario,
+      fdeDeliveryReport,
+      fdeScenarioOptions,
+      fdeScenarioProfile,
+      implementationRisks,
       researchBi,
       researchBiLoading,
       researchProjects,
@@ -1621,6 +2020,30 @@ createApp({
       loadSystemStatus,
       initializeDemoKnowledge,
       runResearchOsTask,
+      runAutonomousResearch,
+      loadAutonomousWorkspace,
+      runResearchWorker,
+      loadResearchWorkerWorkspace,
+      applyWorkerTemplate,
+      applyWorkerDemo,
+      reviewResearchWorker,
+      loadEnterpriseWorkspace,
+      createResearchWorkspace,
+      loadResearchTasks,
+      createResearchTask,
+      loadAgentMonitor,
+      loadClientDelivery,
+      exportClientDelivery,
+      openFdeDeliveryRehearsal,
+      advanceFdeStage,
+      startFdeSolutionDemo,
+      nextFdeDemoStep,
+      previousFdeDemoStep,
+      toggleFdeNeed,
+      generateFdeConfiguration,
+      diagnoseFdeProblem,
+      generateFdeDeliveryReport,
+      selectFdeDeliveryScenario,
       toggleResearchOsAgent,
       overviewLoading,
       resetTask,
@@ -1666,14 +2089,14 @@ createApp({
       <header class="workspace-header">
         <nav class="top-navigation" aria-label="主导航">
           <button class="brand-button" type="button" @click="openWorkspaceView('dashboard')"><span class="brand-orb">✦</span><span>ResearchOS</span></button>
-          <div class="top-navigation-links"><button type="button" :class="{ active: activeWorkspaceView === 'demo' }" @click="startDemoMode">现场演示</button><button type="button" :class="{ active: activeWorkspaceView === 'tasks' || activeWorkspaceView === 'assistant' }" @click="openWorkspaceView('tasks')">AI助手</button><button type="button" :class="{ active: activeWorkspaceView === 'knowledge' }" @click="openWorkspaceView('knowledge')">知识空间</button><button type="button" :class="{ active: activeWorkspaceView === 'timeline' || activeWorkspaceView === 'agents' }" @click="openWorkspaceView('agents')">Agent团队</button><button type="button" :class="{ active: activeWorkspaceView === 'projects' || activeWorkspaceView === 'delivery' }" @click="openWorkspaceView('projects')">科研项目</button><button type="button" :class="{ active: activeWorkspaceView === 'fde-report' || activeWorkspaceView === 'evidence' || activeWorkspaceView === 'customer-value' }" @click="openWorkspaceView('fde-report')">解决方案</button><button type="button" :class="{ active: activeWorkspaceView === 'bi' || activeWorkspaceView === 'lab-profile' || activeWorkspaceView === 'insights' }" @click="openWorkspaceView('bi')">科研洞察</button><button type="button" :class="{ active: activeWorkspaceView === 'outcome-center' }" @click="openWorkspaceView('outcome-center')">科研成果</button><button type="button" :class="{ active: activeWorkspaceView === 'system' }" @click="openWorkspaceView('system')">系统状态</button></div>
-          <span class="top-navigation-status"><i></i> ResearchOS v1.1</span>
+          <div class="top-navigation-links"><button type="button" :class="{ active: activeWorkspaceView === 'fde-demo' }" @click="startFdeSolutionDemo">FDE Demo</button><button type="button" :class="{ active: activeWorkspaceView === 'tasks' || activeWorkspaceView === 'assistant' }" @click="openWorkspaceView('tasks')">科研决策</button><button type="button" :class="{ active: activeWorkspaceView === 'workspace' }" @click="openWorkspaceView('workspace')">工作空间</button><button type="button" :class="{ active: activeWorkspaceView === 'task-center' }" @click="openWorkspaceView('task-center')">任务中心</button><button type="button" :class="{ active: activeWorkspaceView === 'worker' }" @click="openWorkspaceView('worker')">AI科研执行</button><button type="button" :class="{ active: activeWorkspaceView === 'autonomous' }" @click="openWorkspaceView('autonomous')">自主执行</button><button type="button" :class="{ active: activeWorkspaceView === 'knowledge' }" @click="openWorkspaceView('knowledge')">知识空间</button><button type="button" :class="{ active: activeWorkspaceView === 'timeline' || activeWorkspaceView === 'agents' }" @click="openWorkspaceView('agents')">Agent团队</button><button type="button" :class="{ active: activeWorkspaceView === 'projects' || activeWorkspaceView === 'delivery' }" @click="openWorkspaceView('projects')">科研项目</button><button type="button" :class="{ active: activeWorkspaceView === 'fde-report' || activeWorkspaceView === 'evidence' || activeWorkspaceView === 'customer-value' }" @click="openWorkspaceView('fde-report')">解决方案</button><button type="button" :class="{ active: activeWorkspaceView === 'fde-delivery' }" @click="openFdeDeliveryRehearsal">FDE交付</button><button type="button" :class="{ active: activeWorkspaceView === 'bi' || activeWorkspaceView === 'lab-profile' || activeWorkspaceView === 'insights' }" @click="openWorkspaceView('bi')">科研洞察</button><button type="button" :class="{ active: activeWorkspaceView === 'outcome-center' }" @click="openWorkspaceView('outcome-center')">科研成果</button><button type="button" :class="{ active: activeWorkspaceView === 'delivery-center' }" @click="openWorkspaceView('delivery-center')">客户交付</button><button type="button" :class="{ active: activeWorkspaceView === 'agent-monitor' }" @click="openWorkspaceView('agent-monitor')">Agent监控</button><button type="button" :class="{ active: activeWorkspaceView === 'fde-config' }" @click="openWorkspaceView('fde-config')">FDE配置</button><button type="button" :class="{ active: activeWorkspaceView === 'fde-diagnosis' }" @click="openWorkspaceView('fde-diagnosis')">问题诊断</button><button type="button" :class="{ active: activeWorkspaceView === 'system' }" @click="openWorkspaceView('system')">系统状态</button></div>
+          <span class="top-navigation-status"><i></i> ResearchOS v4.0</span>
         </nav>
         <div v-if="activeWorkspaceView === 'dashboard'" class="minimal-hero researchos-hero">
-          <p class="section-kicker">AI RESEARCH CONSULTANT</p><h1>ResearchOS 科研顾问</h1>
-          <p>从企业需求出发，连接实验室知识资产、技术路线与科研成果规划。</p>
+          <p class="section-kicker">AI RESEARCH DECISION & EXECUTION PLATFORM</p><h1>ResearchOS</h1>
+          <p>AI科研决策与执行平台。连接高校科研能力与企业创新需求，帮助团队完成从研究方向探索到成果交付。</p>
           <div class="hero-tags" aria-label="核心价值"><span>需求理解</span><span>技术路线</span><span>成果规划</span></div>
-          <div class="researchos-hero-actions"><button type="button" class="primary-card-action" @click="applyFdeDeliveryDemo">体验低碳材料企业合作案例</button><button type="button" class="outline-button" @click="openWorkspaceView('tasks')">探索研究方向</button></div>
+          <div class="researchos-hero-actions"><button type="button" class="primary-card-action" @click="startFdeSolutionDemo">开始FDE解决方案演示</button><button type="button" class="outline-button" @click="openWorkspaceView('tasks')">科研决策 · Research Master</button><button type="button" class="outline-button" @click="applyWorkerDemo">科研执行 · Research Worker</button></div>
         </div>
       </header>
 
@@ -1712,6 +2135,120 @@ createApp({
         <p v-if="researchOsError" class="error-alert"><span>!</span>{{ researchOsError }}</p>
         <div class="researchos-task-layout"><section class="task-config-card"><label for="researchos-goal">研究需求</label><textarea id="researchos-goal" v-model="researchOsGoal" rows="6" placeholder="例如：分析低碳建筑材料未来研究方向"></textarea><div class="agent-select-heading"><span>选择参与任务的 Agent</span><button class="text-button" type="button" @click="applyResearchOsDemo">填充比赛案例</button></div><div class="researchos-agent-selector"><button v-for="agent in researchOsAgents" :key="agent.id" type="button" :class="{ active: researchOsSelectedAgents.includes(agent.id) }" @click="toggleResearchOsAgent(agent.id)"><b>{{ agent.name_cn }}</b><small>{{ agent.description }}</small></button></div><button class="analyze-button" type="button" :disabled="researchOsTaskLoading" @click="runResearchOsTask"><span v-if="researchOsTaskLoading" class="spinner small-spinner"></span>{{ researchOsTaskLoading ? 'ResearchOS 正在协作…' : '启动多 Agent 科研任务' }}</button></section>
           <section class="researchos-result-card"><div v-if="researchOsTaskLoading" class="loading-state"><span class="spinner"></span><h3>Research Master 正在编排任务</h3><ol class="loading-workflow"><li><i></i>理解科研目标</li><li><i></i>检索团队知识库</li><li><i></i>调度专项 Agent</li><li><i></i>生成科研决策报告</li></ol></div><div v-else-if="!researchOsTaskResult" class="empty-state"><div class="empty-illustration">✦</div><h3>等待科研任务</h3><p>上传相关论文后，输入一个研究目标，获得基于团队知识资产的科研辅助结果。</p></div><div v-else class="researchos-result"><p class="section-kicker">RESEARCH DECISION REPORT</p><h3>科研决策结论</h3><p class="researchos-executive-summary">{{ researchOsTaskResult.executive_summary }}</p><section class="agent-run-board"><h4>Agent 执行状态</h4><article v-for="run in researchOsTaskResult.agent_runs || []" :key="run.agent"><b>✓</b><div><strong>{{ run.agent }}</strong><p>{{ run.message }}</p></div><span>{{ run.status === 'completed' ? '已完成' : run.status }}</span></article></section><details open class="master-plan-card"><summary>Research Master 执行流程</summary><ol><li v-for="step in researchOsTaskResult.master_plan?.workflow_steps || []" :key="step.step"><b>{{ step.step }}</b><div><strong>{{ step.action }}</strong><p>{{ step.agent }} · {{ step.purpose }}</p></div></li></ol></details><section v-for="section in researchOsSections" :key="section[0]" class="researchos-output-section"><h4>{{ section[0] }}</h4><dl><template v-for="(value, key) in section[1]" :key="key"><dt>{{ key }}</dt><dd v-if="Array.isArray(value)"><ul><li v-for="item in value" :key="item">{{ item }}</li></ul></dd><dd v-else>{{ value }}</dd></template></dl></section><details v-if="researchOsTaskResult.sources?.length" class="master-plan-card"><summary>证据来源（{{ researchOsTaskResult.sources.length }}）</summary><article v-for="source in researchOsTaskResult.sources" :key="source.paper_id + source.section"><b>{{ source.paper_title }}</b><span>{{ source.section }} · {{ source.score }}</span><p>{{ source.content }}</p></article></details><p class="trace-boundary">{{ researchOsTaskResult.boundary_note }}</p></div></section></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'worker'" class="worker-workspace" aria-label="Research Worker Workspace">
+        <div class="worker-workspace-heading"><div><p class="section-kicker">RESEARCH WORKER</p><h2>Research Worker Workspace</h2><p>AI科研执行助手 · 从科研目标到分析报告的受控执行 Agent。</p></div><div class="worker-status-pill" :class="workerLoading ? 'running' : workerRun?.status || 'ready'"><i></i>{{ workerLoading ? 'Running' : workerRun?.status === 'completed' ? 'Completed' : workerRun?.status === 'need_confirmation' ? 'Need confirmation' : 'Ready' }}<small>ResearchOS v4.0</small></div></div>
+        <p v-if="workerError" class="error-alert"><span>!</span>{{ workerError }}</p>
+        <div class="worker-workspace-grid"><aside class="worker-task-panel"><p class="section-kicker">TASK INPUT</p><h3>告诉 AI 你需要完成什么科研任务</h3><textarea v-model="workerGoal" rows="8" placeholder="例如：分析上传的实验数据，整理某方向论文或生成实验报告。"></textarea><button class="analyze-button" type="button" :disabled="workerLoading" @click="runResearchWorker"><span v-if="workerLoading" class="spinner small-spinner"></span>{{ workerLoading ? '正在执行…' : '开始执行' }}</button><div class="worker-template-list"><span>快速任务模板</span><button type="button" @click="applyWorkerTemplate('分析上传的实验数据，并输出数据结构与基础统计摘要。')">实验数据分析</button><button type="button" @click="applyWorkerTemplate('整理当前科研工作区中的论文资料，并形成资料执行摘要。')">论文资料整理</button><button type="button" @click="applyWorkerTemplate('基于已索引资料制定待负责人确认的技术路线建议。')">技术路线生成</button><button type="button" @click="applyWorkerTemplate('基于已上传资料生成待人工复核的项目报告。')">项目报告生成</button></div><button class="worker-demo-button" type="button" @click="applyWorkerDemo">一键体验企业科研任务</button></aside>
+         <section class="worker-timeline-panel"><div v-if="workerLoading" class="loading-state"><span class="spinner"></span><h3>Research Worker 正在受控执行</h3><ol class="loading-workflow"><li><i></i>理解任务</li><li><i></i>制定计划</li><li><i></i>调用科研工具</li><li><i></i>检查资料依据</li><li><i></i>生成待复核交付物</li></ol></div><div v-else-if="!workerRun" class="worker-empty"><span>✦</span><h3>等待执行任务</h3><p>上传或放入真实科研资料后，输入目标即可开始受控执行。</p></div><div v-else><div class="worker-run-summary"><span>当前任务 · {{ workerRun.current_phase }}</span><h3>{{ workerRun.user_goal }}</h3><p>{{ workerRun.current_step }}</p></div><section v-if="workerTimeline.length" class="worker-loop-timeline"><header><div><p class="section-kicker">AI AGENT LOOP TIMELINE</p><h3>受控执行轨迹</h3></div><span>{{ workerTimeline.length }} steps</span></header><article v-for="(item, index) in workerTimeline" :key="item.timestamp + item.action"><b>{{ index + 1 }}</b><div><span>{{ item.phase }}</span><h4>{{ item.action }}</h4><p>{{ item.result_summary }}</p><small>{{ formatLibraryDate(item.timestamp) }}</small></div><i>completed</i></article></section><div class="execution-card"><header><b>1</b><div><span>Task Understanding</span><h4>任务理解</h4></div><em>Completed</em></header><p>AI 已接收科研执行目标，并限定在允许的科研工具范围内。</p></div><div class="execution-card"><header><b>2</b><div><span>Planning</span><h4>任务规划</h4></div><em>{{ workerRun.plan?.length ? 'Completed' : 'Pending' }}</em></header><ol><li v-for="item in workerRun.plan || []" :key="item.step"><strong>{{ item.action }}</strong><small>{{ item.reason || item.selection_reason }}</small><i :class="item.status">{{ item.status }}</i></li></ol></div><div class="execution-card"><header><b>3</b><div><span>Tool Calling</span><h4>工具调用</h4></div><em>{{ workerRun.tools?.length || 0 }} tools</em></header><div class="worker-tool-pills"><span v-for="tool in workerRun.tools || []" :key="tool.name">✓ {{ tool.name }}</span></div></div><div class="execution-card"><header><b>4</b><div><span>Observation</span><h4>结果观察</h4></div><em>{{ workerRun.result?.file_tool?.asset_count || 0 }} files</em></header><p>资料：{{ workerRun.result?.file_tool?.asset_count || 0 }} 个 · RAG 证据：{{ workerRun.result?.knowledge_tool?.source_count || 0 }} 条 · 数据集：{{ workerRun.result?.data_tool?.dataset_count || 0 }} 个</p></div><div class="execution-card"><header><b>5</b><div><span>Reflection</span><h4>结果评估</h4></div><em>{{ workerRun.reflection?.has_verifiable_material ? 'Ready for review' : 'Need material' }}</em></header><p>{{ workerRun.reflection?.message || workerRun.reflection?.result_check || '正在等待结果评估。' }}</p><small>{{ workerRun.reflection?.next_step || workerRun.reflection?.suggestion }}</small></div><div class="execution-card delivery-card"><header><b>6</b><div><span>Delivery</span><h4>最终交付</h4></div><em>{{ workerRun.status }}</em></header><p v-if="workerRun.output_file">已生成本地报告：<code>{{ workerRun.output_file }}</code></p><p v-else>尚未生成交付物。资料不足时系统不会伪造报告。</p><p class="trace-boundary">{{ workerRun.reflection?.human_review }}</p></div></div></section>
+      <section v-if="activeWorkspaceView === 'worker' && workerRun" class="worker-review-center" aria-label="AI科研执行审核中心">
+        <p class="section-kicker">HUMAN REVIEW</p><h3>AI科研执行审核中心</h3>
+        <p>先核验资料与 Evidence，再决定是否采纳建议。此处只记录审核意图，不会自动创建 Action。</p>
+        <div class="worker-review-evidence"><b>证据来源（{{ workerRun.result?.knowledge_tool?.source_count || 0 }}）</b>
+          <p v-if="!(workerRun.result?.knowledge_tool?.sources || []).length">暂无可验证资料</p>
+          <article v-for="(source, index) in workerRun.result?.knowledge_tool?.sources || []" :key="index"><strong>{{ source.paper_title || source.source || '未命名资料' }}</strong><small>{{ source.section || source.chapter || '未标注章节' }} · 匹配度：{{ source.score || '未提供' }}</small></article>
+        </div>
+        <label>修改说明（可选）<textarea v-model="workerReviewNote" rows="2" placeholder="记录需人工补充或调整的内容"></textarea></label>
+        <div class="worker-review-actions"><button type="button" :class="{ selected: workerReviewDecision === 'accepted' }" @click="reviewResearchWorker('accepted')">接受建议</button><button type="button" :class="{ selected: workerReviewDecision === 'modified' }" @click="reviewResearchWorker('modified')">修改建议</button><button type="button" :class="{ selected: workerReviewDecision === 'rejected' }" @click="reviewResearchWorker('rejected')">驳回建议</button></div>
+        <p v-if="workerReviewDecision" class="review-result">已记录人工审核：{{ workerReviewDecision === 'accepted' ? '接受建议' : workerReviewDecision === 'modified' ? '修改后接受' : '驳回建议' }}。请在现有决策闭环中由负责人创建后续 Action。</p>
+      </section>
+          <aside class="worker-control-panel"><p class="section-kicker">AGENT CONTROL PANEL</p><h3>Research Worker</h3><div class="worker-control-status"><span>状态</span><b>{{ workerLoading ? 'Running' : workerRun?.status || 'Ready' }}</b></div><div class="worker-control-status"><span>当前任务</span><p>{{ workerRun?.user_goal || workerGoal }}</p></div><section><h4>可用工具</h4><ul><li v-for="tool in workerTools" :key="tool.name"><b>✓</b><div><strong>{{ tool.name }}</strong><small>{{ tool.description }}</small></div></li></ul></section><section class="worker-safety"><h4>安全边界</h4><p>✓ 不修改原始数据</p><p>✓ 不生成无依据科研结论</p><p>✓ 所有结果需人工确认</p></section><section class="worker-demo-flow"><h4>企业科研任务演示</h4><ol><li>企业需求</li><li>任务拆解</li><li>知识检索</li><li>数据分析</li><li>技术路线</li><li>成果报告</li></ol></section></aside></div>
+      <section v-if="activeWorkspaceView === 'workspace'" class="enterprise-center">
+        <div class="dashboard-heading"><div><p class="section-kicker">RESEARCH WORKSPACE</p><h2>Research Workspace</h2><p>面向实验室与企业协作的轻量工作空间。角色用于界面展示，不代表已启用登录权限。</p></div></div>
+        <p v-if="workspaceError" class="error-alert"><span>!</span>{{ workspaceError }}</p>
+        <form class="workspace-create" @submit.prevent="createResearchWorkspace"><input v-model="workspaceName" placeholder="输入实验室或企业工作空间名称" /><button class="primary-card-action" :disabled="workspaceLoading">创建工作空间</button></form>
+        <div class="workspace-card-grid"><article v-for="space in workspaces" :key="space.id" :class="{ active: activeResearchWorkspace?.id === space.id }" @click="activeResearchWorkspace = space; loadResearchTasks()"><span>WORKSPACE</span><h3>{{ space.name }}</h3><p>{{ space.member_roles.join(' · ') }}</p><div><b>{{ space.document_count }}</b><small>资料</small><b>{{ space.project_count }}</b><small>项目</small><b>{{ space.agent_execution_count }}</b><small>Agent执行</small></div></article><div v-if="!workspaces.length && !workspaceLoading" class="workspace-empty">暂无工作空间。创建一个空间以组织任务、项目和交付记录。</div></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'task-center'" class="enterprise-center">
+        <div class="dashboard-heading"><div><p class="section-kicker">RESEARCH TASK CENTER</p><h2>科研任务中心</h2><p>将文献、数据、企业需求与技术路线规划，关联到已有 Research Worker 执行记录。</p></div><button class="outline-button" @click="loadResearchTasks">刷新任务</button></div>
+        <p v-if="!activeResearchWorkspace" class="demo-boundary">请先创建或选择 Research Workspace。</p>
+        <form v-else class="task-create" @submit.prevent="createResearchTask"><input v-model="taskName" placeholder="任务名称" /><select v-model="taskType"><option>文献分析</option><option>数据分析</option><option>企业需求分析</option><option>技术路线规划</option></select><button class="primary-card-action" :disabled="taskCenterLoading">创建任务</button></form>
+        <div class="task-board"><article v-for="item in researchTasks" :key="item.id"><span :class="item.status">{{ item.status }}</span><h3>{{ item.name }}</h3><p>{{ item.task_type }} · Evidence {{ item.evidence_count }} 条</p><small>{{ item.output_report || '尚未关联输出报告' }}</small></article><p v-if="!researchTasks.length && activeResearchWorkspace">暂无任务。可从当前 Worker 执行结果创建任务。</p></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'delivery-center'" class="enterprise-center">
+        <div class="dashboard-heading"><div><p class="section-kicker">CLIENT DELIVERY CENTER</p><h2>企业交付报告中心</h2><p>将已有 Worker 结果汇总为可沟通的交付摘要。</p></div><button class="primary-card-action" :disabled="!workerRun || deliveryLoading" @click="loadClientDelivery">生成交付预览</button></div>
+        <div v-if="!workerRun" class="workspace-empty">请先完成一项 Research Worker 任务，再生成企业交付摘要。</div>
+        <div v-else-if="deliveryPreview" class="delivery-board"><header><span>AI辅助生成 · 需人工审核</span><h3>{{ deliveryPreview.client_requirement }}</h3></header><section><b>已有资料</b><p>文件 {{ deliveryPreview.ai_analysis.available_files }} 个 · Evidence {{ deliveryPreview.ai_analysis.evidence_count }} 条</p></section><section><b>交付物</b><ul><li v-for="item in deliveryPreview.deliverables" :key="item">{{ item }}</li></ul></section><section><b>Evidence</b><p v-if="!deliveryPreview.evidence?.length">暂无可验证资料</p><ul v-else><li v-for="(item,index) in deliveryPreview.evidence" :key="index">{{ item.paper_title || item.source }} · {{ item.section || item.chapter }}</li></ul></section><footer>{{ deliveryPreview.boundary_note }}</footer><button class="outline-button" :disabled="deliveryLoading" @click="exportClientDelivery">Export Report（PDF）</button></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'agent-monitor'" class="enterprise-center">
+        <div class="dashboard-heading"><div><p class="section-kicker">AGENT MONITOR</p><h2>Agent 能力监控</h2><p>仅显示执行记录、状态与工具调用次数；不显示 Token、Prompt 或思维链。</p></div><button class="outline-button" @click="loadAgentMonitor">刷新监控</button></div>
+        <div v-if="agentMonitor" class="monitor-grid"><article v-for="agent in agentMonitor.agents" :key="agent.name"><span>{{ agent.name }}</span><h3>{{ agent.execution_count }} 次执行</h3><p>成功 {{ agent.success_tasks }} · 失败 {{ agent.failed_tasks }}</p><small>平均耗时：{{ agent.average_duration_seconds === null ? '暂无数据' : agent.average_duration_seconds + ' 秒' }}</small></article></div><div v-if="agentMonitor" class="tool-monitor"><b>工具调用</b><span v-for="tool in agentMonitor.tool_calls" :key="tool.name">{{ tool.name }} · {{ tool.count }}</span><p>{{ agentMonitor.boundary }}</p></div>
+      </section>
+
+      </section>
+
+      <section v-if="activeWorkspaceView === 'worker' && workerRun" class="tool-trace-center" aria-label="Tool Execution Trace">
+        <div class="dashboard-heading"><div><p class="section-kicker">TOOL EXECUTION TRACE</p><h2>受控工具执行轨迹</h2><p>来自当前 Research Worker 的用户可读执行记录，不展示 Prompt、Token 或模型思维链。</p></div></div>
+        <div class="tool-trace-board"><article v-for="(item,index) in workerTimeline" :key="item.timestamp + index"><b>0{{ index + 1 }}</b><div><span>当前阶段：{{ item.phase || '未标注' }}</span><h3>{{ item.tool || item.module || item.action }}</h3><p><strong>调用原因：</strong>{{ item.action || '执行既定受控任务' }}</p><p><strong>输入摘要：</strong>{{ item.input_summary || '当前 Worker 运行上下文' }}</p><p><strong>输出摘要：</strong>{{ item.result_summary || '暂无输出摘要' }}</p><small>Evidence：{{ item.evidence_count || 0 }} · {{ formatLibraryDate(item.timestamp) }}</small></div><em>completed</em></article><p v-if="!workerTimeline.length" class="workspace-empty">当前运行尚未返回可展示的工具轨迹。</p></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'fde-config'" class="fde-config-center enterprise-center" aria-label="FDE Configuration Center">
+        <div class="dashboard-heading"><div><p class="section-kicker">FDE CONFIGURATION CENTER · DEMO</p><h2>FDE 配置中心</h2><p>为客户场景生成实施方案、模块映射和验收标准；不会自动修改真实系统。</p></div></div>
+        <div class="fde-config-grid"><section><label>客户类型<select v-model="fdeClientType"><option>高校实验室</option><option>企业研发中心</option><option>产学研平台</option></select></label><h3>需求配置</h3><button v-for="item in ['知识库建设','文献管理','数据分析','技术路线规划','成果管理']" :key="item" type="button" :class="{ active: fdeSelectedNeeds.includes(item) }" @click="toggleFdeNeed(item)">{{ item }}</button><button class="primary-card-action" @click="generateFdeConfiguration">生成 FDE 方案</button></section><section v-if="fdeConfigurationResult" class="fde-config-result"><h3>客户需求分析</h3><p>{{ fdeConfigurationResult.client_analysis }}</p><h4>系统模块映射</h4><ul><li v-for="item in fdeConfigurationResult.module_mapping" :key="item">{{ item }}</li></ul><h4>实施步骤</h4><ol><li v-for="item in fdeConfigurationResult.implementation_steps" :key="item">{{ item }}</li></ol><h4>验收标准</h4><ul><li v-for="item in fdeConfigurationResult.acceptance_criteria" :key="item">{{ item }}</li></ul><p class="demo-boundary">{{ fdeConfigurationResult.boundary_note }}</p></section><section v-else class="workspace-empty">选择客户类型和需求后，生成一份仅供演练的 FDE 实施方案。</section></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'fde-config'" class="fde-shortcuts" aria-label="FDE 交付展示入口">
+        <span>FDE 交付展示</span><button type="button" @click="openWorkspaceView('fde-mapping')">需求映射</button><button type="button" @click="openWorkspaceView('fde-risks')">实施风险</button><button type="button" @click="openWorkspaceView('fde-delivery-report')">交付报告</button>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'fde-diagnosis'" class="fde-config-center enterprise-center" aria-label="FDE Problem Diagnosis">
+        <div class="dashboard-heading"><div><p class="section-kicker">FDE PROBLEM DIAGNOSIS · DEMO</p><h2>问题诊断中心</h2><p>将客户反馈转为可沟通的检查项和确认事项，不替代真实故障排查。</p></div></div>
+        <div class="diagnosis-input"><textarea v-model="fdeProblemInput" rows="5" placeholder="例如：客户反馈知识库检索不到已上传资料，且输出缺少引用依据。"></textarea><button class="primary-card-action" @click="diagnoseFdeProblem">生成诊断清单</button></div><section v-if="fdeDiagnosisResult" class="diagnosis-result"><article><h3>可能原因</h3><ul><li v-for="item in fdeDiagnosisResult.possible_causes" :key="item">{{ item }}</li></ul></article><article><h3>检查项</h3><ul><li v-for="item in fdeDiagnosisResult.checks" :key="item">{{ item }}</li></ul></article><article><h3>推荐解决方案</h3><ul><li v-for="item in fdeDiagnosisResult.recommendations" :key="item">{{ item }}</li></ul></article><article><h3>需要客户确认</h3><ul><li v-for="item in fdeDiagnosisResult.customer_confirmation" :key="item">{{ item }}</li></ul></article><p class="demo-boundary">{{ fdeDiagnosisResult.boundary_note }}</p></section>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'fde-mapping'" class="fde-solution-center enterprise-center" aria-label="Requirement Mapping Center">
+        <div class="dashboard-heading"><div><p class="section-kicker">REQUIREMENT MAPPING CENTER · DEMO</p><h2>需求映射中心</h2><p>将客户业务问题映射到解决方案与 ResearchOS 模块，用于 FDE 沟通演练。</p></div></div>
+        <div class="fde-scenario-tabs"><button v-for="item in fdeScenarioOptions" :key="item" type="button" :class="{ active: fdeDeliveryScenario === item }" @click="selectFdeDeliveryScenario(item)">{{ item }}</button></div>
+        <article class="requirement-map-hero"><span>Demo 场景 · {{ fdeDeliveryScenario }}</span><h3>{{ fdeScenarioProfile.background }}</h3></article>
+        <div class="requirement-mapping-flow"><article><span>01 · 客户业务问题</span><p>{{ fdeScenarioProfile.problem }}</p></article><i>↓</i><article><span>02 · 解决方案</span><p>{{ fdeScenarioProfile.solution }}</p></article><i>↓</i><article><span>03 · ResearchOS 模块</span><p>{{ fdeScenarioProfile.mapping[2] }}</p></article></div>
+        <p class="demo-boundary">需求映射为 Demo 展示内容；真实客户方案需根据授权资料、现场调研与验收口径确认。</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'fde-risks'" class="fde-solution-center enterprise-center" aria-label="Implementation Risk Center">
+        <div class="dashboard-heading"><div><p class="section-kicker">IMPLEMENTATION RISK CENTER · DEMO</p><h2>实施风险中心</h2><p>在项目启动前明确资料、可信、使用与实施边界，避免将 AI 输出误用为已验证结论。</p></div></div>
+        <div class="implementation-risk-grid"><article v-for="risk in implementationRisks" :key="risk.name"><span>DEMO RISK</span><h3>{{ risk.name }}</h3><dl><dt>风险原因</dt><dd>{{ risk.reason }}</dd><dt>可能影响</dt><dd>{{ risk.impact }}</dd><dt>解决建议</dt><dd>{{ risk.recommendation }}</dd></dl></article></div><p class="demo-boundary">风险清单为 FDE 演练模板，不构成对实际客户环境的故障、合规或科研判断。</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'fde-delivery-report'" class="fde-solution-center enterprise-center" aria-label="FDE Delivery Report">
+        <div class="dashboard-heading"><div><p class="section-kicker">FDE DELIVERY REPORT · DEMO</p><h2>客户交付方案报告</h2><p>汇总已有客户场景、方案配置与实施流程，形成可沟通的交付材料。</p></div><button class="primary-card-action" type="button" @click="generateFdeDeliveryReport">生成交付报告</button></div>
+        <div v-if="fdeDeliveryReport" class="fde-delivery-report"><header><span>AI辅助生成 · 需要客户确认</span><h3>{{ fdeDeliveryScenario }} · FDE Delivery Report</h3></header><section><h4>客户背景</h4><p>{{ fdeDeliveryReport.customer_background }}</p></section><section><h4>当前问题</h4><p>{{ fdeDeliveryReport.current_problem }}</p></section><section><h4>需求分析</h4><p>{{ fdeDeliveryReport.requirement_analysis }}</p></section><section><h4>系统方案</h4><p>{{ fdeDeliveryReport.system_solution }}</p></section><section><h4>模块映射</h4><ul><li v-for="item in fdeDeliveryReport.module_mapping" :key="item">{{ item }}</li></ul></section><section><h4>实施计划</h4><ol><li v-for="item in fdeDeliveryReport.implementation_plan" :key="item">{{ item }}</li></ol></section><section><h4>验收标准</h4><ul><li v-for="item in fdeDeliveryReport.acceptance_criteria" :key="item">{{ item }}</li></ul></section><footer><b>风险说明</b><p>{{ fdeDeliveryReport.risk_note }}</p></footer></div>
+        <div v-else class="workspace-empty">请选择并生成一份 Demo 客户交付方案；报告仅供方案沟通，需客户确认。</div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'fde-demo'" class="fde-demo-center" aria-label="FDE解决方案演示模式">
+        <header class="fde-demo-header"><div><p class="section-kicker">FDE SOLUTION DEMO · 5 MINUTES</p><h2>FDE 解决方案演示</h2><p>从客户背景到实施交付的五步说明。以下为 Demo 演练，不调用模型、不生成真实科研结论。</p></div><span>Step {{ fdeDemoStep + 1 }} / 5</span></header>
+        <div class="fde-demo-progress"><button v-for="(name,index) in ['客户背景','需求分析','AI解决方案架构','AI执行过程','客户交付']" :key="name" :class="{ active: fdeDemoStep === index, done: fdeDemoStep > index }" @click="fdeDemoStep = index"><b>0{{ index + 1 }}</b>{{ name }}</button></div>
+        <section class="fde-demo-content"><template v-if="fdeDemoStep === 0"><p class="section-kicker">CUSTOMER BACKGROUND</p><h3>某低碳建筑材料企业</h3><p>企业希望寻找材料性能优化方向，但实验数据、论文资料和研究成果分散。</p><div class="fde-demo-pain"><article><b>资料分散</b><span>信息整理成本高</span></article><article><b>路线不清</b><span>技术路线探索困难</span></article><article><b>协作断层</b><span>企业需求和实验室能力匹配困难</span></article></div></template><template v-else-if="fdeDemoStep === 1"><p class="section-kicker">FDE REQUIREMENT ANALYSIS</p><h3>需求分析</h3><div class="fde-requirement-map"><article><b>业务需求</b><p>寻找材料优化方案。</p><small>对应：企业需求分析与项目规划</small></article><article><b>系统需求</b><p>建立科研知识空间。</p><small>对应：Research Workspace 与 Knowledge Space</small></article><article><b>AI需求</b><p>辅助资料分析和方案生成。</p><small>对应：Research Worker 与 Human Review</small></article></div></template><template v-else-if="fdeDemoStep === 2"><p class="section-kicker">SOLUTION ARCHITECTURE</p><h3>AI解决方案架构</h3><div class="fde-architecture-flow"><button v-for="name in ['用户需求','Research Master','Research Worker','Tools','RAG知识库','Evidence','Human Review','交付报告']" :key="name" :class="{ active: fdeArchitectureSelection === name }" @click="fdeArchitectureSelection = name">{{ name }}</button></div><aside><b>{{ fdeArchitectureSelection }}</b><p>{{ fdeArchitectureDescriptions[fdeArchitectureSelection] }}</p></aside></template><template v-else-if="fdeDemoStep === 3"><p class="section-kicker">AI EXECUTION · DEMO</p><h3>AI执行过程</h3><div class="fde-execution-demo"><article v-for="item in [['Planning','规划','理解企业任务并拆解资料处理步骤'],['Executing','执行','扫描允许资料并调用既有受控工具'],['Observing','观察','检查资料数量和可验证 Evidence'],['Evaluating','评估','资料不足时明确停止科研结论'],['Delivery','交付','生成待人工审核的说明或报告']]" :key="item[0]"><b>✓</b><div><span>{{ item[0] }}</span><h4>{{ item[1] }}</h4><p>{{ item[2] }}</p></div></article></div><p class="demo-boundary">Demo流程仅展示已有 Research Worker 的用户可读阶段，不代表实际扫描、检索或科研结论。</p></template><template v-else><p class="section-kicker">CLIENT DELIVERY</p><h3>客户交付</h3><div class="fde-delivery-preview"><article><b>客户问题</b><p>资料分散、合作项目准备周期长。</p></article><article><b>解决方案</b><p>Workspace、知识空间、受控执行、Evidence 与人工审核。</p></article><article><b>实施过程</b><p>需求调研 → 配置 → 测试 → 验收。</p></article><article><b>AI能力</b><p>知识检索、资料处理、执行摘要和交付报告。</p></article><article><b>交付成果</b><p>Implementation Acceptance Report 与后续优化建议。</p></article></div><p class="review-result">AI辅助生成 · 需客户确认。真实交付需基于客户授权资料完成验收。</p></template></section>
+        <footer class="fde-demo-controls"><button class="outline-button" :disabled="fdeDemoStep === 0" @click="previousFdeDemoStep">上一步</button><button class="primary-card-action" :disabled="fdeDemoStep === 4" @click="nextFdeDemoStep">下一步</button><button v-if="fdeDemoStep === 4" class="primary-card-action" @click="openFdeDeliveryRehearsal">进入FDE交付中心</button></footer>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'product-value'" class="value-page enterprise-center" aria-label="产品价值">
+        <div class="dashboard-heading"><div><p class="section-kicker">WHY RESEARCHOS</p><h2>为什么客户选择 ResearchOS</h2><p>把资料理解、协作沟通和科研决策辅助组织为可验证的工作流程。</p></div></div><div class="value-role-grid"><article><span>高校实验室</span><h3>科研资料资产化</h3><p>帮助整理科研资料、沉淀可检索知识，并辅助项目管理。</p></article><article><span>企业</span><h3>理解技术方向</h3><p>帮助更快理解可合作的技术方向，辅助产学研沟通与方案准备。</p></article><article><span>高校管理部门</span><h3>科研资源管理</h3><p>帮助查看资料、项目与成果路径，辅助科研资源协调。</p></article></div><p class="demo-boundary">页面说明产品潜在价值，不承诺具体效率、收益、客户数量或科研成功率。</p>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'tech-architecture'" class="tech-page enterprise-center" aria-label="技术架构">
+        <div class="dashboard-heading"><div><p class="section-kicker">TECHNOLOGY ARCHITECTURE</p><h2>ResearchOS 技术架构</h2><p>以轻量、可解释与受控执行为目标的产品原型架构。</p></div></div><div class="tech-stack-grid"><article><span>Frontend</span><b>Vue 3</b><p>CDN 单页工作空间</p></article><article><span>Backend</span><b>FastAPI</b><p>REST API 与业务服务</p></article><article><span>AI</span><b>Multi-Agent</b><p>Research Master 协同现有专项能力</p></article><article><span>Knowledge</span><b>RAG + FAISS</b><p>基于授权上传资料检索</p></article><article><span>Trust</span><b>Evidence + Human Review</b><p>章节级资料提示与人工确认</p></article><article><span>Execution</span><b>Research Worker</b><p>受控工具与可读执行摘要</p></article></div>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'fde-delivery'" class="fde-delivery-center" aria-label="FDE交付中心">
+        <header class="dashboard-heading"><div><p class="section-kicker">FDE DELIVERY PIPELINE · DEMO</p><h2>FDE 交付中心</h2><p>低碳建筑材料企业与高校实验室的实施演练。所有内容均为 Demo 流程，不代表真实客户实施结果。</p></div><button class="primary-card-action" @click="advanceFdeStage">推进当前阶段</button></header>
+        <div class="fde-delivery-grid"><aside class="fde-stage-list"><button v-for="(stage, index) in ['需求调研','方案设计','系统配置','测试验证','上线交付']" :key="stage" type="button" :class="{ active: fdeStageIndex === index, done: fdeStageIndex > index }" @click="fdeStageIndex = index"><b>0{{ index + 1 }}</b><span>{{ stage }}</span></button></aside>
+          <section class="fde-stage-detail"><p class="section-kicker">STAGE {{ fdeStageIndex + 1 }}</p><template v-if="fdeStageIndex === 0"><h3>需求调研</h3><dl><dt>客户目标</dt><dd>提升低碳建筑材料性能，并缩短企业合作项目准备周期。</dd><dt>业务痛点</dt><dd>实验室资料分散，知识传递与项目准备依赖人工整理。</dd><dt>现有资料</dt><dd>Demo 环境不将演示资料写入知识库；真实实施需由客户授权上传资料。</dd></dl></template><template v-else-if="fdeStageIndex === 1"><h3>方案设计</h3><dl><dt>Agent方案</dt><dd>Research Master 负责决策辅助，Research Worker 负责受控资料处理。</dd><dt>数据方案</dt><dd>使用现有 SQLite、文件工作区与受控数据工具。</dd><dt>知识库方案</dt><dd>仅以客户授权并完成索引的资料进入既有 RAG/FAISS 流程。</dd></dl></template><template v-else-if="fdeStageIndex === 2"><h3>系统配置</h3><dl><dt>Workspace创建</dt><dd>建立客户独立 Research Workspace，并展示成员角色。</dd><dt>资料上传</dt><dd>通过既有论文库或科研工作区接收可读取资料。</dd><dt>Agent配置</dt><dd>沿用现有受控工具与 Evidence/Human Review 边界。</dd></dl></template><template v-else-if="fdeStageIndex === 3"><h3>测试验证</h3><dl><dt>任务执行</dt><dd>运行文献、数据或企业需求任务。</dd><dt>Evidence检查</dt><dd>没有可验证资料时，系统只能生成资料不足说明。</dd><dt>人工审核</dt><dd>负责人审核 AI 建议后，才可进入现有 Action/Decision 流程。</dd></dl></template><template v-else><h3>上线交付</h3><dl><dt>报告交付</dt><dd>提供 AI 辅助生成、需人工审核的实施与客户交付报告。</dd><dt>培训说明</dt><dd>说明资料上传、Evidence 验证、人工确认和限制边界。</dd><dt>后续优化</dt><dd>根据客户真实资料覆盖与验收反馈迭代，不承诺未验证科研结果。</dd></dl></template></section>
+          <aside class="fde-value-panel"><p class="section-kicker">CUSTOMER VALUE</p><h3>客户需求分析</h3><p>“实验室资料分散，企业合作项目准备周期长。”</p><div class="fde-tag-list"><span>数据管理</span><span>AI分析</span><span>项目协作</span><span>成果管理</span></div><h4>关联 ResearchOS 模块</h4><ul><li>Research Workspace</li><li>知识空间与 RAG</li><li>Research Worker</li><li>Evidence + Human Review</li></ul></aside></div>
+        <section class="fde-implementation"><div><p class="section-kicker">IMPLEMENTATION TASKS</p><h3>实施任务列表</h3></div><article v-for="(name,index) in ['收集客户资料','建立知识空间','配置Agent流程','测试任务效果','客户验收']" :key="name"><b>0{{ index + 1 }}</b><span>{{ name }}</span><em :class="fdeTaskStatuses[index]">{{ fdeTaskStatuses[index] }}</em></article></section>
+        <section class="fde-acceptance"><div><p class="section-kicker">IMPLEMENTATION ACCEPTANCE REPORT</p><h3>实施验收报告</h3><span>AI辅助生成 · 需客户确认</span></div><dl><dt>客户需求</dt><dd>资料管理、AI分析、项目协作和成果规划。</dd><dt>实施内容</dt><dd>Research Workspace、任务中心、受控 Worker、Evidence 与人工审核流程。</dd><dt>系统能力</dt><dd>资料理解、知识检索、交付报告与可追溯执行摘要。</dd><dt>测试结果</dt><dd>Demo 流程可完整展示；真实科研结论需使用客户授权资料另行验收。</dd><dt>限制说明</dt><dd>非生产系统；不包含登录、多租户隔离或生产级持久化。</dd><dt>后续建议</dt><dd>以真实资料覆盖、客户验收反馈和权限体系作为下一阶段实施输入。</dd></dl><p v-if="fdeAcceptanceReady" class="review-result">交付阶段已推进至上线交付。请由客户负责人确认本演练报告。</p></section>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'autonomous'" class="autonomous-workspace" aria-label="自主科研执行工作空间">
+        <div class="dashboard-heading"><div><p class="section-kicker">AI RESEARCH WORKER</p><h2>AI Research Workspace</h2><p>Research Brain 先感知真实科研环境，再规划、执行、观察和评估；只有具备可追溯资料依据时才形成待人工确认的交付物。</p></div></div>
+        <p v-if="autonomousError" class="error-alert"><span>!</span>{{ autonomousError }}</p>
+        <div class="autonomous-grid"><section class="task-config-card"><label for="autonomous-goal">当前科研目标</label><textarea id="autonomous-goal" v-model="autonomousGoal" rows="7" placeholder="例如：帮助低碳建筑材料实验室寻找企业合作创新方向。"></textarea><p class="tool-boundary">Research Worker 仅读取 <code>research_workspace/</code> 中允许的科研文件，并调用现有知识库；不会控制电脑、执行 Shell 命令或自动创建项目。</p><button class="analyze-button" type="button" :disabled="autonomousLoading" @click="runAutonomousResearch"><span v-if="autonomousLoading" class="spinner small-spinner"></span>{{ autonomousLoading ? 'AI Research Worker 正在执行…' : '启动 AI Research Worker' }}</button><details class="compact-details"><summary>可调用工具（{{ autonomousTools.length }}）</summary><ul class="tool-catalog"><li v-for="tool in autonomousTools" :key="tool.id"><b>{{ tool.name }}</b><span>{{ tool.description }}</span></li></ul></details></section>
+          <section class="autonomous-result-card"><div v-if="autonomousLoading" class="loading-state"><span class="spinner"></span><h3>AI Research Worker 正在执行受控任务</h3><ol class="loading-workflow"><li><i></i>感知科研环境并理解目标</li><li><i></i>规划任务并选择工具</li><li><i></i>观察结果、检查证据</li><li><i></i>反思并生成待复核交付物</li></ol></div><div v-else-if="!autonomousRun" class="empty-state"><div class="empty-illustration">◌</div><h3>等待科研目标</h3><p>先上传并索引资料，或在 <code>research_workspace/</code> 放入允许的科研文件。</p></div><div v-else class="autonomous-result"><p class="section-kicker">RUN · {{ autonomousRun.status }}</p><h3>{{ autonomousRun.goal }}</h3><div class="autonomous-status-grid"><article><span>当前步骤</span><b>{{ autonomousRun.current_step || '等待执行' }}</b></article><article><span>当前工具</span><b>{{ autonomousRun.current_tool || '尚未调用' }}</b></article><article><span>已完成任务</span><b>{{ (autonomousRun.completed_tasks || []).length }}</b></article></div><details open class="master-plan-card"><summary>AI 已理解的科研环境</summary><p>资料：{{ autonomousRun.environment_profile?.documents || 0 }} 个 · 论文：{{ autonomousRun.environment_profile?.papers || 0 }} 篇 · 数据集：{{ autonomousRun.environment_profile?.datasets || 0 }} 个</p><p v-if="(autonomousRun.environment_profile?.research_topics || []).length">文件名线索：{{ autonomousRun.environment_profile.research_topics.join('、') }}</p><p class="trace-boundary">{{ autonomousRun.environment_profile?.boundary_note }}</p></details><details class="master-plan-card"><summary>实验室长期记忆</summary><p>已上传论文：{{ autonomousRun.memory_snapshot?.knowledge_assets?.papers || 0 }} 篇 · 已就绪：{{ autonomousRun.memory_snapshot?.knowledge_assets?.ready_papers || 0 }} 篇 · 历史任务：{{ autonomousRun.memory_snapshot?.organization_context?.historical_agent_runs || 0 }}</p><p v-if="(autonomousRun.memory_snapshot?.research_directions || []).length">标题线索：{{ autonomousRun.memory_snapshot.research_directions.join('、') }}</p><p class="trace-boundary">{{ autonomousRun.memory_snapshot?.memory_boundary }}</p></details><section class="agent-run-board"><h4>任务计划与工具选择</h4><article v-for="item in autonomousRun.task_plan?.tasks || []" :key="item.id"><b>{{ item.status === 'completed' ? '✓' : '•' }}</b><div><strong>{{ item.task }}</strong><p>{{ item.agent }} · {{ item.tool }}<br><small>选择原因：{{ item.tool_selection_reason || '根据当前任务计划执行。' }}</small></p></div><span>{{ item.status }}</span></article></section><section class="agent-run-board"><h4>用户可读执行时间线</h4><article v-for="(item, index) in autonomousRun.execution_timeline || []" :key="index"><b>{{ index + 1 }}</b><div><strong>{{ item.actor }}</strong><p>{{ item.message }}</p></div><span>{{ item.status }}</span></article></section><details open class="master-plan-card"><summary>结果检查、反思与下一步</summary><p>{{ autonomousRun.reflection?.next_decision || '暂无下一步建议。' }}</p><ul><li v-for="item in autonomousRun.next_plan || []" :key="item.action">{{ item.action }}：{{ item.reason }}</li></ul><p class="trace-boundary">{{ autonomousRun.reflection?.boundary_note }}</p><p>证据数量：{{ autonomousRun.reflection?.evidence_count || 0 }} · 目标覆盖：{{ autonomousRun.reflection?.goal_coverage ? '满足' : '待补充' }}</p></details><details v-if="autonomousRun.final_output?.research_result?.executive_summary" open class="master-plan-card"><summary>最终科研交付物（待人工确认）</summary><p>{{ autonomousRun.final_output.research_result.executive_summary }}</p></details><details class="master-plan-card"><summary>证据依据（{{ (autonomousRun.final_output?.evidence || []).length }}）</summary><p v-if="!(autonomousRun.final_output?.evidence || []).length">暂无可验证资料。</p><article v-for="source in autonomousRun.final_output?.evidence || []" :key="source.paper_id + source.section"><b>{{ source.source }}</b><span>{{ source.section }} · {{ source.score }}</span></article></details></div></section></div>
+        <section v-if="autonomousRuns.length" class="autonomous-history"><h3>最近执行记录</h3><button v-for="item in autonomousRuns" :key="item.id" type="button" @click="autonomousRun = item"><span>{{ item.status }}</span><b>{{ item.goal }}</b><small>{{ formatLibraryDate(item.updated_at) }}</small></button></section>
       </section>
 
       <section v-if="activeWorkspaceView === 'projects'" class="researchos-projects" aria-label="科研项目中心"><div class="dashboard-heading"><div><p class="section-kicker">RESEARCH PROJECT LIFECYCLE</p><h2>科研项目中心</h2><p>把企业需求、研究目标、技术路线、论文专利规划和成果管理放在同一条项目生命周期中。</p></div></div><p v-if="projectError" class="error-alert"><span>!</span>{{ projectError }}</p><div class="project-workspace"><section class="task-config-card"><label>新建科研项目</label><input v-model="projectForm.name" placeholder="项目名称，例如：低碳建筑材料关键技术研发" /><textarea v-model="projectForm.enterprise_requirement" rows="4" placeholder="企业需求：例如开发绿色建筑材料并验证工程适用性"></textarea><textarea v-model="projectForm.research_goal" rows="3" placeholder="研究目标"></textarea><textarea v-model="projectForm.technology_route" rows="3" placeholder="技术路线（可后续完善）"></textarea><textarea v-model="projectForm.paper_plan" rows="2" placeholder="论文规划"></textarea><textarea v-model="projectForm.patent_plan" rows="2" placeholder="专利规划"></textarea><textarea v-model="projectForm.outcome_management" rows="2" placeholder="成果管理"></textarea><button class="analyze-button" type="button" :disabled="projectLoading" @click="createResearchProject">{{ projectLoading ? '保存中…' : '创建科研项目' }}</button></section><section class="project-list-panel"><div v-if="projectLoading && !researchProjects.length" class="loading-state"><span class="spinner"></span><p>正在读取项目…</p></div><div v-else-if="!researchProjects.length" class="empty-state"><div class="empty-illustration">◫</div><h3>暂无科研项目</h3><p>创建项目后，可用 Project Agent 评估企业需求与实验室能力匹配。</p></div><article v-for="project in researchProjects" :key="project.id" class="project-card"><div><span>{{ project.status }}</span><time>{{ formatLibraryDate(project.updated_at) }}</time></div><h3>{{ project.name }}</h3><p>{{ project.research_goal || project.enterprise_requirement || '尚未补充项目目标。' }}</p><footer><span>论文：{{ project.paper_plan ? '已规划' : '待规划' }} · 专利：{{ project.patent_plan ? '已规划' : '待规划' }}</span><button class="primary-card-action" type="button" :disabled="projectMatching" @click="runProjectMatch(project)">{{ projectMatching ? '匹配中…' : '需求匹配' }}</button></footer></article></section></div><section v-if="projectMatchResult" class="project-match-result"><p class="section-kicker">PROJECT AGENT RESULT</p><h3>{{ projectMatchResult.projectName }} · 横向需求匹配</h3><div class="project-match-grid"><article><h4>实验室能力匹配</h4><ul><li v-for="item in projectMatchResult.lab_capability_match" :key="item">{{ item }}</li></ul></article><article><h4>技术方案建议</h4><ul><li v-for="item in projectMatchResult.technical_solution_suggestions" :key="item">{{ item }}</li></ul></article><article><h4>预期成果规划</h4><dl><template v-for="(value,key) in projectMatchResult.expected_outcome_plan" :key="key"><dt>{{ key }}</dt><dd>{{ Array.isArray(value) ? value.join('、') : value }}</dd></template></dl></article><article><h4>风险与待确认问题</h4><ul><li v-for="item in projectMatchResult.risks_and_questions" :key="item">{{ item }}</li></ul></article></div><section class="agent-run-board"><h4>Project Agent 执行过程</h4><article v-for="trace in projectMatchResult.agent_trace" :key="trace.agent"><b>✓</b><div><strong>{{ trace.agent }}</strong><p>{{ trace.message }}</p></div><span>已完成</span></article></section><p class="trace-boundary">{{ projectMatchResult.boundary_note }}</p></section></section>
@@ -1785,7 +2322,7 @@ createApp({
       </section>
 
       <section v-if="activeWorkspaceView === 'system'" class="system-center" aria-label="系统状态中心">
-        <div class="dashboard-heading"><div><p class="section-kicker">SYSTEM STATUS CENTER</p><h2>系统状态中心</h2><p>{{ systemStatus?.version || 'ResearchOS v1.1' }} · {{ systemStatus?.platform_name || 'AI科研创新决策平台' }}</p></div><button class="outline-button" type="button" :disabled="systemStatusLoading" @click="loadSystemStatus">{{ systemStatusLoading ? '检查中…' : '刷新状态' }}</button></div>
+        <div class="dashboard-heading"><div><p class="section-kicker">SYSTEM STATUS CENTER</p><h2>系统状态中心</h2><p>{{ systemStatus?.version || 'ResearchOS v3.0' }} · {{ systemStatus?.platform_name || 'AI科研创新决策平台' }}</p></div><button class="outline-button" type="button" :disabled="systemStatusLoading" @click="loadSystemStatus">{{ systemStatusLoading ? '检查中…' : '刷新状态' }}</button></div>
         <p v-if="systemStatusError" class="error-alert"><span>!</span>{{ systemStatusError }}</p>
         <div v-if="systemStatus" class="system-status-grid"><article v-for="service in systemStatus.services" :key="service.id"><header><span :class="service.status">{{ service.status === 'ready' || service.status === 'configured' ? '正常' : service.status === 'empty' ? '待初始化' : '需配置' }}</span><b>{{ service.name }}</b></header><p>{{ service.detail }}</p></article></div>
         <section class="demo-knowledge-panel"><div><p class="section-kicker">DEMO KNOWLEDGE BASE</p><h3>低碳建筑材料案例资料</h3><p>用于比赛现场讲解知识库、项目资料和产学研协作流程。</p></div><button class="primary-card-action" type="button" @click="initializeDemoKnowledge">{{ demoKnowledgeInitialized ? 'Demo资料已加载' : '初始化 Demo 知识库' }}</button><div v-if="visibleDemoKnowledgeAssets.length" class="demo-asset-grid"><article v-for="asset in visibleDemoKnowledgeAssets" :key="asset.title"><span>{{ asset.status }}</span><h4>{{ asset.title }}</h4><small>{{ asset.type }}</small><p>{{ asset.detail }}</p></article></div><p class="demo-boundary">这些是明确标注的界面展示资料，不会自动写入真实论文库、FAISS 索引或作为 Agent 的科研证据。需要真实分析时，请上传实际可解析的资料。</p></section>

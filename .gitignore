@@ -23,3 +23,13 @@ frontend/dist/
 # Local scratch files and test artifacts
 work/
 tmp/
+outputs/
+
+# Local databases and vector-search artifacts
+*.db
+*.sqlite
+*.sqlite3
+*.faiss
+
+# User-provided autonomous Research Workspace assets
+research_workspace/

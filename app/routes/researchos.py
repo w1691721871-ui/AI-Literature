@@ -7,10 +7,14 @@ from dotenv import load_dotenv
 from sqlalchemy import func, select
 
 from app.agent.research_master_agent import ResearchMasterAgent
+from app.agent.research_brain import ResearchBrain
+from app.agent.research_worker import ResearchWorker
 from app.models.paper import Paper
 from app.models.paper_chunk import PaperChunk
 from app.models.research_project import ResearchProject
 from app.schemas.researchos import ResearchOSTaskRequest, ResearchValueRequest
+from app.schemas.autonomous_research import AutonomousResearchRunRequest, AutonomousResearchRunResponse
+from app.schemas.research_worker import ResearchWorkerRunRequest, ResearchWorkerRunResponse
 from app.schemas.research_project import (
     EnterpriseMatchRequest,
     ResearchProjectInput,
@@ -42,14 +46,25 @@ from app.services.research_outcome_service import (
     ResearchOutcomeSourceActionNotFoundError,
     ResearchOutcomeService,
 )
+from app.services.autonomous_research_run_service import AutonomousResearchRunNotFoundError
+from app.services.research_worker_run_service import ResearchWorkerRunNotFoundError
+from app.services.workspace_service import WorkspaceNotFoundError, WorkspaceService
+from app.services.client_delivery_service import ClientDeliveryService
+from app.schemas.workspace import DeliveryExportRequest, TaskCreate, WorkspaceCreate
+from app.memory.research_memory_service import ResearchMemoryService
 
 
 router = APIRouter(prefix="/researchos", tags=["researchos"])
 master_agent = ResearchMasterAgent()
+research_brain = ResearchBrain(master_agent=master_agent)
+research_worker = ResearchWorker()
+research_memory_service = ResearchMemoryService()
 project_service = ResearchProjectService()
 evidence_center_service = EvidenceCenterService()
 research_action_service = ResearchActionService()
 research_outcome_service = ResearchOutcomeService()
+workspace_service = WorkspaceService()
+client_delivery_service = ClientDeliveryService()
 
 
 def _project_response(project: ResearchProject) -> ResearchProjectResponse:
@@ -72,6 +87,148 @@ def _project_response(project: ResearchProject) -> ResearchProjectResponse:
 def list_researchos_agents() -> dict[str, object]:
     """Expose the orchestrator's available specialist roles to the UI."""
     return {"agents": master_agent.catalog()}
+
+
+@router.get("/autonomous-runs", response_model=list[AutonomousResearchRunResponse])
+def list_autonomous_research_runs() -> list[dict[str, object]]:
+    """List persisted user-visible autonomous execution summaries."""
+    return research_brain.list_runs()
+
+
+@router.get("/autonomous-runs/tools")
+def list_autonomous_research_tools() -> dict[str, object]:
+    """Expose the allow-listed research tools used by Research Brain."""
+    return {"tools": research_brain.tool_catalog()}
+
+
+@router.get("/research-worker/tools")
+def list_research_worker_tools() -> dict[str, object]:
+    """List Research Worker's explicit, safe execution tools."""
+    return {"tools": research_worker.tool_catalog()}
+
+
+@router.post("/research-worker/run", response_model=ResearchWorkerRunResponse, status_code=status.HTTP_201_CREATED)
+def run_research_worker(request_body: ResearchWorkerRunRequest) -> dict[str, object]:
+    """Execute a bounded research-support task without altering decision-loop entities."""
+    try:
+        return research_worker.run(request_body.goal)
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+
+
+@router.get("/research-worker/{run_id}", response_model=ResearchWorkerRunResponse)
+def get_research_worker_run(run_id: str) -> dict[str, object]:
+    try:
+        return research_worker.get_run(run_id)
+    except ResearchWorkerRunNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.get("/research-worker/{run_id}/timeline")
+def get_research_worker_timeline(run_id: str) -> list[dict[str, object]]:
+    """Return the user-visible Agent Loop timeline, never hidden model reasoning."""
+    try:
+        return research_worker.timeline(run_id)
+    except ResearchWorkerRunNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.get("/research-worker/{run_id}/context")
+def get_research_worker_context(run_id: str) -> dict[str, object]:
+    """Return the task-scoped context summary; never raw files or model reasoning."""
+    try:
+        return research_worker.context(run_id)
+    except ResearchWorkerRunNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.get("/workspaces")
+def list_research_workspaces() -> list[dict[str, object]]:
+    """List lightweight organization spaces; roles are display-only without login."""
+    return workspace_service.list()
+
+
+@router.post("/workspaces", status_code=status.HTTP_201_CREATED)
+def create_research_workspace(request_body: WorkspaceCreate) -> dict[str, object]:
+    return workspace_service.create(request_body.name, request_body.member_roles)
+
+
+@router.get("/tasks")
+def list_research_tasks(workspace_id: str | None = None) -> list[dict[str, object]]:
+    try:
+        return workspace_service.list_tasks(workspace_id)
+    except WorkspaceNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.post("/workspaces/{workspace_id}/tasks", status_code=status.HTTP_201_CREATED)
+def create_research_task(workspace_id: str, request_body: TaskCreate) -> dict[str, object]:
+    try:
+        return workspace_service.create_task(workspace_id, request_body.model_dump())
+    except WorkspaceNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.get("/agent-monitor")
+def get_agent_monitor() -> dict[str, object]:
+    return workspace_service.monitor()
+
+
+@router.get("/client-delivery/{run_id}")
+def get_client_delivery_preview(run_id: str) -> dict[str, object]:
+    try:
+        return client_delivery_service.preview(research_worker.get_run(run_id))
+    except ResearchWorkerRunNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.post("/client-delivery/export")
+def export_client_delivery(request_body: DeliveryExportRequest) -> dict[str, str]:
+    try:
+        return client_delivery_service.export_pdf(research_worker.get_run(request_body.worker_run_id))
+    except ResearchWorkerRunNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.get("/research-memory")
+def get_research_memory() -> dict[str, object]:
+    """Return organization memory separately from document knowledge evidence."""
+    return research_memory_service.get_lab_profile()
+
+
+@router.post("/research-memory/refresh")
+def refresh_research_memory() -> dict[str, object]:
+    """Rebuild factual lab memory from current local metadata and task history."""
+    return research_memory_service.refresh_lab_profile()
+
+
+@router.get("/autonomous-runs/{run_id}", response_model=AutonomousResearchRunResponse)
+def get_autonomous_research_run(run_id: str) -> dict[str, object]:
+    try:
+        return research_brain.get_run(run_id)
+    except AutonomousResearchRunNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
+@router.post("/autonomous-runs", response_model=AutonomousResearchRunResponse, status_code=status.HTTP_201_CREATED)
+def run_autonomous_research(request_body: AutonomousResearchRunRequest) -> dict[str, object]:
+    """Run the bounded Research Brain without changing existing task endpoints."""
+    try:
+        return research_brain.run(
+            request_body.goal,
+            request_body.paper_ids,
+            request_body.generate_docx,
+        )
+    except ValueError as error:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(error)) from error
+    except EmbeddingConfigurationError as error:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error)) from error
+    except EmbeddingRequestError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
+    except LLMConfigurationError as error:
+        raise HTTPException(status_code=status.HTTP_503_SERVICE_UNAVAILABLE, detail=str(error)) from error
+    except LLMRequestError as error:
+        raise HTTPException(status_code=status.HTTP_502_BAD_GATEWAY, detail=str(error)) from error
 
 
 @router.get("/overview")
@@ -117,7 +274,7 @@ def get_system_status() -> dict[str, object]:
 
     model_configured = bool(os.getenv("DASHSCOPE_API_KEY"))
     return {
-        "version": "ResearchOS v1.1",
+        "version": "ResearchOS v3.0",
         "platform_name": "AI科研创新决策平台",
         "services": [
             {
