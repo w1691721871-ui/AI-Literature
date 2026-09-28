@@ -1,8 +1,15 @@
-# ResearchOS v5.0
+# ResearchOS
 
-> AI Research Solution Platform · AI 科研决策与执行平台。
+> **AI Research Operating System · AI 科研决策与执行平台**
 
-ResearchOS 是面向高校实验室、企业研发团队和产学研合作场景的 AI 科研决策与执行平台原型。它把研究目标、授权资料、可解释分析与人工确认组织成可演练的 FDE 解决方案交付流程。
+ResearchOS 是面向高校实验室、科研机构、企业研发团队与产学研协作场景的 AI 产品原型。它以一个明确的研究目标为起点，把授权资料、AI 研究、Evidence、人工确认、项目执行与成果交付组织为同一条可追溯的科研闭环。
+
+```text
+Research Goal → Knowledge → AI Research → Evidence → Decision
+              → Human Review → Project → Tasks → Deliverables → Knowledge Asset
+```
+
+它不是聊天机器人，也不把 PDF 总结作为产品终点：ResearchOS 的核心是帮助科研团队以有资料依据、可复核、由人确认的方式推进研究与协作。
 
 核心能力包括：
 
@@ -10,11 +17,19 @@ ResearchOS 是面向高校实验室、企业研发团队和产学研合作场景
 - **Research Worker Agent Loop**：以受控工具完成任务理解、规划、执行、观察、评估与待人工确认的交付物。
 - **RAG + FAISS**：基于已上传并索引的资料进行多论文知识检索与研究问答。
 - **Evidence + Human-in-the-loop**：以章节级资料提示支撑建议；没有资料时明确提示不足，建议须由负责人确认。
-- **FDE Solution Delivery Workflow**：覆盖客户需求配置、需求映射、实施风险、交付报告与验收演练。
+- **FDE Solution Delivery Workflow**：覆盖客户需求、方案设计、模块映射、实施计划、测试、验收与交付演练。
 
 本项目用于比赛展示与校招实践，不是生产系统；不虚构用户数量、准确率、商业收入或企业落地案例。
 
-本项目用于比赛展示，不是生产系统；不虚构用户数量、准确率、商业收入或企业落地案例。
+## 产品入口与用户任务
+
+产品面向用户的主入口收敛为：**Research Command、Knowledge Space、Research Projects、Tasks、Evidence、Deliverables、FDE Delivery、System**。Research Master、Research Worker 与专项 Agent 是执行层能力，而非要求用户理解的后台导航。
+
+- **Research Command**：先定义目标、资料范围、计划步骤、所需工具与预期交付，再实际发起研究任务。
+- **Knowledge Space**：管理已授权上传并完成解析/索引的科研资料；资料不足时，系统明确提示不能形成有依据的研究结论。
+- **Evidence / Human Review**：重要建议可回溯到已有资料的章节级 Evidence；采纳、修改或拒绝由研究人员确认。
+- **Projects / Tasks / Deliverables**：把确认后的研究建议组织成项目、执行事项与待审核成果，而不是把 AI 输出伪装成最终科研事实。
+- **FDE Delivery**：以明确标注的 Demo Scenario 演练“客户需求 → 方案 → 实施 → 测试 → 验收 → 交付”，不代表真实客户或商业合同。
 
 ## ResearchOS 平台定位
 
