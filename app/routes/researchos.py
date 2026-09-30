@@ -619,6 +619,14 @@ def solution_computer_action(solution_id: str) -> dict[str, object]:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
 
 
+@router.get("/solutions/{solution_id}/versions")
+def solution_versions(solution_id: str) -> dict[str, object]:
+    try:
+        return fde_solution_service.versions(solution_id)
+    except SolutionNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
+
+
 @router.post("/computer/pro/tasks", status_code=status.HTTP_201_CREATED)
 def create_computer_pro_task(payload: ComputerProTaskCreate) -> dict[str, object]:
     try:

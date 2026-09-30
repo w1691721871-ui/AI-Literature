@@ -257,6 +257,15 @@ createApp({
     const fdeSolutionLoading = ref(false);
     const fdeSolutionError = ref("");
     const fdeSolutionReviewNote = ref("");
+    const fdeSolutionVersions = ref([]);
+    // P22 Mission Center uses only persisted, user-readable lifecycle events.
+    const aiMissions = ref([]);
+    const selectedAIMission = ref(null);
+    const aiMissionDashboard = ref(null);
+    const aiMissionForm = ref({ title: "", mission_type: "RESEARCH", goal: "" });
+    const aiMissionLoading = ref(false);
+    const aiMissionError = ref("");
+    const aiNotifications = ref([]);
     const onboardingState = ref(null);
     const onboardingOpen = ref(false);
     const artifactGallery = ref([]);
@@ -753,6 +762,7 @@ createApp({
       if (view === "dashboard" || view === "artifact-center" || view === "demo-center") await loadProductExperience();
       if (view === "workflow-studio") await loadResearchWorkflows();
       if (view === "dashboard") await loadResearchWorkspaces();
+      if (view === "dashboard") await loadAIMissions();
       if (view === "research-workspace") await loadResearchWorkspaces();
       if (view === "autonomous") await loadAutonomousWorkspace();
       if (view === "worker") await loadResearchWorkerWorkspace();
@@ -773,6 +783,7 @@ createApp({
       if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics()]);
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
+      if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
       if (view === "enterprise-hub") await loadEnterpriseHub();
       void loadResearchOverview();
     }
@@ -1019,11 +1030,55 @@ createApp({
       finally { fdeSolutionLoading.value = false; }
     }
 
+    async function loadAIMissions() {
+      if (aiMissionLoading.value) return;
+      aiMissionLoading.value = true; aiMissionError.value = "";
+      try {
+        const [missionsResponse, dashboardResponse, notificationResponse] = await Promise.all([
+          fetchWithTimeout(`${API_BASE_URL}/api/missions`),
+          fetchWithTimeout(`${API_BASE_URL}/api/missions/dashboard`),
+          fetchWithTimeout(`${API_BASE_URL}/api/notifications`),
+        ]);
+        aiMissions.value = await readResponse(missionsResponse);
+        aiMissionDashboard.value = await readResponse(dashboardResponse);
+        aiNotifications.value = await readResponse(notificationResponse);
+        if (selectedAIMission.value?.id) await loadAIMissionDetail(selectedAIMission.value.id);
+      } catch (error) { aiMissionError.value = error.message || "AI Mission 暂时无法读取。"; }
+      finally { aiMissionLoading.value = false; }
+    }
+
+    async function loadAIMissionDetail(missionId) {
+      if (!missionId) return;
+      const response = await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}`);
+      selectedAIMission.value = await readResponse(response);
+    }
+
+    async function createAIMission() {
+      const payload = aiMissionForm.value;
+      if (!payload.title.trim()) { aiMissionError.value = "请先填写 Mission 标题。"; return; }
+      aiMissionLoading.value = true; aiMissionError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/missions`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ ...payload, title: payload.title.trim(), goal: payload.goal.trim() }) });
+        selectedAIMission.value = await readResponse(response);
+        aiMissionForm.value = { title: "", mission_type: "RESEARCH", goal: "" };
+        await loadAIMissions();
+      } catch (error) { aiMissionError.value = error.message || "Mission 创建失败。"; }
+      finally { aiMissionLoading.value = false; }
+    }
+
+    async function markAINotificationRead(notificationId) {
+      try {
+        await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/notifications/${notificationId}/read`, { method: "POST" }));
+        aiNotifications.value = aiNotifications.value.map((item) => item.id === notificationId ? { ...item, read: true } : item);
+      } catch (error) { aiMissionError.value = error.message || "通知状态更新失败。"; }
+    }
+
     async function loadFdeSolutionDetail(solutionId) {
       if (!solutionId) return;
       const response = await fetchWithTimeout(`${API_BASE_URL}/researchos/solutions/${solutionId}`, { method: "GET" });
       selectedFdeSolution.value = await readResponse(response);
       fdeComputerMissions.value = selectedFdeSolution.value.computer_missions || [];
+      fdeSolutionVersions.value = selectedFdeSolution.value.versions || [];
     }
 
     function fdeEvidenceRefs() {
@@ -1055,7 +1110,7 @@ createApp({
           body: JSON.stringify({ ...payload, title: payload.title.trim(), customer_need: payload.customer_need.trim(), objective: payload.objective.trim() }),
         });
         selectedFdeSolution.value = await readResponse(response);
-        fdeSolutionAnalysis.value = null; fdeSolutionBlueprint.value = null; fdeSolutionPackage.value = null; fdeComputerMissions.value = [];
+        fdeSolutionAnalysis.value = null; fdeSolutionBlueprint.value = null; fdeSolutionPackage.value = null; fdeComputerMissions.value = []; fdeSolutionVersions.value = [];
         await loadFdeSolutions();
       } catch (error) { fdeSolutionError.value = error.message || "方案项目创建失败。"; }
       finally { fdeSolutionLoading.value = false; }
@@ -2813,6 +2868,14 @@ createApp({
       fdeSolutionLoading,
       fdeSolutionError,
       fdeSolutionReviewNote,
+      fdeSolutionVersions,
+      aiMissions,
+      selectedAIMission,
+      aiMissionDashboard,
+      aiMissionForm,
+      aiMissionLoading,
+      aiMissionError,
+      aiNotifications,
       loadFdeSolutions,
       loadFdeSolutionDetail,
       applyFdeSolutionDemo,
@@ -2822,6 +2885,10 @@ createApp({
       reviewFdeSolution,
       loadFdeSolutionPackage,
       fdeEvidenceRefs,
+      loadAIMissions,
+      loadAIMissionDetail,
+      createAIMission,
+      markAINotificationRead,
       onboardingState,
       onboardingOpen,
       artifactGallery,
@@ -3026,6 +3093,7 @@ createApp({
            <button class="brand-button" type="button" @click="openWorkspaceView('dashboard')"><span class="brand-orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2.8 14.4 9.6 21.2 12l-6.8 2.4L12 21.2l-2.4-6.8L2.8 12l6.8-2.4L12 2.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><span><b>ResearchOS</b><small>AI Research Workspace</small></span></button>
            <div class="top-navigation-links product-navigation">
              <button type="button" :class="{ active: activeWorkspaceView === 'dashboard' }" @click="openWorkspaceView('dashboard')">AI Command Center</button>
+              <button type="button" :class="{ active: activeWorkspaceView === 'mission-center' || activeWorkspaceView === 'team-workspace' }" @click="openWorkspaceView('mission-center')">Mission Center</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'tasks' || activeWorkspaceView === 'workflow-studio' || activeWorkspaceView === 'assistant' || activeWorkspaceView === 'worker' || activeWorkspaceView === 'agents' || activeWorkspaceView === 'timeline' }" @click="openWorkspaceView('tasks')">Research Engine</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'operator' }" @click="openWorkspaceView('operator')">Operator Studio</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'computer' }" @click="openWorkspaceView('computer')">Computer Lab</button>
@@ -3042,8 +3110,19 @@ createApp({
 
       <section v-if="activeWorkspaceView === 'dashboard'" class="home-workspace" aria-label="ResearchOS Home">
           <div class="home-hero"><p class="section-kicker">RESEARCHOS AI WORKSPACE</p><h1>From research question to<br />evidence-backed decision.</h1><p>一个面向科研团队的 AI Research Operating System。</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="Describe your research goal or task..."></textarea><button type="button" class="primary-card-action" :disabled="workflowLoading" @click="generateResearchWorkflow()">{{ workflowLoading ? 'Building workflow…' : 'Generate Workflow' }}</button></div><small>工作流可先审阅；研究结论只在已有索引资料和 Evidence 支撑下生成。</small></div>
-         <div class="home-quick-grid product-capability-grid"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><b>Research Agent</b><small>Explore research, Evidence and deliverables</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Review my project code'; computerPlanPreview = null"><b>Computer Agent</b><small>Analyze a workspace and prepare reviewable changes</small></button><button type="button" @click="openWorkspaceView('enterprise-hub')"><b>Enterprise Workspace</b><small>Connect research collaboration and delivery</small></button></div>
+          <div class="home-quick-grid product-capability-grid"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><b>Research Agent</b><small>Explore research, Evidence and deliverables</small></button><button type="button" @click="openWorkspaceView('mission-center')"><b>AI Mission Center</b><small>Track planned work, review and delivery states</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Review my project code'; computerPlanPreview = null"><b>Computer Agent</b><small>Analyze a workspace and prepare reviewable changes</small></button><button type="button" @click="openWorkspaceView('enterprise-hub')"><b>Enterprise Workspace</b><small>Connect research collaboration and delivery</small></button></div>
+          <section v-if="aiMissionDashboard" class="mission-dashboard-strip"><article v-for="(value, key) in aiMissionDashboard.metrics" :key="key"><span>{{ key.replaceAll('_', ' ') }}</span><b>{{ value }}</b></article></section>
         <section class="home-recent-workspaces"><header><div><p class="section-kicker">RECENT WORKSPACES</p><h3>继续正在进行的研究</h3></div><button class="text-button" type="button" @click="openWorkspaceView('research-workspace')">查看全部</button></header><div v-if="researchWorkspaces.length" class="recent-workspace-grid"><article v-for="item in researchWorkspaces.slice(0,3)" :key="item.workspace_id"><span>{{ item.strategy_type || 'research' }}</span><h4>{{ item.title }}</h4><p><b>{{ item.status || 'created' }}</b> · {{ item.human_review_required ? 'Review Pending' : 'Review not required' }}</p><small>Evidence：{{ item.evidence_count || 0 }}</small><button type="button" @click="resumeResearchWorkspace(item)">继续研究 →</button></article></div><div v-else class="home-empty-state"><b>暂无持续研究 Workspace</b><span>提交一项有依据的研究任务后，系统会保存策略、Evidence 和审核状态。</span></div></section>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'mission-center'" class="mission-center" aria-label="AI Mission Center">
+        <header class="dashboard-heading"><div><p class="section-kicker">AI MISSION CENTER</p><h2>Mission lifecycle, without hidden reasoning.</h2><p>Workspace → Mission → AI Team → Evidence → Review → Deliverable。只展示已持久化的用户可理解事件。</p></div><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="loadAIMissions">Refresh</button></header>
+        <p v-if="aiMissionError" class="error-alert"><span>!</span>{{ aiMissionError }}</p>
+        <div class="mission-center-layout"><section class="mission-create-surface"><p class="section-kicker">CREATE MISSION</p><label>Mission title<input v-model="aiMissionForm.title" placeholder="例如：RAG 技术路线分析" /></label><label>Mission type<select v-model="aiMissionForm.mission_type"><option>RESEARCH</option><option>SOLUTION</option><option>DELIVERY</option></select></label><label>Goal<textarea v-model="aiMissionForm.goal" rows="5" placeholder="记录研究或解决方案目标；不会在此处生成无依据结论。"></textarea></label><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="createAIMission">Create AI Mission</button></section>
+          <section class="mission-stream-surface"><template v-if="selectedAIMission"><header><div><p class="section-kicker">MISSION RUNTIME</p><h3>{{ selectedAIMission.title }}</h3><small>{{ selectedAIMission.status }} · {{ selectedAIMission.progress }}% · {{ selectedAIMission.current_step }}</small></div></header><ol class="mission-timeline"><li v-for="item in selectedAIMission.timeline || []" :key="item.id"><b>{{ item.stage }}</b><div><strong>{{ item.action }}</strong><p>{{ item.result }}</p><small>Evidence: {{ item.evidence_count }} · {{ item.status }}</small></div></li></ol><section class="mission-graph"><span>EVIDENCE GRAPH</span><div v-for="node in selectedAIMission.evidence_graph?.nodes || []" :key="node.id"><b>{{ node.type }}</b><small>{{ node.label }}</small></div><p>{{ selectedAIMission.evidence_graph?.boundary }}</p></section></template><div v-else class="product-empty-state"><b>No mission selected</b><p>Create or choose an AI Mission to inspect its auditable timeline.</p></div></section>
+          <aside class="mission-intelligence-surface"><p class="section-kicker">AI TEAM</p><article v-for="item in selectedAIMission?.team || aiMissionDashboard?.team_status || []" :key="item.name"><b>{{ item.name }}</b><span>{{ item.role }}</span><small>{{ item.status }} · {{ item.last_action }}</small></article><p class="section-kicker">NOTIFICATIONS</p><button v-for="item in aiNotifications" :key="item.id" class="mission-notification" :class="{ read: item.read }" type="button" @click="markAINotificationRead(item.id)"><b>{{ item.type }}</b><small>{{ item.message }}</small></button><p v-if="!aiNotifications.length" class="quiet-note">No persisted notifications.</p></aside>
+        </div>
+        <section class="mission-list"><button v-for="item in aiMissions" :key="item.id" type="button" :class="{ active: selectedAIMission?.id === item.id }" @click="loadAIMissionDetail(item.id)"><span>{{ item.type }}</span><b>{{ item.title }}</b><small>{{ item.status }} · {{ item.progress }}% · {{ item.current_step }}</small></button><p v-if="!aiMissions.length">No AI mission yet. Create a mission to begin a reviewable lifecycle.</p></section>
       </section>
 
       <section v-if="activeWorkspaceView === 'artifact-center'" class="product-experience-center" aria-label="Artifact Center"><header class="dashboard-heading"><div><p class="section-kicker">ARTIFACT CENTER</p><h2>Reviewable AI outputs in one place.</h2><p>只展示已有运行记录产生的研究草稿和 Computer 产物；没有产物时保持空状态。</p></div><button class="outline-button" type="button" @click="openWorkspaceView('dashboard')">Back to Command Center</button></header><div v-if="artifactGallery.length" class="product-artifact-grid"><article v-for="item in artifactGallery" :key="item.category + item.id"><span>{{ item.category }}</span><h3>{{ item.title }}</h3><p>{{ item.type }} · {{ item.status }}</p><small>Reference · {{ item.reference }}</small><button class="text-button" type="button" @click="item.category === 'Computer' ? openWorkspaceView('computer') : openWorkspaceView('outcome-center')">Review →</button></article></div><div v-else class="product-empty-state"><b>Nothing generated yet</b><p>Start a controlled research or Computer mission to collect reviewable output here.</p><button class="primary-card-action" type="button" @click="openWorkspaceView('dashboard')">Start a mission</button></div></section>
@@ -3279,6 +3358,7 @@ createApp({
             <article><span>Delivery status</span><b>{{ fdeSolutionPackage?.status || selectedFdeSolution?.status || 'DRAFT' }}</b><small>所有包内容保留 AI Generated Draft 标记。</small></article>
             <section class="fde-evidence-list"><span>EVIDENCE REFERENCES</span><p v-if="!fdeEvidenceRefs().length">暂无可验证资料</p><article v-for="item in fdeEvidenceRefs()" :key="item.chunk_id"><b>{{ item.source }}</b><small>paper_id: {{ item.paper_id }} · chunk_id: {{ item.chunk_id }}</small><small>{{ item.section || '正文' }}</small></article></section>
             <section class="fde-computer-mission"><span>COMPUTER MISSION</span><p v-if="!fdeComputerMissions.length">Blueprint 生成后会创建受控行动提案。</p><article v-for="item in fdeComputerMissions" :key="item.id"><b>{{ item.status }}</b><small>{{ item.task }}</small><p>{{ item.change_summary }}</p><em>Proposal only · no execution</em></article></section>
+            <section class="fde-version-control"><span>SOLUTION VERSION CONTROL</span><p v-if="!fdeSolutionVersions.length">生成 Blueprint 后保留可审阅版本。</p><article v-for="item in fdeSolutionVersions" :key="item.id"><b>V{{ item.version }} · {{ item.status }}</b><small>{{ item.change_summary }}</small></article></section>
             <button class="text-button" type="button" @click="openWorkspaceView('computer')">Check capability in Computer Lab →</button>
           </aside>
         </div>

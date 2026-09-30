@@ -78,3 +78,11 @@ def project_computer_action(project_id: str) -> dict[str, object]:
         return service.computer_actions(project_id)
     except SolutionNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.get("/projects/{project_id}/versions")
+def project_versions(project_id: str) -> dict[str, object]:
+    try:
+        return service.versions(project_id)
+    except SolutionNotFoundError as error:
+        raise HTTPException(status_code=404, detail=str(error)) from error

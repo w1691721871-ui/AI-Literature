@@ -17,6 +17,7 @@ from app.models.paper import Paper
 from app.models.paper_chunk import PaperChunk
 from app.models.solution_deliverable import SolutionDeliverable
 from app.models.solution_computer_mission import SolutionComputerMission
+from app.models.solution_version import SolutionVersion
 from app.models.solution_project import SolutionProject
 from app.models.solution_requirement import SolutionRequirement
 from app.services.database import SessionLocal, initialize_database
@@ -63,6 +64,7 @@ class FDESolutionService:
                 "requirements": [self._requirement(row) for row in session.scalars(select(SolutionRequirement).where(SolutionRequirement.solution_project_id == project.id)).all()],
                 "deliverables": [self._deliverable(row) for row in session.scalars(select(SolutionDeliverable).where(SolutionDeliverable.solution_project_id == project.id).order_by(SolutionDeliverable.created_at.asc())).all()],
                 "computer_missions": [self._mission(row) for row in session.scalars(select(SolutionComputerMission).where(SolutionComputerMission.solution_project_id == project.id).order_by(SolutionComputerMission.created_at.asc())).all()],
+                "versions": [self._version(row) for row in session.scalars(select(SolutionVersion).where(SolutionVersion.solution_project_id == project.id).order_by(SolutionVersion.version.asc())).all()],
                 "metrics": self._metrics(session, project.id),
                 "boundary": "Solution Project 是 AI 辅助方案草稿；需求、范围、风险与正式交付均需人工确认。",
             }
@@ -120,6 +122,7 @@ class FDESolutionService:
             self._upsert_deliverable(session, project.id, "DATA_PLAN", "Data & Knowledge Assessment", gap)
             self._upsert_deliverable(session, project.id, "AI_WORKFLOW", "AI Workflow", blueprint["core_workflow"])
             self._upsert_computer_mission(session, project.id)
+            self._version_snapshot(session, project.id, "DRAFT", "Generated Solution Blueprint draft", blueprint)
             project.status = "WAITING_REVIEW"; session.commit(); session.refresh(project)
             return {"project": self._project(project), "blueprint": blueprint, "metrics": self._metrics(session, project.id)}
         finally:
@@ -150,6 +153,7 @@ class FDESolutionService:
             if status == "APPROVED":
                 for row in session.scalars(select(SolutionDeliverable).where(SolutionDeliverable.solution_project_id == project.id)).all():
                     row.status = "HUMAN_REVIEWED"
+            self._version_snapshot(session, project.id, "APPROVED" if status == "APPROVED" else "REVISED", f"Human Review: {status}", {"review_status": status, "reviewer_note": note.strip()})
             session.commit(); session.refresh(project)
             return self._project(project)
         finally:
@@ -199,6 +203,16 @@ class FDESolutionService:
             ).all()
             return {"label": "Computer Action Plan · WAITING_APPROVAL", "actions": [self._mission(row) for row in rows],
                     "boundary": "仅生成受控能力评估提案；不会执行文件、代码、终端或浏览器操作。"}
+        finally:
+            session.close()
+
+    def versions(self, project_id: str) -> dict[str, object]:
+        session = self._sessions()
+        try:
+            self._project_row(session, project_id)
+            rows = session.scalars(select(SolutionVersion).where(SolutionVersion.solution_project_id == project_id).order_by(SolutionVersion.version.asc())).all()
+            return {"label": "Solution Version Control", "versions": [self._version(row) for row in rows],
+                    "boundary": "每个版本是 AI 草稿或人工审核记录，不等同于客户验收。"}
         finally:
             session.close()
 
@@ -271,6 +285,12 @@ class FDESolutionService:
                 setattr(row, key, value)
 
     @staticmethod
+    def _version_snapshot(session: Session, project_id: str, status: str, summary: str, snapshot: object) -> None:
+        maximum = session.scalar(select(func.max(SolutionVersion.version)).where(SolutionVersion.solution_project_id == project_id)) or 0
+        session.add(SolutionVersion(solution_project_id=project_id, version=int(maximum) + 1, status=status,
+                                    change_summary=summary, snapshot_json=json.dumps(snapshot, ensure_ascii=False, default=str)))
+
+    @staticmethod
     def _find(deliverables: list[dict[str, object]], kind: str) -> dict[str, object] | None:
         return next((item for item in deliverables if item["deliverable_type"] == kind), None)
 
@@ -307,3 +327,7 @@ class FDESolutionService:
     def _mission(row: SolutionComputerMission) -> dict[str, object]:
         return {"id": row.id, "task": row.task, "change_summary": row.change_summary, "risk_level": row.risk_level,
                 "status": row.status, "created_at": row.created_at, "execution_allowed": False}
+
+    @staticmethod
+    def _version(row: SolutionVersion) -> dict[str, object]:
+        return {"id": row.id, "version": row.version, "status": row.status, "change_summary": row.change_summary, "created_at": row.created_at}

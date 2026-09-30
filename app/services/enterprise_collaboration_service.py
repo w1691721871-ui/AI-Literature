@@ -37,6 +37,10 @@ class EnterpriseCollaborationService:
         "Reviewer": {"view_evidence", "review_evidence", "comment_draft", "create_meeting"},
         "Leader": {"view_project", "approve_deliverable", "view_quality", "create_project", "create_meeting"},
         "Admin": {"manage_members", "create_project", "view_project", "approve_deliverable", "view_quality", "upload_material", "view_evidence", "create_meeting"},
+        # P22 enterprise labels map to the existing product-model permissions.
+        # This remains a server-side authorization model, not an identity provider.
+        "Owner": {"manage_members", "create_project", "view_project", "approve_deliverable", "view_quality", "upload_material", "view_evidence", "create_meeting"},
+        "Member": {"create_task", "upload_material", "view_evidence", "create_meeting"},
     }
     project_statuses = {"Planning", "Researching", "Reviewing", "Delivering", "Completed"}
     scope_permissions = {"Private", "Team", "Organization"}

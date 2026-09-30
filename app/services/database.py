@@ -60,6 +60,9 @@ def initialize_database() -> None:
     from app.models.solution_requirement import SolutionRequirement  # noqa: F401
     from app.models.solution_deliverable import SolutionDeliverable  # noqa: F401
     from app.models.solution_computer_mission import SolutionComputerMission  # noqa: F401
+    from app.models.solution_version import SolutionVersion  # noqa: F401
+    from app.models.ai_mission import AIMission, AIMissionEvent  # noqa: F401
+    from app.models.notification import Notification  # noqa: F401
     from app.models.research_copilot_action import ResearchCopilotAction  # noqa: F401
     from app.models.research_document_revision import ResearchDocumentRevision  # noqa: F401
     from app.models.research_workflow import ResearchWorkflow, WorkflowEvent, WorkflowStep  # noqa: F401

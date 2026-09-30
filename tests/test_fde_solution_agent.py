@@ -12,6 +12,7 @@ from app.models.solution_deliverable import SolutionDeliverable
 from app.models.solution_project import SolutionProject
 from app.models.solution_requirement import SolutionRequirement
 from app.models.solution_computer_mission import SolutionComputerMission
+from app.models.solution_version import SolutionVersion
 from app.services.fde_solution_service import FDESolutionService
 
 
@@ -19,7 +20,7 @@ class FDESolutionAgentTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         self.Session = sessionmaker(bind=self.engine)
-        for table in (Paper.__table__, PaperChunk.__table__, SolutionProject.__table__, SolutionRequirement.__table__, SolutionDeliverable.__table__, SolutionComputerMission.__table__):
+        for table in (Paper.__table__, PaperChunk.__table__, SolutionProject.__table__, SolutionRequirement.__table__, SolutionDeliverable.__table__, SolutionComputerMission.__table__, SolutionVersion.__table__):
             table.create(self.engine)
         session = self.Session()
         session.add(Paper(paper_id="real-fixture-paper", title="Authorized Fixture Paper", filename="fixture.pdf", file_path="/fixture/authorized.pdf", text_content="Fixture text", analysis_status="ready", quality_status="ready"))
@@ -83,6 +84,12 @@ class FDESolutionAgentTests(unittest.TestCase):
         actions = self.service.computer_actions(self.project["id"])["actions"]
         self.assertEqual(actions[0]["status"], "WAITING_APPROVAL")
         self.assertFalse(actions[0]["execution_allowed"])
+
+    def test_solution_versions_preserve_draft_and_review_history(self):
+        self.agent.understand_requirements(self.project["id"]); self.agent.prepare_solution(self.project["id"])
+        self.service.review(self.project["id"], "NEEDS_REVISION", "reviewer requested a revision")
+        versions = self.service.versions(self.project["id"])["versions"]
+        self.assertEqual([item["status"] for item in versions], ["DRAFT", "REVISED"])
 
 
 if __name__ == "__main__":

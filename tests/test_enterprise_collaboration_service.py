@@ -54,6 +54,12 @@ class EnterpriseCollaborationServiceTests(unittest.TestCase):
                 "member_id": self.reviewer_id, "paper_id": self.paper_id, "knowledge_scope": "Organization",
             })
 
+    def test_owner_and_member_labels_reuse_the_server_side_permission_model(self) -> None:
+        owner = self.service.add_member(self.organization["id"], self.admin_id, "Owner", "Owner")
+        member = self.service.add_member(self.organization["id"], self.admin_id, "Member", "Member")
+        self.assertEqual(self.service.check(self.organization["id"], owner["id"], "approve_deliverable").role, "Owner")
+        self.assertEqual(self.service.check(self.organization["id"], member["id"], "view_evidence").role, "Member")
+
     def test_meeting_proposals_require_human_confirmation_and_create_no_task(self) -> None:
         result = self.service.create_meeting(self.organization["id"], {
             "member_id": self.researcher_id,

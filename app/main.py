@@ -25,6 +25,7 @@ from app.services.pdf_service import (
 from app.routes.research import router as research_router
 from app.routes.researchos import router as researchos_router
 from app.routes.fde import router as fde_router
+from app.routes.missions import router as missions_router
 
 
 app = FastAPI(title="ResearchOS · AI科研创新决策平台")
@@ -33,6 +34,7 @@ app.state.paper_agent = paper_agent
 app.include_router(research_router)
 app.include_router(researchos_router)
 app.include_router(fde_router)
+app.include_router(missions_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 app.add_middleware(
