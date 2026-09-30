@@ -47,6 +47,8 @@ class WorkspaceService:
             task = ResearchTask(
                 workspace_id=workspace_id, name=payload["name"], task_type=payload["task_type"],
                 worker_run_id=payload.get("worker_run_id", ""),
+                project_id=payload.get("project_id"), decision_id=payload.get("decision_id"),
+                evidence_refs=json.dumps(payload.get("evidence_refs", []), ensure_ascii=False),
                 status=self._task_status(run.status) if run else "Draft",
                 evidence_count=self._evidence_count(run) if run else 0,
                 output_report=run.output_file if run else "",
@@ -98,7 +100,9 @@ class WorkspaceService:
 
     @staticmethod
     def _task_payload(item: ResearchTask) -> dict[str, object]:
-        return {"id": item.id, "workspace_id": item.workspace_id, "name": item.name, "task_type": item.task_type, "status": item.status, "worker_run_id": item.worker_run_id, "evidence_count": item.evidence_count, "output_report": item.output_report, "created_at": item.created_at, "updated_at": item.updated_at}
+        try: evidence_refs = json.loads(item.evidence_refs or "[]")
+        except json.JSONDecodeError: evidence_refs = []
+        return {"id": item.id, "workspace_id": item.workspace_id, "name": item.name, "task_type": item.task_type, "status": item.status, "worker_run_id": item.worker_run_id, "project_id": item.project_id, "decision_id": item.decision_id, "evidence_refs": evidence_refs, "evidence_count": item.evidence_count, "output_report": item.output_report, "created_at": item.created_at, "updated_at": item.updated_at}
 
     @staticmethod
     def _task_status(status: str) -> str:

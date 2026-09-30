@@ -11,6 +11,11 @@ class ResearchResultEvaluator:
         source_integrity = evidence_count == len(valid_sources)
         needs_more_retrieval = not has_evidence or not source_integrity
         goal_coverage = master_completed and has_evidence
+        missing_evidence: list[str] = []
+        if not has_evidence:
+            missing_evidence.append("缺少可追溯的研究资料、章节和内容 Evidence。")
+        elif not source_integrity:
+            missing_evidence.append("部分检索资料缺少 paper_id 或章节信息，无法作为可追溯 Evidence 使用。")
         if master_failed:
             next_decision = "已有资料依据，但模型服务未完成交付；请稍后重试，不要把未完成结果作为科研结论。"
             next_plan = [{"action": "重新执行专项分析", "reason": "模型服务未完成本次受控执行。"}]
@@ -29,6 +34,9 @@ class ResearchResultEvaluator:
             "source_integrity": source_integrity,
             "goal_coverage": goal_coverage,
             "needs_more_retrieval": needs_more_retrieval,
+            "sufficient": has_evidence and source_integrity,
+            "missing_evidence": missing_evidence,
+            "recommendation": next_decision,
             "workspace_asset_count": len(workspace_assets),
             "master_completed": master_completed,
             "next_decision": next_decision,

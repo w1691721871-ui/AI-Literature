@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field
 
 
 ActionStatus = Literal["待执行", "进行中", "已完成", "已取消"]
-DecisionStatus = Literal["待确认", "已采纳", "已修改", "已拒绝"]
+DecisionStatus = Literal["待确认", "已采纳", "已修改", "需补充证据", "已拒绝"]
 OutcomeType = Literal["论文", "专利", "技术报告", "实验成果"]
 OutcomeStatus = Literal["规划中", "进行中", "已完成", "已提交", "已归档"]
 KnowledgeStatus = Literal["未沉淀", "待整理", "已沉淀"]
@@ -38,6 +38,7 @@ class ResearchActionCreate(BaseModel):
 
 
 class ResearchActionUpdate(BaseModel):
+    project_id: str | None = None
     title: str | None = Field(default=None, min_length=1, max_length=300)
     description: str | None = None
     status: ActionStatus | None = None

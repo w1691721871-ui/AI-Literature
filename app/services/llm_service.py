@@ -313,6 +313,7 @@ def answer_question_with_retrieved_context(
     question: str,
     sources: list[dict[str, object]],
     task_instruction: str = "直接回答问题，清楚区分证据与推断。",
+    conflict_instruction: str = "",
 ) -> str:
     """Answer a multi-paper question using only retriever-provided evidence."""
     context_parts: list[str] = []
@@ -340,6 +341,8 @@ def answer_question_with_retrieved_context(
 
 任务要求：{task_instruction}
 
+冲突与比较边界：{conflict_instruction or "未提供额外冲突信息；仍须谨慎区分证据与推断。"}
+
 用户问题：{question}
 
 检索证据：
@@ -366,6 +369,7 @@ def decode_research_json(response_text: str) -> dict[str, object]:
 def generate_research_report(
     report_type: str,
     sources: list[dict[str, object]],
+    conflict_instruction: str = "",
 ) -> dict[str, object]:
     """Create a grounded structured research report from retrieved evidence."""
     report_fields = {
@@ -385,6 +389,7 @@ def generate_research_report(
     )[:MAX_RAG_CONTEXT_CHARS]
     prompt = f"""基于下列论文检索证据生成中文研究报告。
 只能使用提供的证据；信息不足时填写“现有证据不足”。
+冲突与比较边界：{conflict_instruction or "未提供额外冲突信息；不得将检索匹配度表述为事实正确率。"}
 返回且只返回 JSON 对象，字段必须是：{"、".join(fields)}。每个字段使用字符串或字符串数组。
 在每项结论中保留 [证据编号] 标注。
 

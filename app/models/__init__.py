@@ -14,8 +14,12 @@ from app.models.research_worker_run import ResearchWorkerRun
 from app.models.research_worker_context import ResearchWorkerContext
 from app.models.research_workspace import ResearchWorkspace
 from app.models.research_task import ResearchTask
+from app.models.research_workflow import ResearchWorkflow, WorkflowEvent, WorkflowStep
+from app.models.computer_execution_event import ComputerExecutionEvent
+from app.models.code_patch import CodePatch
+from app.models.computer_task_checkpoint import ComputerTaskCheckpoint
 
 __all__ = [
     "AgentTrace", "AutonomousResearchRun", "AnalysisRecord", "Paper", "PaperChunk", "RagQueryRecord",
-    "ResearchAction", "ResearchDecision", "ResearchOutcome", "ResearchMemory", "ResearchWorkerRun", "ResearchWorkerContext", "ResearchWorkspace", "ResearchTask",
+    "ResearchAction", "ResearchDecision", "ResearchOutcome", "ResearchMemory", "ResearchWorkerRun", "ResearchWorkerContext", "ResearchWorkspace", "ResearchTask", "ResearchWorkflow", "WorkflowStep", "WorkflowEvent", "ComputerExecutionEvent", "CodePatch", "ComputerTaskCheckpoint",
 ]

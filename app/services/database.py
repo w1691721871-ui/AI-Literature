@@ -41,6 +41,32 @@ def initialize_database() -> None:
     from app.models.research_worker_context import ResearchWorkerContext  # noqa: F401
     from app.models.research_workspace import ResearchWorkspace  # noqa: F401
     from app.models.research_task import ResearchTask  # noqa: F401
+    from app.models.operator_task import OperatorTask  # noqa: F401
+    from app.models.operator_action import OperatorAction  # noqa: F401
+    from app.models.computer_session import ComputerSession  # noqa: F401
+    from app.models.computer_action import ComputerAction  # noqa: F401
+    from app.models.computer_execution_event import ComputerExecutionEvent  # noqa: F401
+    from app.models.code_patch import CodePatch  # noqa: F401
+    from app.models.computer_task_checkpoint import ComputerTaskCheckpoint  # noqa: F401
+    from app.models.computer_runtime_session import ComputerRuntimeSession  # noqa: F401
+    from app.models.computer_artifact import ComputerArtifact  # noqa: F401
+    from app.models.computer_recovery_attempt import ComputerRecoveryAttempt  # noqa: F401
+    from app.models.computer_file_change import ComputerFileChange  # noqa: F401
+    from app.models.computer_activity_summary import ComputerActivitySummary  # noqa: F401
+    from app.models.computer_project_memory import ComputerProjectMemory  # noqa: F401
+    from app.models.computer_mission import ComputerMission  # noqa: F401
+    from app.models.user_onboarding_state import UserOnboardingState  # noqa: F401
+    from app.models.solution_project import SolutionProject  # noqa: F401
+    from app.models.solution_requirement import SolutionRequirement  # noqa: F401
+    from app.models.solution_deliverable import SolutionDeliverable  # noqa: F401
+    from app.models.solution_computer_mission import SolutionComputerMission  # noqa: F401
+    from app.models.research_copilot_action import ResearchCopilotAction  # noqa: F401
+    from app.models.research_document_revision import ResearchDocumentRevision  # noqa: F401
+    from app.models.research_workflow import ResearchWorkflow, WorkflowEvent, WorkflowStep  # noqa: F401
+    from app.models.organization import (  # noqa: F401
+        Organization, OrganizationMember, OrganizationActivity, OrganizationProject,
+        KnowledgeAccessGrant, OrganizationMeeting,
+    )
     from app.models.paper import Paper  # noqa: F401
     from app.models.paper_chunk import PaperChunk  # noqa: F401
     from app.models.research_project import ResearchProject  # noqa: F401
@@ -99,6 +125,16 @@ def _apply_lightweight_migrations() -> None:
         if name not in worker_columns:
             with engine.begin() as connection:
                 connection.execute(text(f"ALTER TABLE research_worker_runs ADD COLUMN {name} {definition}"))
+    task_columns = {column["name"] for column in inspect(engine).get_columns("research_tasks")}
+    task_additions = {
+        "project_id": "VARCHAR(36)",
+        "decision_id": "VARCHAR(36)",
+        "evidence_refs": "TEXT NOT NULL DEFAULT '[]'",
+    }
+    for name, definition in task_additions.items():
+        if name not in task_columns:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE research_tasks ADD COLUMN {name} {definition}"))
 
 
 def get_database_session() -> Generator[Session, None, None]:

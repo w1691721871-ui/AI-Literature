@@ -58,6 +58,7 @@ class RetrievalService:
                 continue
             result.append(
                 {
+                    "chunk_id": chunk.id,
                     "paper_id": chunk.paper_id,
                     "paper_title": paper_title,
                     "document_type": document_type,

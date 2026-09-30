@@ -10,6 +10,11 @@ from app.services.llm_service import (
 from app.services.query_service import rewrite_query
 from app.services.rag_query_record_service import RagQueryRecordService
 from app.services.rag_evaluation_service import evaluate_retrieval
+from app.services.evidence_validation_service import validate_evidence_grounding
+from app.services.evidence_conflict_service import (
+    conflict_prompt_instruction,
+    detect_evidence_conflicts,
+)
 from app.services.retrieval_service import RetrievalService
 
 
@@ -59,25 +64,42 @@ class ResearchAgent:
                 "confidence": "low",
                 "source_quality": build_source_quality([]),
                 "retrieval_evaluation": evaluate_retrieval([]),
+                "evidence_validation": validate_evidence_grounding([], ""),
+                "conflict_report": detect_evidence_conflicts([]),
                 "agent_plan": {**plan, "retrieval_query": retrieval_query},
                 "agent_trace": {"trace_id": trace_id, "steps": trace_steps},
             }
             self._record_service.save(normalized_question, result["answer"], [], paper_ids or [], plan["task_type"])
             return result
 
+        pre_generation_validation = validate_evidence_grounding(sources)
+        conflict_report = detect_evidence_conflicts(sources)
+        trace_steps.append(self._record_trace(
+            trace_id, "验证证据", pre_generation_validation["message"]
+        ))
+        trace_steps.append(self._record_trace(
+            trace_id, "冲突检查", _conflict_trace_message(conflict_report)
+        ))
         answer = answer_question_with_retrieved_context(
             normalized_question,
             sources,
             task_instruction=plan["instruction"],
+            conflict_instruction=conflict_prompt_instruction(conflict_report),
         )
         trace_steps.append(self._record_trace(trace_id, "生成研究结论", "已基于筛选后的论文证据生成回答。"))
         public_sources = [self._public_source(source) for source in sources]
+        evidence_validation = validate_evidence_grounding(sources, answer)
+        trace_steps.append(self._record_trace(
+            trace_id, "质量检查", f"可追溯资料 {evidence_validation['valid_source_count']} 条；需要人工复核。"
+        ))
         result = {
             "answer": answer,
             "sources": public_sources,
             "confidence": self._retrieval_confidence(float(sources[0]["score"])),
             "source_quality": build_source_quality(public_sources),
             "retrieval_evaluation": evaluate_retrieval(public_sources),
+            "evidence_validation": evidence_validation,
+            "conflict_report": conflict_report,
             "agent_plan": {**plan, "retrieval_query": retrieval_query},
             "agent_trace": {"trace_id": trace_id, "steps": trace_steps},
         }
@@ -112,11 +134,21 @@ class ResearchAgent:
                 "confidence": "low",
                 "source_quality": build_source_quality([]),
                 "retrieval_evaluation": evaluate_retrieval([]),
+                "evidence_validation": validate_evidence_grounding([], ""),
+                "conflict_report": detect_evidence_conflicts([]),
                 "agent_trace": {"trace_id": trace_id, "steps": trace_steps},
             }
         public_sources = [self._public_source(source) for source in sources]
-        report = generate_research_report(report_type, sources)
+        pre_generation_validation = validate_evidence_grounding(sources)
+        conflict_report = detect_evidence_conflicts(sources)
+        trace_steps.append(self._record_trace(trace_id, "验证证据", pre_generation_validation["message"]))
+        trace_steps.append(self._record_trace(trace_id, "冲突检查", _conflict_trace_message(conflict_report)))
+        report = generate_research_report(
+            report_type, sources, conflict_instruction=conflict_prompt_instruction(conflict_report)
+        )
         trace_steps.append(self._record_trace(trace_id, "生成研究结论", "已依据引用证据生成结构化研究报告。"))
+        evidence_validation = validate_evidence_grounding(sources, str(report))
+        trace_steps.append(self._record_trace(trace_id, "质量检查", f"可追溯资料 {evidence_validation['valid_source_count']} 条；需要人工复核。"))
         summary = "；".join(
             str(value) if isinstance(value, str) else "、".join(value)
             for value in report.values()
@@ -129,6 +161,8 @@ class ResearchAgent:
             "confidence": self._retrieval_confidence(float(sources[0]["score"])),
             "source_quality": build_source_quality(public_sources),
             "retrieval_evaluation": evaluate_retrieval(public_sources),
+            "evidence_validation": evidence_validation,
+            "conflict_report": conflict_report,
             "agent_trace": {"trace_id": trace_id, "steps": trace_steps},
         }
 
@@ -141,6 +175,7 @@ class ResearchAgent:
         """Return a compact citation card rather than a full stored chunk."""
         content = str(source["content"]).strip()
         return {
+            "chunk_id": str(source.get("chunk_id", "")),
             "paper_id": source["paper_id"],
             "paper_title": source["paper_title"],
             "section": source["section"],
@@ -156,3 +191,14 @@ class ResearchAgent:
         if top_score >= 0.4:
             return "medium"
         return "low"
+
+
+def _conflict_trace_message(report: dict[str, object]) -> str:
+    """Return a product-facing milestone without revealing model reasoning."""
+    labels = {
+        "no_conflict": "当前规则未发现明显冲突；不代表所有研究结论一致。",
+        "potential_conflict": "发现潜在资料结论差异，建议人工复核。",
+        "context_difference": "发现可能由不同研究条件造成的结论差异，不能直接横向比较。",
+        "insufficient_evidence": "可比较 Evidence 不足，无法完成冲突判断。",
+    }
+    return labels.get(str(report.get("status")), "已完成 Evidence 冲突检查。")

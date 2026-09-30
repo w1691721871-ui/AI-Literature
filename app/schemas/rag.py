@@ -11,6 +11,7 @@ class ResearchQuestionRequest(BaseModel):
 
 
 class RagSource(BaseModel):
+    chunk_id: str = ""
     paper_id: str
     paper_title: str
     section: str
@@ -26,6 +27,8 @@ class ResearchQuestionResponse(BaseModel):
     agent_plan: dict[str, str] = Field(default_factory=dict)
     agent_trace: dict[str, object] = Field(default_factory=dict)
     retrieval_evaluation: dict[str, object] = Field(default_factory=dict)
+    evidence_validation: dict[str, object] = Field(default_factory=dict)
+    conflict_report: dict[str, object] = Field(default_factory=dict)
 
 
 class ResearchReportRequest(BaseModel):
@@ -41,6 +44,8 @@ class ResearchReportResponse(BaseModel):
     source_quality: dict[str, object] = Field(default_factory=dict)
     agent_trace: dict[str, object] = Field(default_factory=dict)
     retrieval_evaluation: dict[str, object] = Field(default_factory=dict)
+    evidence_validation: dict[str, object] = Field(default_factory=dict)
+    conflict_report: dict[str, object] = Field(default_factory=dict)
 
 
 class RagQueryHistoryItem(BaseModel):
