@@ -7,6 +7,7 @@ from sqlalchemy.orm import sessionmaker
 
 from app.models.ai_mission import AIMission, AIMissionEvent
 from app.models.computer_mission import ComputerMission
+from app.models.agent_trace import AgentTrace
 from app.models.notification import Notification
 from app.models.paper import Paper
 from app.models.paper_chunk import PaperChunk
@@ -19,7 +20,7 @@ class AIMissionServiceTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:")
         self.Session = sessionmaker(bind=self.engine)
-        for table in (AIMission.__table__, AIMissionEvent.__table__, ComputerMission.__table__, Notification.__table__, Paper.__table__, PaperChunk.__table__, SolutionProject.__table__, SolutionDeliverable.__table__):
+        for table in (AIMission.__table__, AIMissionEvent.__table__, AgentTrace.__table__, ComputerMission.__table__, Notification.__table__, Paper.__table__, PaperChunk.__table__, SolutionProject.__table__, SolutionDeliverable.__table__):
             table.create(self.engine)
         self.service = AIMissionService(self.Session, initialize=False)
 

@@ -18,6 +18,7 @@ from sqlalchemy.orm import Session
 from app.agent.controlled_computer_agent import ControlledComputerAgent
 from app.agent.verification_agent import VerificationAgent
 from app.models.ai_mission import AIMission, AIMissionEvent
+from app.models.agent_trace import AgentTrace
 from app.models.computer_mission import ComputerMission
 from app.services.computer_use_service import ComputerUseService
 from app.services.database import SessionLocal, initialize_database
@@ -241,4 +242,5 @@ class ControlledComputerMissionService:
                 evidence_count=0,
                 result_summary=key[2],
             ))
+            session.add(AgentTrace(trace_id=row.mission_id, mission_id=row.mission_id, step="Computer Agent", message=key[2], agent_name="Computer Agent", action=key[0], status=key[1], output_summary=key[2], tool_used="Workspace Sandbox", evidence_count=0))
             existing.add(key)

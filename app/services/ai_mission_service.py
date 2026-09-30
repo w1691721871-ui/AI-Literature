@@ -5,6 +5,7 @@ from collections.abc import Callable
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from app.models.ai_mission import AIMission, AIMissionEvent
+from app.models.agent_trace import AgentTrace
 from app.models.computer_mission import ComputerMission
 from app.models.notification import Notification
 from app.models.paper import Paper
@@ -172,7 +173,11 @@ class AIMissionService:
         try:s.add(Notification(notification_type=kind,message=msg));s.commit()
         finally:s.close()
     @staticmethod
-    def _event(s,m,stage,action,status,count,result):s.add(AIMissionEvent(mission_id=m.id,stage=stage,action=action,status=status,evidence_count=count,result_summary=result))
+    def _event(s,m,stage,action,status,count,result):
+        s.add(AIMissionEvent(mission_id=m.id,stage=stage,action=action,status=status,evidence_count=count,result_summary=result))
+        agent = "Computer Agent" if stage == "Computer Agent" else ("Literature Agent" if stage == "Evidence Retrieval" else ("Risk Agent" if stage == "Risk Analysis" else ("Delivery Agent" if stage == "Delivery" else "Research Agent")))
+        tool = "FAISS Retrieval" if stage == "Evidence Retrieval" else ("Verification Sandbox" if stage == "Computer Agent" else "")
+        s.add(AgentTrace(trace_id=m.id, mission_id=m.id, step=stage, message=result, agent_name=agent, action=action, status=status, output_summary=result, tool_used=tool, evidence_count=count))
     @staticmethod
     def _require(s,mid):
         x=s.get(AIMission,mid)

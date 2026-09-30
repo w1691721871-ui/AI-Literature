@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from uuid import uuid4
 
-from sqlalchemy import DateTime, String, Text
+from sqlalchemy import DateTime, Float, Integer, String, Text
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.services.database import Base
@@ -22,6 +22,15 @@ class AgentTrace(Base):
     trace_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
     step: Mapped[str] = mapped_column(String(100), nullable=False)
     message: Mapped[str] = mapped_column(Text, nullable=False)
+    mission_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
+    agent_name: Mapped[str] = mapped_column(String(100), nullable=False, default="Research Agent")
+    action: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    status: Mapped[str] = mapped_column(String(40), nullable=False, default="COMPLETED")
+    duration: Mapped[float | None] = mapped_column(Float, nullable=True)
+    input_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    output_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    tool_used: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    evidence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, index=True
     )
