@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+from pathlib import Path
 
 from sqlalchemy import func
 
@@ -12,10 +13,46 @@ from app.models.research_task import ResearchTask
 from app.models.research_workspace import ResearchWorkspace
 from app.models.research_worker_run import ResearchWorkerRun
 from app.services.database import SessionLocal, initialize_database
+from app.services.computer_environment_service import ComputerEnvironmentScanner
+from app.tools.computer.workspace_action_engine import WorkspaceActionEngine
 
 
 class WorkspaceNotFoundError(Exception):
     pass
+
+
+class WorkspaceManager:
+    """P24 sandbox boundary for Computer Missions.
+
+    This intentionally has no system-directory discovery and delegates file
+    allow-listing to ``WorkspaceActionEngine``. It is not the user-facing
+    ResearchWorkspace persistence service below.
+    """
+
+    def __init__(self, root: Path | None = None) -> None:
+        self.root = (root or Path(__file__).resolve().parents[2]).resolve()
+        self._scanner = ComputerEnvironmentScanner(project_root=self.root)
+        self._actions = WorkspaceActionEngine(self.root)
+
+    def scan(self) -> dict[str, object]:
+        raw = self._scanner.scan()
+        project = raw["project"]
+        technology = list(project.get("technology", []))
+        languages = [item for item in technology if item in {"Python", "JavaScript"}]
+        frameworks = [item for item in technology if item in {"FastAPI", "Vue"}]
+        return {
+            "project_type": "AI Application" if frameworks else "Project Workspace",
+            "languages": languages,
+            "frameworks": frameworks,
+            "files_count": int(project.get("file_count", 0)),
+            "workspace_files": int(raw["workspace"].get("file_count", 0)),
+            "boundary": raw["boundary"],
+        }
+
+    def inspect_file(self, relative_path: str) -> dict[str, object]:
+        """Read an allow-listed project file only after path validation."""
+        payload = self._actions.read(relative_path)
+        return {"file_path": payload["file_path"], "content": payload["content"], "boundary": payload["boundary"]}
 
 
 class WorkspaceService:

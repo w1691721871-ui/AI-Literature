@@ -269,6 +269,8 @@ createApp({
     const aiMissionReviewComment = ref("");
     const aiMissionRevisionSummary = ref("");
     const aiMissionDelivery = ref(null);
+    const computerMissionTask = ref("");
+    const computerMissionLoading = ref(false);
     const onboardingState = ref(null);
     const onboardingOpen = ref(false);
     const artifactGallery = ref([]);
@@ -1134,6 +1136,44 @@ createApp({
       };
       await createAIMission();
       if (selectedAIMission.value?.id) await runAIMission(selectedAIMission.value.id);
+    }
+
+    async function createComputerMission() {
+      const missionId = selectedAIMission.value?.id;
+      if (!missionId || !computerMissionTask.value.trim()) { aiMissionError.value = "请先说明需要 Computer Agent 执行的受控任务。"; return; }
+      computerMissionLoading.value = true; aiMissionError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/computer-missions`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ mission_id: missionId, task: computerMissionTask.value.trim(), reason: "Mission Detail 中由用户发起的受控执行请求" }),
+        });
+        const created = await readResponse(response);
+        await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/computer-missions/${created.id}/analyze`, { method: "POST" }));
+        computerMissionTask.value = "";
+        await loadAIMissionDetail(missionId);
+      } catch (error) { aiMissionError.value = error.message || "Computer Mission 分析失败。"; }
+      finally { computerMissionLoading.value = false; }
+    }
+
+    async function decideComputerMission(item, decision) {
+      computerMissionLoading.value = true; aiMissionError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/computer-missions/${item.id}/approve`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ decision, note: "Mission Center 人工审核" }),
+        });
+        await readResponse(response);
+        await loadAIMissionDetail(selectedAIMission.value?.id);
+      } catch (error) { aiMissionError.value = error.message || "Computer Mission 审核或执行失败。"; }
+      finally { computerMissionLoading.value = false; }
+    }
+
+    async function executeComputerMission(item) {
+      computerMissionLoading.value = true; aiMissionError.value = "";
+      try {
+        await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/computer-missions/${item.id}/execute`, { method: "POST" }));
+        await loadAIMissionDetail(selectedAIMission.value?.id);
+      } catch (error) { aiMissionError.value = error.message || "Computer Mission 执行失败。"; }
+      finally { computerMissionLoading.value = false; }
     }
 
     async function markAINotificationRead(notificationId) {
@@ -2949,6 +2989,8 @@ createApp({
       aiMissionReviewComment,
       aiMissionRevisionSummary,
       aiMissionDelivery,
+      computerMissionTask,
+      computerMissionLoading,
       loadFdeSolutions,
       loadFdeSolutionDetail,
       applyFdeSolutionDemo,
@@ -2966,6 +3008,9 @@ createApp({
       reviseAIMission,
       generateAIMissionDelivery,
       startFdeMissionDemo,
+      createComputerMission,
+      decideComputerMission,
+      executeComputerMission,
       markAINotificationRead,
       onboardingState,
       onboardingOpen,
@@ -3201,6 +3246,7 @@ createApp({
           <aside class="mission-intelligence-surface"><p class="section-kicker">AI TEAM</p><article v-for="item in selectedAIMission?.team || aiMissionDashboard?.team_status || []" :key="item.name"><b>{{ item.name }}</b><span>{{ item.role }}</span><small>{{ item.status }} · {{ item.last_action }}</small></article><p class="section-kicker">NOTIFICATIONS</p><button v-for="item in aiNotifications" :key="item.id" class="mission-notification" :class="{ read: item.read }" type="button" @click="markAINotificationRead(item.id)"><b>{{ item.type }}</b><small>{{ item.message }}</small></button><p v-if="!aiNotifications.length" class="quiet-note">No persisted notifications.</p></aside>
         </div>
         <section v-if="selectedAIMission" class="mission-version-history"><span>VERSION HISTORY</span><div v-for="item in selectedAIMission.versions || []" :key="item.id"><b>v{{ item.version }} · {{ item.status }}</b><small>{{ item.created_by }} · {{ item.change_summary }} · {{ item.created_at }}</small></div><p v-if="!(selectedAIMission.versions || []).length">尚未生成 Blueprint 版本。</p></section>
+        <section v-if="selectedAIMission" class="computer-mission-center"><header><div><span>COMPUTER MISSION CENTER</span><b>Sandbox · Diff Review · Human Approval · Verification</b></div><small>仅允许当前 ResearchOS 项目的白名单文件与固定验证命令。</small></header><div class="computer-mission-create"><input v-model="computerMissionTask" placeholder="例如：为首页输入区准备可审阅的焦点状态优化" /><button class="outline-button" type="button" :disabled="computerMissionLoading" @click="createComputerMission">Create & Analyze</button></div><article v-for="item in selectedAIMission.computer_missions || []" :key="item.id"><div class="computer-mission-summary"><b>{{ item.task }}</b><small>{{ item.status }} · {{ item.approval_status }} · {{ item.risk_level }} risk</small><details><summary>View plan, Diff & verification</summary><p>Workspace: {{ item.workspace?.boundary || '尚未扫描' }}</p><p>Plan: {{ item.action_plan?.steps?.length || 0 }} reviewable steps · verification {{ item.verification?.status || 'PENDING' }}</p><pre v-if="item.diff_content">{{ item.diff_content }}</pre><p v-else>尚未生成可安全执行的 Diff。</p><small v-if="item.execution_log?.length">{{ item.execution_log[item.execution_log.length - 1].action }} · {{ item.execution_log[item.execution_log.length - 1].status }}</small></details></div><div class="computer-mission-actions"><button v-if="item.status === 'WAITING_APPROVAL'" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'APPROVED')">Approve Diff</button><button v-if="item.status === 'WAITING_APPROVAL'" class="text-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'REJECTED')">Reject</button><button v-if="item.status === 'WAITING_APPROVAL'" class="outline-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'NEEDS_REVISION')">Request Revision</button><button v-if="item.status === 'APPROVED' && item.execution_allowed" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="executeComputerMission(item)">Execute Approved Diff</button></div></article><p v-if="!(selectedAIMission.computer_missions || []).length">尚无 Computer Mission。创建后只扫描受控 Workspace 与生成 Diff，不会自动写入文件。</p></section>
         <section class="mission-list"><button v-for="item in aiMissions" :key="item.id" type="button" :class="{ active: selectedAIMission?.id === item.id }" @click="loadAIMissionDetail(item.id)"><span>{{ item.type }}</span><b>{{ item.title }}</b><small>{{ item.status }} · {{ item.progress }}% · {{ item.current_step }}</small></button><p v-if="!aiMissions.length">No AI mission yet. Create a mission to begin a reviewable lifecycle.</p></section>
       </section>
 

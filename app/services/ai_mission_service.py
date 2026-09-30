@@ -5,6 +5,7 @@ from collections.abc import Callable
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 from app.models.ai_mission import AIMission, AIMissionEvent
+from app.models.computer_mission import ComputerMission
 from app.models.notification import Notification
 from app.models.paper import Paper
 from app.models.paper_chunk import PaperChunk
@@ -97,7 +98,16 @@ class AIMissionService:
         try:
             m=self._require(s,mission_id); reqs,dels=self._solution_records(s,m.solution_project_id)
             versions = [] if not m.solution_project_id else [{"id": x.id, "version": x.version, "status": x.status, "change_summary": x.change_summary, "created_by": x.created_by, "created_at": x.created_at} for x in s.scalars(select(SolutionVersion).where(SolutionVersion.solution_project_id == m.solution_project_id).order_by(SolutionVersion.version.asc())).all()]
-            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m),"requirements":reqs,"deliverables":dels,"versions":versions,"evidence_graph":self._graph(m,reqs,dels)}
+            computer_missions = [{"id": x.id, "task": x.task or x.mission_name, "status": x.status,
+                                  "approval_status": x.approval_status, "execution_allowed": x.execution_allowed,
+                                  "progress": x.progress, "risk_level": x.risk_level,
+                                  "action_plan": self._object(x.action_plan_json, {}),
+                                  "workspace": self._object(x.workspace_profile_json, {}),
+                                  "diff_content": x.diff_content,
+                                  "execution_log": self._object(x.execution_log_json, []),
+                                  "verification": self._object(x.verification_json, {}),
+                                  "retry_count": x.retry_count} for x in s.scalars(select(ComputerMission).where(ComputerMission.mission_id == m.id).order_by(ComputerMission.created_at.asc())).all()]
+            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m, computer_missions),"requirements":reqs,"deliverables":dels,"versions":versions,"computer_missions":computer_missions,"evidence_graph":self._graph(m,reqs,dels)}
         finally:s.close()
     def timeline(self,mission_id):
         s=self._sessions()
@@ -176,6 +186,12 @@ class AIMissionService:
     def _decode(value):
         try:return json.loads(value or "[]") if isinstance(json.loads(value or "[]"),list) else []
         except (json.JSONDecodeError,TypeError):return []
+    @staticmethod
+    def _object(value, default):
+        try:
+            decoded=json.loads(value or "")
+            return decoded if isinstance(decoded, type(default)) else default
+        except (json.JSONDecodeError,TypeError):return default
     def _mission(self,x):return {"id":x.id,"title":x.title,"type":x.mission_type,"goal":x.goal,"solution_project_id":x.solution_project_id,"status":x.status,"progress":x.progress,"current_step":x.current_step,"evidence_refs":self._decode(x.evidence_refs_json),"review_comment":x.review_comment,"retry_count":x.retry_count,"created_at":x.created_at,"updated_at":x.updated_at}
     @staticmethod
     def _timeline(s,mid):return [{"id":x.id,"stage":x.stage,"action":x.action,"status":x.status,"evidence_count":x.evidence_count,"result":x.result_summary,"created_at":x.created_at} for x in s.scalars(select(AIMissionEvent).where(AIMissionEvent.mission_id==mid).order_by(AIMissionEvent.created_at.asc())).all()]
@@ -186,9 +202,10 @@ class AIMissionService:
         dels=[{"id":x.id,"type":x.deliverable_type,"title":x.title,"status":x.status} for x in s.scalars(select(SolutionDeliverable).where(SolutionDeliverable.solution_project_id==pid)).all()]
         return reqs,dels
     @staticmethod
-    def _team(m):
+    def _team(m, computer_missions=None):
         state=m.status if m else "READY";has_evidence=bool(m and m.evidence_refs_json!="[]")
-        return [{"name":"Research Agent","role":"任务规划","status":"RUNNING" if state in {"PLANNING","REQUIREMENT_ANALYSIS"} else ("COMPLETED" if state not in {"READY","CREATED"} else "READY"),"last_action":m.current_step if m else "等待任务"},{"name":"Literature Agent","role":"真实知识检索","status":"RUNNING" if state=="EVIDENCE_RETRIEVAL" else ("COMPLETED" if has_evidence else "WAITING"),"last_action":"仅在真实 RAG 检索时运行"},{"name":"Innovation Agent","role":"方案草稿","status":"RUNNING" if state=="SOLUTION_GENERATION" else ("COMPLETED" if state in {"RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION","APPROVED","DELIVERY_READY","COMPLETED"} else "WAITING"),"last_action":"依赖真实 Evidence"},{"name":"Risk Agent","role":"风险检查","status":"RUNNING" if state=="RISK_ANALYSIS" else ("COMPLETED" if state in {"WAITING_REVIEW","NEEDS_REVISION","APPROVED","DELIVERY_READY","COMPLETED"} else "WAITING"),"last_action":"风险项需人工确认"},{"name":"Delivery Agent","role":"交付生成","status":"RUNNING" if state=="DELIVERY_READY" else ("COMPLETED" if state=="COMPLETED" else "WAITING"),"last_action":"仅批准后生成交付包"}]
+        computer_status = str((computer_missions or [{}])[-1].get("status", "IDLE"))
+        return [{"name":"Research Agent","role":"任务规划","status":"RUNNING" if state in {"PLANNING","REQUIREMENT_ANALYSIS"} else ("COMPLETED" if state not in {"READY","CREATED"} else "READY"),"last_action":m.current_step if m else "等待任务"},{"name":"Literature Agent","role":"真实知识检索","status":"RUNNING" if state=="EVIDENCE_RETRIEVAL" else ("COMPLETED" if has_evidence else "WAITING"),"last_action":"仅在真实 RAG 检索时运行"},{"name":"Innovation Agent","role":"方案草稿","status":"RUNNING" if state=="SOLUTION_GENERATION" else ("COMPLETED" if state in {"RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION","APPROVED","DELIVERY_READY","COMPLETED"} else "WAITING"),"last_action":"依赖真实 Evidence"},{"name":"Risk Agent","role":"风险检查","status":"RUNNING" if state=="RISK_ANALYSIS" else ("COMPLETED" if state in {"WAITING_REVIEW","NEEDS_REVISION","APPROVED","DELIVERY_READY","COMPLETED"} else "WAITING"),"last_action":"风险项需人工确认"},{"name":"Computer Agent","role":"受控 Workspace 执行","status":computer_status,"last_action":"仅在 Diff 审核后执行"},{"name":"Delivery Agent","role":"交付生成","status":"RUNNING" if state=="DELIVERY_READY" else ("COMPLETED" if state=="COMPLETED" else "WAITING"),"last_action":"仅批准后生成交付包"}]
     @staticmethod
     def _graph(m,reqs,dels):
         nodes=[{"id":"mission","type":"customer_need","label":m.goal or m.title}];edges=[]

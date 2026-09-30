@@ -12,6 +12,8 @@ class ComputerEnvironmentScanner:
     """Scans only approved roots and returns metadata, never document content."""
 
     _ignored = {".git", ".venv", "work", "__pycache__", "node_modules", ".pytest_cache"}
+    _blocked_file_names = {".env", ".env.local", ".env.production"}
+    _blocked_suffixes = {".db", ".sqlite", ".sqlite3", ".faiss"}
     _document_suffixes = {".pdf", ".docx", ".txt", ".md", ".csv", ".xlsx"}
 
     def __init__(self, project_root: Path | None = None, workspace_root: Path | None = None) -> None:
@@ -57,7 +59,8 @@ class ComputerEnvironmentScanner:
 
     def _files(self, root: Path):
         for item in root.rglob("*"):
-            if any(part in self._ignored for part in item.parts) or not item.is_file() or item.is_symlink():
+            if (any(part in self._ignored for part in item.parts) or not item.is_file() or item.is_symlink()
+                    or item.name.lower() in self._blocked_file_names or item.suffix.lower() in self._blocked_suffixes):
                 continue
             try:
                 resolved = item.resolve()

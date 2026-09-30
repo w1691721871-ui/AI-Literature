@@ -153,6 +153,19 @@ def _apply_lightweight_migrations() -> None:
     if "created_by" not in version_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE solution_versions ADD COLUMN created_by VARCHAR(80) NOT NULL DEFAULT 'AI'"))
+    computer_mission_columns = {column["name"] for column in inspect(engine).get_columns("computer_missions")}
+    computer_mission_additions = {
+        "mission_id": "VARCHAR(36)", "task": "TEXT NOT NULL DEFAULT ''", "reason": "TEXT NOT NULL DEFAULT ''",
+        "risk_level": "VARCHAR(30) NOT NULL DEFAULT 'LOW'", "status": "VARCHAR(40) NOT NULL DEFAULT 'CREATED'",
+        "action_plan_json": "TEXT NOT NULL DEFAULT '[]'", "diff_content": "TEXT NOT NULL DEFAULT ''",
+        "approval_status": "VARCHAR(40) NOT NULL DEFAULT 'PENDING'", "execution_allowed": "BOOLEAN NOT NULL DEFAULT 0",
+        "workspace_profile_json": "TEXT NOT NULL DEFAULT '{}'", "execution_log_json": "TEXT NOT NULL DEFAULT '[]'",
+        "verification_json": "TEXT NOT NULL DEFAULT '{}'", "retry_count": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for name, definition in computer_mission_additions.items():
+        if name not in computer_mission_columns:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE computer_missions ADD COLUMN {name} {definition}"))
 
 
 def get_database_session() -> Generator[Session, None, None]:

@@ -21,7 +21,7 @@ class ProSafeTerminalTool:
         self.root = project_root or PROJECT_ROOT
 
     def catalog(self) -> list[str]:
-        return ["python_version", "pytest", "compileall", "npm_check", "git_status"]
+        return ["python_version", "pytest", "compileall", "npm_check", "npm_test", "git_status", "git_diff"]
 
     def execute(self, operation: str) -> dict[str, object]:
         commands = {
@@ -29,7 +29,9 @@ class ProSafeTerminalTool:
             "pytest": [sys.executable, "-m", "pytest", "-q"],
             "compileall": [sys.executable, "-m", "compileall", "app"],
             "npm_check": ["node", "--check", "frontend/app.js"],
+            "npm_test": ["npm", "test", "--", "--runInBand"],
             "git_status": ["git", "status", "--short"],
+            "git_diff": ["git", "diff", "--check"],
         }
         command = commands.get(operation)
         if command is None:

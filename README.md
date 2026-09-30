@@ -286,7 +286,7 @@ pip install -r requirements.txt
 在根目录创建 `.env`（不得提交）：
 
 ```env
-DASHSCOPE_API_KEY=your_api_key_here
+DASHSCOPE_API_KEY=<YOUR_DASHSCOPE_API_KEY>
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL=qwen-plus
 EMBEDDING_MODEL=text-embedding-v4
@@ -327,7 +327,7 @@ py -m http.server 5173 --directory frontend
 在 Render 创建 Blueprint 或 Web Service 后，在服务的 **Environment** 中设置以下变量：
 
 ```text
-DASHSCOPE_API_KEY=your_api_key_here
+DASHSCOPE_API_KEY=<YOUR_DASHSCOPE_API_KEY>
 LLM_BASE_URL=https://dashscope.aliyuncs.com/compatible-mode/v1
 LLM_MODEL=qwen-plus
 EMBEDDING_MODEL=text-embedding-v4
