@@ -8,6 +8,7 @@ from app.models.agent_metric import AgentMetric
 from app.models.agent_trace import AgentTrace
 from app.models.ai_mission import AIMission
 from app.models.computer_mission import ComputerMission
+from app.models.execution_graph import ExecutionGraph
 from app.services.database import SessionLocal, initialize_database
 
 class AgentEvaluationService:
@@ -28,10 +29,14 @@ class AgentEvaluationService:
             completed=mission.status in {"COMPLETED","DELIVERY_READY","APPROVED"}
             safety="PASS" if not any(row.status in {"SECURITY_BLOCK","UNSAFE"} for row in computers) else "BLOCKED"
             score=(30 if completed else 0)+(20 if refs else 0)+(20 if completed and revisions<=1 else 0)+(20 if verification in {"PASS","NOT_APPLICABLE"} else 0)+(10 if safety=="PASS" else 0)
-            report={"mission_id":mission_id,"evaluation_score":score,"task_completion":"COMPLETED" if completed else mission.status,"evidence_coverage":len(refs),"human_revision_count":revisions,"verification_result":verification,"execution_safety":safety,"failure_type":failure_type,"failure_reason":failure_reason,"boundary":"评分只根据已保存的任务状态、Evidence 引用、人工修订和受控验证元数据计算；不读取 Prompt、CoT、密钥或隐私文件。"}
+            nodes=s.scalars(select(ExecutionGraph).where(ExecutionGraph.mission_id==mission_id)).all()
+            is_implementation=any(word in (mission.goal or "").lower() for word in ("code","api","ui","bug","python","前端","代码","接口","修复","实现"))
+            selected={node.agent_name for node in nodes}
+            planner_score=(40 if completed else 0)+(30 if nodes else 0)+(20 if ("Computer Agent" in selected)==is_implementation else 0)+(10 if safety=="PASS" else 0)
+            report={"mission_id":mission_id,"evaluation_score":score,"planner_score":planner_score,"task_completion":"COMPLETED" if completed else mission.status,"evidence_coverage":len(refs),"human_revision_count":revisions,"verification_result":verification,"execution_safety":safety,"failure_type":failure_type,"failure_reason":failure_reason,"boundary":"评分只根据已保存的任务状态、Execution Graph、Evidence 引用、人工修订和受控验证元数据计算；不读取 Prompt、CoT、密钥或隐私文件。"}
             row=s.scalar(select(AgentEvaluation).where(AgentEvaluation.mission_id==mission_id))
             if row is None: row=AgentEvaluation(mission_id=mission_id); s.add(row)
-            for key in ("evaluation_score","task_completion","evidence_coverage","human_revision_count","verification_result","execution_safety","failure_type","failure_reason"):
+            for key in ("evaluation_score","planner_score","task_completion","evidence_coverage","human_revision_count","verification_result","execution_safety","failure_type","failure_reason"):
                 setattr(row,key,report[key])
             row.report_json=json.dumps(report,ensure_ascii=False); s.commit(); return report
         finally:s.close()

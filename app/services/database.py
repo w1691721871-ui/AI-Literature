@@ -37,6 +37,9 @@ def initialize_database() -> None:
     from app.models.agent_trace import AgentTrace  # noqa: F401
     from app.models.agent_metric import AgentMetric  # noqa: F401
     from app.models.agent_evaluation import AgentEvaluation  # noqa: F401
+    from app.models.agent_memory import AgentMemory  # noqa: F401
+    from app.models.execution_graph import ExecutionGraph  # noqa: F401
+    from app.models.planner_trace import PlannerTrace  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
     from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401
@@ -180,6 +183,10 @@ def _apply_lightweight_migrations() -> None:
         if name not in trace_columns:
             with engine.begin() as connection:
                 connection.execute(text(f"ALTER TABLE agent_traces ADD COLUMN {name} {definition}"))
+    evaluation_columns = {column["name"] for column in inspect(engine).get_columns("agent_evaluations")}
+    if "planner_score" not in evaluation_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE agent_evaluations ADD COLUMN planner_score INTEGER NOT NULL DEFAULT 0"))
 
 
 def get_database_session() -> Generator[Session, None, None]:

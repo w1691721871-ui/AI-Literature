@@ -12,6 +12,9 @@ from sqlalchemy.orm import sessionmaker
 from app.models.ai_mission import AIMission, AIMissionEvent
 from app.models.computer_mission import ComputerMission
 from app.models.agent_trace import AgentTrace
+from app.models.execution_graph import ExecutionGraph
+from app.models.planner_trace import PlannerTrace
+from app.models.agent_memory import AgentMemory
 from app.models.notification import Notification
 from app.models.paper import Paper
 from app.models.paper_chunk import PaperChunk
@@ -45,7 +48,7 @@ class AIMissionOrchestratorTests(unittest.TestCase):
         self.engine = create_engine("sqlite:///:memory:")
         self.Session = sessionmaker(bind=self.engine)
         self.tables = (
-            AIMission.__table__, AIMissionEvent.__table__, AgentTrace.__table__, ComputerMission.__table__, Notification.__table__,
+            AIMission.__table__, AIMissionEvent.__table__, AgentTrace.__table__, ExecutionGraph.__table__, PlannerTrace.__table__, AgentMemory.__table__, ComputerMission.__table__, Notification.__table__,
             Paper.__table__, PaperChunk.__table__, SolutionProject.__table__,
             SolutionRequirement.__table__, SolutionDeliverable.__table__,
             SolutionComputerMission.__table__, SolutionVersion.__table__,

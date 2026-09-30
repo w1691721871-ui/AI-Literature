@@ -7,6 +7,7 @@ from sqlalchemy.orm import Session
 from app.models.ai_mission import AIMission, AIMissionEvent
 from app.models.agent_trace import AgentTrace
 from app.models.computer_mission import ComputerMission
+from app.models.execution_graph import ExecutionGraph
 from app.models.notification import Notification
 from app.models.paper import Paper
 from app.models.paper_chunk import PaperChunk
@@ -17,6 +18,8 @@ from app.models.solution_version import SolutionVersion
 from app.services.database import SessionLocal, initialize_database
 from app.services.fde_solution_service import FDESolutionService
 from app.services.retrieval_service import RetrievalService
+from app.services.dynamic_planner_service import DynamicPlannerService
+from app.services.agent_memory_service import AgentMemoryService
 
 
 class AIMissionNotFoundError(ValueError): pass
@@ -27,11 +30,13 @@ class AIMissionService:
     max_retries = 3
     allowed_statuses = {"CREATED","PLANNING","REQUIREMENT_ANALYSIS","EVIDENCE_RETRIEVAL","SOLUTION_GENERATION","RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION","APPROVED","DELIVERY_READY","COMPLETED","FAILED"}
 
-    def __init__(self, session_factory: Callable[[], Session] = SessionLocal, *, initialize: bool = True, fde_service=None, retrieval_service=None):
+    def __init__(self, session_factory: Callable[[], Session] = SessionLocal, *, initialize: bool = True, fde_service=None, retrieval_service=None, planner_service=None, memory_service=None):
         if initialize: initialize_database()
         self._sessions = session_factory
         self._fde = fde_service or FDESolutionService(session_factory, initialize=False)
         self._retrieval = retrieval_service or RetrievalService(session_factory=session_factory)
+        self._memory = memory_service or AgentMemoryService(session_factory, initialize=False)
+        self._planner = planner_service or DynamicPlannerService(session_factory, initialize=False, memories=self._memory)
 
     def create(self, payload: dict[str, str]) -> dict[str, object]:
         session = self._sessions()
@@ -42,6 +47,7 @@ class AIMissionService:
             row.status,row.progress,row.current_step="PLANNING",5,"Requirement Analysis"
             self._event(session,row,"Planning","Mission Planning Ready","PLANNING",0,"尚未发起检索；等待用户启动受控执行。")
             session.add(Notification(notification_type="MISSION_CREATED",message=f"AI Mission 已创建：{row.title}")); session.commit(); session.refresh(row)
+            self._planner.analyze(row.goal or row.title, row.mission_type, row.id)
             return self._mission(row)
         finally: session.close()
 
@@ -49,16 +55,26 @@ class AIMissionService:
         mission=self._mission_row(mission_id)
         if mission["status"] not in {"CREATED","PLANNING","NEEDS_REVISION"}: raise ValueError("当前 Mission 不处于可执行或可修订状态。")
         try:
+            self._graph_status(mission_id,"Research Agent","RUNNING")
             project_id=self._ensure_project(mission)
             self._transition(mission_id,"REQUIREMENT_ANALYSIS",20,"Requirement Analysis","Requirement Analysis Started","RUNNING",0,"开始生成六类待确认需求。")
             analyzed=self._fde.analyze(project_id)
             self._transition(mission_id,"EVIDENCE_RETRIEVAL",38,"Evidence Retrieval","Requirements Generated","COMPLETED",0,f"已生成 {len(analyzed['requirements'])} 类待确认需求。")
             self._transition(mission_id,"EVIDENCE_RETRIEVAL",45,"Evidence Retrieval","Evidence Retrieval Started","RUNNING",0,"调用现有 RAG 检索服务。")
-            evidence=self._retrieve(mission["goal"] or mission["title"],mission_id); self._save_evidence(mission_id,evidence)
+            self._graph_status(mission_id,"Literature Agent","RUNNING")
+            evidence=self._retrieve(mission["goal"] or mission["title"],mission_id); self._save_evidence(mission_id,evidence); self._graph_status(mission_id,"Literature Agent","COMPLETED")
             self._transition(mission_id,"SOLUTION_GENERATION",62,"Solution Generation","Evidence Retrieved" if evidence else "No Evidence Found","COMPLETED" if evidence else "WAITING",len(evidence),"只保存 RAG 返回的 paper_id / chunk_id / source。" if evidence else "当前未找到可用 Evidence；方案将明确标记 NEEDS_CONFIRMATION。")
-            self._fde.blueprint(project_id,evidence_refs=evidence,version_summary="Generated Solution Blueprint from Mission Evidence")
-            self._transition(mission_id,"RISK_ANALYSIS",76,"Risk Analysis","Blueprint Generated","COMPLETED",len(evidence),"Solution Blueprint 已生成，未支持内容保持 NEEDS_CONFIRMATION。")
-            risks=self._fde.risks(project_id)
+            if self._selected(mission_id,"Innovation Agent"):
+                self._graph_status(mission_id,"Innovation Agent","RUNNING")
+                self._fde.blueprint(project_id,evidence_refs=evidence,version_summary="Generated Solution Blueprint from Mission Evidence"); self._graph_status(mission_id,"Innovation Agent","COMPLETED")
+                self._transition(mission_id,"RISK_ANALYSIS",76,"Risk Analysis","Blueprint Generated","COMPLETED",len(evidence),"Solution Blueprint 已生成，未支持内容保持 NEEDS_CONFIRMATION。")
+            else:
+                self._transition(mission_id,"RISK_ANALYSIS",70,"Risk Analysis","Solution Draft Skipped","SKIPPED",len(evidence),"Planner 未选择方案草稿阶段；保留 Evidence 与人工审核边界。")
+            if self._selected(mission_id,"Risk Agent"):
+                self._graph_status(mission_id,"Risk Agent","RUNNING"); risks=self._fde.risks(project_id); self._graph_status(mission_id,"Risk Agent","COMPLETED")
+            else:
+                risks={"risks":[]}
+                self._transition(mission_id,"WAITING_REVIEW",80,"Human Review","Risk Review Skipped","SKIPPED",len(evidence),"Planner 未选择风险专项检查；负责人仍需审核 Evidence 与任务范围。")
             self._transition(mission_id,"WAITING_REVIEW",85,"Human Review","Risk Analysis Completed","COMPLETED",len(evidence),f"已生成 {len(risks['risks'])} 项风险草稿，等待人工审核。")
             self._transition(mission_id,"WAITING_REVIEW",85,"Human Review","Waiting Human Review","WAITING_REVIEW",len(evidence),"AI 不会自动批准方案或交付包。")
             self._notify("REVIEW_REQUIRED",f"Mission 等待人工审核：{mission['title']}"); return self.detail(mission_id)
@@ -71,7 +87,9 @@ class AIMissionService:
         review=self._fde.review(str(mission["solution_project_id"]),status,comment)
         if status=="NEEDS_REVISION": self._transition(mission_id,"NEEDS_REVISION",72,"Human Review","Reviewer Requested Revision","NEEDS_REVISION",len(mission["evidence_refs"]),comment or "需要调整方案后再次审核。",comment)
         elif status=="APPROVED":
-            self._transition(mission_id,"APPROVED",92,"Human Review","Mission Approved","APPROVED",len(mission["evidence_refs"]),comment or "Reviewer 已批准方案。",comment); self._notify("MISSION_APPROVED",f"Mission 已获人工审核批准：{mission['title']}")
+            self._transition(mission_id,"APPROVED",92,"Human Review","Mission Approved","APPROVED",len(mission["evidence_refs"]),comment or "Reviewer 已批准方案。",comment)
+            self._memory.confirmed(mission_id, f"已人工确认 Mission “{mission['title']}” 的规划与审核状态；后续相似任务仍需重新检索 Evidence 并再次人工审核。")
+            self._notify("MISSION_APPROVED",f"Mission 已获人工审核批准：{mission['title']}")
         else: self._transition(mission_id,"FAILED",100,"Human Review","Mission Rejected","REJECTED",len(mission["evidence_refs"]),comment or "Reviewer 已拒绝当前方案。",comment)
         return {"mission":self.detail(mission_id),"review":review}
 
@@ -86,6 +104,7 @@ class AIMissionService:
         mission=self._mission_row(mission_id)
         if mission["status"]!="APPROVED": raise ValueError("Mission 尚未通过人工审核，不能生成 Delivery Package。")
         package=self._fde.delivery_package(str(mission["solution_project_id"])); package["evidence_references"]=mission["evidence_refs"]
+        self._graph_status(mission_id,"Delivery Agent","COMPLETED")
         self._transition(mission_id,"DELIVERY_READY",97,"Delivery","Delivery Package Generated","COMPLETED",len(mission["evidence_refs"]),"交付包保留 AI Generated Draft 与 Evidence References 标记。")
         self._transition(mission_id,"COMPLETED",100,"Delivery","Mission Completed","COMPLETED",len(mission["evidence_refs"]),"Mission 交付流程完成。"); self._notify("MISSION_COMPLETED",f"Mission 已完成：{mission['title']}")
         return {"mission":self.detail(mission_id),"delivery_package":package}
@@ -108,7 +127,8 @@ class AIMissionService:
                                   "execution_log": self._object(x.execution_log_json, []),
                                   "verification": self._object(x.verification_json, {}),
                                   "retry_count": x.retry_count} for x in s.scalars(select(ComputerMission).where(ComputerMission.mission_id == m.id).order_by(ComputerMission.created_at.asc())).all()]
-            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m, computer_missions),"requirements":reqs,"deliverables":dels,"versions":versions,"computer_missions":computer_missions,"evidence_graph":self._graph(m,reqs,dels)}
+            plan_nodes=[{"id":x.id,"node_name":x.node_name,"agent_name":x.agent_name,"status":x.status,"order":x.node_order,"depends_on":self._decode(x.depends_on),"created_at":x.created_at} for x in s.scalars(select(ExecutionGraph).where(ExecutionGraph.mission_id==m.id).order_by(ExecutionGraph.node_order)).all()]
+            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m, computer_missions),"requirements":reqs,"deliverables":dels,"versions":versions,"computer_missions":computer_missions,"execution_graph":plan_nodes,"evidence_graph":self._graph(m,reqs,dels)}
         finally:s.close()
     def timeline(self,mission_id):
         s=self._sessions()
@@ -157,6 +177,17 @@ class AIMissionService:
     def _save_evidence(self,mission_id,refs):
         s=self._sessions()
         try:self._require(s,mission_id).evidence_refs_json=json.dumps(refs,ensure_ascii=False);s.commit()
+        finally:s.close()
+    def _graph_status(self,mission_id,agent_name,status):
+        s=self._sessions()
+        try:
+            row=s.scalar(select(ExecutionGraph).where(ExecutionGraph.mission_id==mission_id,ExecutionGraph.agent_name==agent_name))
+            if row: row.status=status
+            s.commit()
+        finally:s.close()
+    def _selected(self,mission_id,agent_name):
+        s=self._sessions()
+        try:return s.scalar(select(ExecutionGraph).where(ExecutionGraph.mission_id==mission_id,ExecutionGraph.agent_name==agent_name)) is not None
         finally:s.close()
     def _transition(self,mid,status,progress,step,action,event_status,count,result,comment=None):
         s=self._sessions()

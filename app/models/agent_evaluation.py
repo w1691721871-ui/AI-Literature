@@ -12,6 +12,7 @@ class AgentEvaluation(Base):
     id: Mapped[str] = mapped_column(String(36), primary_key=True, default=lambda: str(uuid4()))
     mission_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
     evaluation_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    planner_score: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     task_completion: Mapped[str] = mapped_column(String(40), nullable=False, default="PENDING")
     evidence_coverage: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     human_revision_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)

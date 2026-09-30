@@ -12,6 +12,9 @@ from sqlalchemy.orm import sessionmaker
 from app.agent.verification_agent import VerificationAgent
 from app.models.ai_mission import AIMission, AIMissionEvent
 from app.models.agent_trace import AgentTrace
+from app.models.execution_graph import ExecutionGraph
+from app.models.planner_trace import PlannerTrace
+from app.models.agent_memory import AgentMemory
 from app.models.computer_file_change import ComputerFileChange
 from app.models.computer_mission import ComputerMission
 from app.services.computer_use_service import ComputerUseService
@@ -38,7 +41,7 @@ class ControlledComputerAgentTests(unittest.TestCase):
         (self.root / "frontend" / "styles.css").write_text(".home-research-input{}\n", encoding="utf-8")
         (self.root / ".env").write_text("secret=blocked", encoding="utf-8")
         self.engine = create_engine("sqlite:///:memory:")
-        AIMission.__table__.create(self.engine); AIMissionEvent.__table__.create(self.engine); AgentTrace.__table__.create(self.engine)
+        AIMission.__table__.create(self.engine); AIMissionEvent.__table__.create(self.engine); AgentTrace.__table__.create(self.engine); ExecutionGraph.__table__.create(self.engine); PlannerTrace.__table__.create(self.engine); AgentMemory.__table__.create(self.engine)
         ComputerMission.__table__.create(self.engine); ComputerFileChange.__table__.create(self.engine)
         self.sessions = sessionmaker(bind=self.engine)
         manager = WorkspaceManager(self.root)
