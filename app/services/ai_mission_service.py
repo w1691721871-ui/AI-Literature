@@ -1,139 +1,215 @@
-"""Evidence-bounded mission lifecycle and dashboard projections."""
-
+"""P23 finite, evidence-bounded Mission orchestration."""
 from __future__ import annotations
-
+import json
 from collections.abc import Callable
-
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
-
 from app.models.ai_mission import AIMission, AIMissionEvent
 from app.models.notification import Notification
 from app.models.paper import Paper
 from app.models.paper_chunk import PaperChunk
 from app.models.solution_deliverable import SolutionDeliverable
 from app.models.solution_project import SolutionProject
+from app.models.solution_requirement import SolutionRequirement
+from app.models.solution_version import SolutionVersion
 from app.services.database import SessionLocal, initialize_database
+from app.services.fde_solution_service import FDESolutionService
+from app.services.retrieval_service import RetrievalService
 
 
-class AIMissionNotFoundError(ValueError):
-    pass
+class AIMissionNotFoundError(ValueError): pass
 
 
 class AIMissionService:
-    """Creates planning records only; it neither invokes models nor fabricates Evidence."""
+    """Coordinates existing FDE + RAG services without fabricating Evidence."""
+    max_retries = 3
+    allowed_statuses = {"CREATED","PLANNING","REQUIREMENT_ANALYSIS","EVIDENCE_RETRIEVAL","SOLUTION_GENERATION","RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION","APPROVED","DELIVERY_READY","COMPLETED","FAILED"}
 
-    allowed_statuses = {"CREATED", "PLANNING", "RUNNING", "WAITING_REVIEW", "COMPLETED", "FAILED"}
-
-    def __init__(self, session_factory: Callable[[], Session] = SessionLocal, *, initialize: bool = True) -> None:
-        if initialize:
-            initialize_database()
+    def __init__(self, session_factory: Callable[[], Session] = SessionLocal, *, initialize: bool = True, fde_service=None, retrieval_service=None):
+        if initialize: initialize_database()
         self._sessions = session_factory
+        self._fde = fde_service or FDESolutionService(session_factory, initialize=False)
+        self._retrieval = retrieval_service or RetrievalService(session_factory=session_factory)
 
     def create(self, payload: dict[str, str]) -> dict[str, object]:
         session = self._sessions()
         try:
-            mission = AIMission(title=payload["title"].strip(), mission_type=payload.get("mission_type", "RESEARCH").strip(), goal=payload.get("goal", "").strip())
-            session.add(mission); session.flush()
-            self._event(session, mission, "Requirement Analysis", "Mission created", "CREATED", 0, "任务已创建，等待可审阅的研究规划。")
-            mission.status, mission.progress, mission.current_step = "PLANNING", 15, "Requirement Analysis"
-            self._event(session, mission, "Requirement Analysis", "Planning mission scope", "PLANNING", 0, "仅记录任务目标；尚未发起检索或生成研究结论。")
-            session.add(Notification(notification_type="MISSION_CREATED", message=f"AI Mission 已创建：{mission.title}"))
-            session.commit(); session.refresh(mission)
-            return self._mission(mission)
-        finally:
-            session.close()
+            row=AIMission(title=payload["title"].strip(), mission_type=payload.get("mission_type","RESEARCH").strip(), goal=payload.get("goal","").strip())
+            session.add(row); session.flush()
+            self._event(session,row,"Mission","Mission Created","CREATED",0,"任务已创建，尚未执行检索或生成科研结论。")
+            row.status,row.progress,row.current_step="PLANNING",5,"Requirement Analysis"
+            self._event(session,row,"Planning","Mission Planning Ready","PLANNING",0,"尚未发起检索；等待用户启动受控执行。")
+            session.add(Notification(notification_type="MISSION_CREATED",message=f"AI Mission 已创建：{row.title}")); session.commit(); session.refresh(row)
+            return self._mission(row)
+        finally: session.close()
 
-    def list(self) -> list[dict[str, object]]:
-        session = self._sessions()
+    def run(self, mission_id: str) -> dict[str, object]:
+        mission=self._mission_row(mission_id)
+        if mission["status"] not in {"CREATED","PLANNING","NEEDS_REVISION"}: raise ValueError("当前 Mission 不处于可执行或可修订状态。")
         try:
-            return [self._mission(row) for row in session.scalars(select(AIMission).order_by(AIMission.updated_at.desc())).all()]
-        finally:
-            session.close()
+            project_id=self._ensure_project(mission)
+            self._transition(mission_id,"REQUIREMENT_ANALYSIS",20,"Requirement Analysis","Requirement Analysis Started","RUNNING",0,"开始生成六类待确认需求。")
+            analyzed=self._fde.analyze(project_id)
+            self._transition(mission_id,"EVIDENCE_RETRIEVAL",38,"Evidence Retrieval","Requirements Generated","COMPLETED",0,f"已生成 {len(analyzed['requirements'])} 类待确认需求。")
+            self._transition(mission_id,"EVIDENCE_RETRIEVAL",45,"Evidence Retrieval","Evidence Retrieval Started","RUNNING",0,"调用现有 RAG 检索服务。")
+            evidence=self._retrieve(mission["goal"] or mission["title"],mission_id); self._save_evidence(mission_id,evidence)
+            self._transition(mission_id,"SOLUTION_GENERATION",62,"Solution Generation","Evidence Retrieved" if evidence else "No Evidence Found","COMPLETED" if evidence else "WAITING",len(evidence),"只保存 RAG 返回的 paper_id / chunk_id / source。" if evidence else "当前未找到可用 Evidence；方案将明确标记 NEEDS_CONFIRMATION。")
+            self._fde.blueprint(project_id,evidence_refs=evidence,version_summary="Generated Solution Blueprint from Mission Evidence")
+            self._transition(mission_id,"RISK_ANALYSIS",76,"Risk Analysis","Blueprint Generated","COMPLETED",len(evidence),"Solution Blueprint 已生成，未支持内容保持 NEEDS_CONFIRMATION。")
+            risks=self._fde.risks(project_id)
+            self._transition(mission_id,"WAITING_REVIEW",85,"Human Review","Risk Analysis Completed","COMPLETED",len(evidence),f"已生成 {len(risks['risks'])} 项风险草稿，等待人工审核。")
+            self._transition(mission_id,"WAITING_REVIEW",85,"Human Review","Waiting Human Review","WAITING_REVIEW",len(evidence),"AI 不会自动批准方案或交付包。")
+            self._notify("REVIEW_REQUIRED",f"Mission 等待人工审核：{mission['title']}"); return self.detail(mission_id)
+        except Exception as error:
+            self._fail(mission_id); raise error
 
-    def detail(self, mission_id: str) -> dict[str, object]:
-        session = self._sessions()
+    def review(self, mission_id: str, status: str, comment: str) -> dict[str, object]:
+        mission=self._mission_row(mission_id)
+        if mission["status"] not in {"WAITING_REVIEW","NEEDS_REVISION"}: raise ValueError("当前 Mission 尚未进入人工审核阶段。")
+        review=self._fde.review(str(mission["solution_project_id"]),status,comment)
+        if status=="NEEDS_REVISION": self._transition(mission_id,"NEEDS_REVISION",72,"Human Review","Reviewer Requested Revision","NEEDS_REVISION",len(mission["evidence_refs"]),comment or "需要调整方案后再次审核。",comment)
+        elif status=="APPROVED":
+            self._transition(mission_id,"APPROVED",92,"Human Review","Mission Approved","APPROVED",len(mission["evidence_refs"]),comment or "Reviewer 已批准方案。",comment); self._notify("MISSION_APPROVED",f"Mission 已获人工审核批准：{mission['title']}")
+        else: self._transition(mission_id,"FAILED",100,"Human Review","Mission Rejected","REJECTED",len(mission["evidence_refs"]),comment or "Reviewer 已拒绝当前方案。",comment)
+        return {"mission":self.detail(mission_id),"review":review}
+
+    def revise(self, mission_id: str, change_summary: str) -> dict[str, object]:
+        mission=self._mission_row(mission_id)
+        if mission["status"]!="NEEDS_REVISION": raise ValueError("只有 NEEDS_REVISION 状态的 Mission 可以创建新版本。")
+        self._transition(mission_id,"SOLUTION_GENERATION",76,"Solution Generation","Blueprint Revised","RUNNING",len(mission["evidence_refs"]),change_summary)
+        self._fde.blueprint(str(mission["solution_project_id"]),evidence_refs=mission["evidence_refs"],version_summary=f"Reviewer Revision: {change_summary}")
+        self._transition(mission_id,"WAITING_REVIEW",85,"Human Review","Waiting Human Review","WAITING_REVIEW",len(mission["evidence_refs"]),"已创建新版本，等待新的人工审核。"); return self.detail(mission_id)
+
+    def delivery(self, mission_id: str) -> dict[str, object]:
+        mission=self._mission_row(mission_id)
+        if mission["status"]!="APPROVED": raise ValueError("Mission 尚未通过人工审核，不能生成 Delivery Package。")
+        package=self._fde.delivery_package(str(mission["solution_project_id"])); package["evidence_references"]=mission["evidence_refs"]
+        self._transition(mission_id,"DELIVERY_READY",97,"Delivery","Delivery Package Generated","COMPLETED",len(mission["evidence_refs"]),"交付包保留 AI Generated Draft 与 Evidence References 标记。")
+        self._transition(mission_id,"COMPLETED",100,"Delivery","Mission Completed","COMPLETED",len(mission["evidence_refs"]),"Mission 交付流程完成。"); self._notify("MISSION_COMPLETED",f"Mission 已完成：{mission['title']}")
+        return {"mission":self.detail(mission_id),"delivery_package":package}
+
+    def list(self):
+        s=self._sessions()
+        try:return [self._mission(x) for x in s.scalars(select(AIMission).order_by(AIMission.updated_at.desc())).all()]
+        finally:s.close()
+    def detail(self,mission_id):
+        s=self._sessions()
         try:
-            mission = self._require(session, mission_id)
-            return {**self._mission(mission), "timeline": self._timeline(session, mission.id), "team": self._team(mission), "evidence_graph": self._evidence_graph(mission)}
-        finally:
-            session.close()
-
-    def timeline(self, mission_id: str) -> list[dict[str, object]]:
-        session = self._sessions()
+            m=self._require(s,mission_id); reqs,dels=self._solution_records(s,m.solution_project_id)
+            versions = [] if not m.solution_project_id else [{"id": x.id, "version": x.version, "status": x.status, "change_summary": x.change_summary, "created_by": x.created_by, "created_at": x.created_at} for x in s.scalars(select(SolutionVersion).where(SolutionVersion.solution_project_id == m.solution_project_id).order_by(SolutionVersion.version.asc())).all()]
+            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m),"requirements":reqs,"deliverables":dels,"versions":versions,"evidence_graph":self._graph(m,reqs,dels)}
+        finally:s.close()
+    def timeline(self,mission_id):
+        s=self._sessions()
+        try:self._require(s,mission_id);return self._timeline(s,mission_id)
+        finally:s.close()
+    def notifications(self):
+        s=self._sessions()
+        try:return [{"id":x.id,"type":x.notification_type,"message":x.message,"read":x.read,"created_at":x.created_at} for x in s.scalars(select(Notification).order_by(Notification.created_at.desc()).limit(30)).all()]
+        finally:s.close()
+    def mark_notification_read(self,notification_id):
+        s=self._sessions()
         try:
-            self._require(session, mission_id)
-            return self._timeline(session, mission_id)
-        finally:
-            session.close()
-
-    def notifications(self) -> list[dict[str, object]]:
-        session = self._sessions()
+            x=s.get(Notification,notification_id)
+            if not x:raise AIMissionNotFoundError("Notification 不存在。")
+            x.read=True;s.commit();return {"id":x.id,"read":True}
+        finally:s.close()
+    def dashboard(self):
+        s=self._sessions()
         try:
-            return [{"id": row.id, "type": row.notification_type, "message": row.message, "read": row.read, "created_at": row.created_at}
-                    for row in session.scalars(select(Notification).order_by(Notification.created_at.desc()).limit(30)).all()]
-        finally:
-            session.close()
+            missions=[self._mission(x) for x in s.scalars(select(AIMission).order_by(AIMission.updated_at.desc())).all()]
+            active={"PLANNING","REQUIREMENT_ANALYSIS","EVIDENCE_RETRIEVAL","SOLUTION_GENERATION","RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION"}
+            metrics={"projects":int(s.scalar(select(func.count(SolutionProject.id)))or 0),"active_missions":sum(x["status"] in active for x in missions),"pending_reviews":int(s.scalar(select(func.count(SolutionProject.id)).where(SolutionProject.review_status.in_(("PENDING","NEEDS_REVISION"))))or 0),"completed_missions":sum(x["status"]=="COMPLETED" for x in missions),"knowledge_size":int(s.scalar(select(func.count(Paper.paper_id)))or 0),"evidence_count":int(s.scalar(select(func.count(PaperChunk.id)))or 0),"deliverables":int(s.scalar(select(func.count(SolutionDeliverable.id)))or 0)}
+            return {"metrics":metrics,"recent_missions":missions[:6],"team_status":self._team(None),"latest_deliverables":metrics["deliverables"],"boundary":"Dashboard 只聚合数据库中的真实任务、资料、Evidence 引用与交付记录。"}
+        finally:s.close()
 
-    def mark_notification_read(self, notification_id: str) -> dict[str, object]:
-        session = self._sessions()
+    def _ensure_project(self,m):
+        if m["solution_project_id"]:return str(m["solution_project_id"])
+        p=self._fde.create({"title":str(m["title"]),"customer_need":str(m["goal"]or m["title"]),"industry":"Enterprise AI Workspace","objective":"待人工确认的解决方案目标"})
+        s=self._sessions()
+        try:self._require(s,str(m["id"])).solution_project_id=str(p["id"]);s.commit()
+        finally:s.close()
+        return str(p["id"])
+    def _retrieve(self,question,mission_id):
+        for attempt in range(1,self.max_retries+1):
+            try:
+                rows=self._retrieval.retrieve(question,top_k=5)
+                return [{"paper_id":str(x["paper_id"]),"chunk_id":str(x["chunk_id"]),"source":str(x.get("filename")or x.get("paper_title")or"未命名资料"),"section":str(x.get("section")or"正文")} for x in rows]
+            except Exception:
+                self._retry(mission_id,attempt)
+        raise RuntimeError("Evidence Retrieval 未能在有限重试内完成，请检查模型或索引配置。")
+    def _retry(self,mission_id,attempt):
+        s=self._sessions()
         try:
-            row = session.get(Notification, notification_id)
-            if row is None:
-                raise AIMissionNotFoundError("Notification 不存在。")
-            row.read = True; session.commit(); session.refresh(row)
-            return {"id": row.id, "read": row.read}
-        finally:
-            session.close()
-
-    def dashboard(self) -> dict[str, object]:
-        session = self._sessions()
+            m=self._require(s,mission_id);m.retry_count=attempt;self._event(s,m,"Evidence Retrieval","Evidence Retrieval Retry","RETRYING",0,f"第 {attempt}/{self.max_retries} 次受控重试。");s.commit()
+        finally:s.close()
+    def _save_evidence(self,mission_id,refs):
+        s=self._sessions()
+        try:self._require(s,mission_id).evidence_refs_json=json.dumps(refs,ensure_ascii=False);s.commit()
+        finally:s.close()
+    def _transition(self,mid,status,progress,step,action,event_status,count,result,comment=None):
+        s=self._sessions()
         try:
-            missions = self.list()
-            project_count = int(session.scalar(select(func.count(SolutionProject.id))) or 0)
-            review_count = int(session.scalar(select(func.count(SolutionProject.id)).where(SolutionProject.review_status.in_(("PENDING", "NEEDS_REVISION")))) or 0)
-            paper_count = int(session.scalar(select(func.count(Paper.paper_id))) or 0)
-            chunk_count = int(session.scalar(select(func.count(PaperChunk.id))) or 0)
-            deliverable_count = int(session.scalar(select(func.count(SolutionDeliverable.id))) or 0)
-            return {"metrics": {"projects": project_count, "active_missions": sum(item["status"] in {"PLANNING", "RUNNING", "WAITING_REVIEW"} for item in missions), "pending_reviews": review_count, "knowledge_size": paper_count, "evidence_count": chunk_count, "deliverables": deliverable_count},
-                    "recent_missions": missions[:6], "team_status": self._team(None), "latest_deliverables": deliverable_count,
-                    "boundary": "Dashboard 仅聚合已持久化记录；不会生成虚假任务、Evidence 或交付物。"}
-        finally:
-            session.close()
-
+            m=self._require(s,mid);m.status,m.progress,m.current_step=status,progress,step
+            if comment is not None:m.review_comment=comment
+            self._event(s,m,step,action,event_status,count,result);s.commit()
+        finally:s.close()
+    def _fail(self,mid):
+        try:self._transition(mid,"FAILED",100,"Execution","Step Failed","FAILED",0,"当前步骤执行失败，请检查配置或重试。");self._notify("MISSION_FAILED",f"Mission 执行失败：{mid}")
+        except Exception:pass
+    def _notify(self,kind,msg):
+        s=self._sessions()
+        try:s.add(Notification(notification_type=kind,message=msg));s.commit()
+        finally:s.close()
     @staticmethod
-    def _event(session: Session, mission: AIMission, stage: str, action: str, status: str, evidence_count: int, result: str) -> None:
-        session.add(AIMissionEvent(mission_id=mission.id, stage=stage, action=action, status=status, evidence_count=evidence_count, result_summary=result))
-
+    def _event(s,m,stage,action,status,count,result):s.add(AIMissionEvent(mission_id=m.id,stage=stage,action=action,status=status,evidence_count=count,result_summary=result))
     @staticmethod
-    def _require(session: Session, mission_id: str) -> AIMission:
-        mission = session.get(AIMission, mission_id)
-        if mission is None:
-            raise AIMissionNotFoundError("AI Mission 不存在。")
-        return mission
-
+    def _require(s,mid):
+        x=s.get(AIMission,mid)
+        if not x:raise AIMissionNotFoundError("AI Mission 不存在。")
+        return x
+    def _mission_row(self,mid):
+        s=self._sessions()
+        try:return self._mission(self._require(s,mid))
+        finally:s.close()
     @staticmethod
-    def _mission(row: AIMission) -> dict[str, object]:
-        return {"id": row.id, "title": row.title, "type": row.mission_type, "goal": row.goal, "status": row.status, "progress": row.progress, "current_step": row.current_step, "created_at": row.created_at, "updated_at": row.updated_at}
-
+    def _decode(value):
+        try:return json.loads(value or "[]") if isinstance(json.loads(value or "[]"),list) else []
+        except (json.JSONDecodeError,TypeError):return []
+    def _mission(self,x):return {"id":x.id,"title":x.title,"type":x.mission_type,"goal":x.goal,"solution_project_id":x.solution_project_id,"status":x.status,"progress":x.progress,"current_step":x.current_step,"evidence_refs":self._decode(x.evidence_refs_json),"review_comment":x.review_comment,"retry_count":x.retry_count,"created_at":x.created_at,"updated_at":x.updated_at}
     @staticmethod
-    def _timeline(session: Session, mission_id: str) -> list[dict[str, object]]:
-        return [{"id": row.id, "stage": row.stage, "action": row.action, "status": row.status, "evidence_count": row.evidence_count, "result": row.result_summary, "created_at": row.created_at}
-                for row in session.scalars(select(AIMissionEvent).where(AIMissionEvent.mission_id == mission_id).order_by(AIMissionEvent.created_at.asc())).all()]
-
+    def _timeline(s,mid):return [{"id":x.id,"stage":x.stage,"action":x.action,"status":x.status,"evidence_count":x.evidence_count,"result":x.result_summary,"created_at":x.created_at} for x in s.scalars(select(AIMissionEvent).where(AIMissionEvent.mission_id==mid).order_by(AIMissionEvent.created_at.asc())).all()]
     @staticmethod
-    def _team(mission: AIMission | None) -> list[dict[str, str]]:
-        status = mission.status if mission else "READY"
-        return [
-            {"name": "Research Agent", "role": "任务规划", "status": status, "last_action": mission.current_step if mission else "等待任务"},
-            {"name": "Literature Agent", "role": "知识检索", "status": "WAITING" if mission else "READY", "last_action": "仅在任务调用真实检索时运行"},
-            {"name": "Innovation Agent", "role": "方案草稿", "status": "WAITING" if mission else "READY", "last_action": "依赖 Evidence 与 Human Review"},
-            {"name": "Risk Agent", "role": "风险检查", "status": "READY", "last_action": "高风险输出须人工确认"},
-            {"name": "Delivery Agent", "role": "交付生成", "status": "WAITING" if mission else "READY", "last_action": "仅生成审核后的交付草稿"},
-        ]
-
+    def _solution_records(s,pid):
+        if not pid:return [],[]
+        reqs=[{"id":x.id,"type":x.requirement_type,"content":x.description,"status":x.status} for x in s.scalars(select(SolutionRequirement).where(SolutionRequirement.solution_project_id==pid)).all()]
+        dels=[{"id":x.id,"type":x.deliverable_type,"title":x.title,"status":x.status} for x in s.scalars(select(SolutionDeliverable).where(SolutionDeliverable.solution_project_id==pid)).all()]
+        return reqs,dels
     @staticmethod
-    def _evidence_graph(mission: AIMission) -> dict[str, object]:
-        return {"nodes": [{"id": "mission", "type": "mission", "label": mission.title}, {"id": "evidence:pending", "type": "evidence", "label": "尚未关联 Evidence"}, {"id": "review:pending", "type": "review", "label": "Human Review"}],
-                "edges": [{"from": "mission", "to": "evidence:pending", "relation": "requires"}, {"from": "evidence:pending", "to": "review:pending", "relation": "before"}],
-                "boundary": "该 Mission 尚未运行检索；图中不包含也不暗示任何科研证据。"}
+    def _team(m):
+        state=m.status if m else "READY";has_evidence=bool(m and m.evidence_refs_json!="[]")
+        return [{"name":"Research Agent","role":"任务规划","status":"RUNNING" if state in {"PLANNING","REQUIREMENT_ANALYSIS"} else ("COMPLETED" if state not in {"READY","CREATED"} else "READY"),"last_action":m.current_step if m else "等待任务"},{"name":"Literature Agent","role":"真实知识检索","status":"RUNNING" if state=="EVIDENCE_RETRIEVAL" else ("COMPLETED" if has_evidence else "WAITING"),"last_action":"仅在真实 RAG 检索时运行"},{"name":"Innovation Agent","role":"方案草稿","status":"RUNNING" if state=="SOLUTION_GENERATION" else ("COMPLETED" if state in {"RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION","APPROVED","DELIVERY_READY","COMPLETED"} else "WAITING"),"last_action":"依赖真实 Evidence"},{"name":"Risk Agent","role":"风险检查","status":"RUNNING" if state=="RISK_ANALYSIS" else ("COMPLETED" if state in {"WAITING_REVIEW","NEEDS_REVISION","APPROVED","DELIVERY_READY","COMPLETED"} else "WAITING"),"last_action":"风险项需人工确认"},{"name":"Delivery Agent","role":"交付生成","status":"RUNNING" if state=="DELIVERY_READY" else ("COMPLETED" if state=="COMPLETED" else "WAITING"),"last_action":"仅批准后生成交付包"}]
+    @staticmethod
+    def _graph(m,reqs,dels):
+        nodes=[{"id":"mission","type":"customer_need","label":m.goal or m.title}];edges=[]
+        for x in reqs:nodes.append({"id":f"requirement:{x['id']}","type":"requirement","label":x["type"]});edges.append({"from":"mission","to":f"requirement:{x['id']}","relation":"defines"})
+        refs=AIMissionService._decode(m.evidence_refs_json)
+        if not refs:nodes.append({"id":"evidence:pending","type":"evidence","label":"尚未关联 Evidence"})
+        for x in refs:
+            evidence_id=f"evidence:{x.get('chunk_id','')}"
+            nodes.append({"id":evidence_id,"type":"evidence","label":x.get("source","未命名资料"),"paper_id":x.get("paper_id"),"chunk_id":x.get("chunk_id")})
+            edges.append({"from":"mission","to":evidence_id,"relation":"grounds"})
+        # The decision node mirrors the persisted Mission review state; it is
+        # deliberately provisional until a human has reviewed the solution.
+        nodes.append({"id":"decision:mission-review","type":"decision","label":f"Mission Review · {m.status}"})
+        for x in refs: edges.append({"from":f"evidence:{x.get('chunk_id','')}","to":"decision:mission-review","relation":"informs"})
+        blueprint = next((x for x in dels if x["type"] == "SOLUTION_BLUEPRINT"), None)
+        if blueprint:
+            blueprint_id=f"blueprint:{blueprint['id']}"
+            nodes.append({"id":blueprint_id,"type":"blueprint","label":blueprint["title"]})
+            edges.append({"from":"decision:mission-review","to":blueprint_id,"relation":"shapes"})
+        for x in dels:
+            node_id=f"deliverable:{x['id']}"
+            nodes.append({"id":node_id,"type":"deliverable","label":x["title"]})
+            edges.append({"from": blueprint_id if blueprint else "decision:mission-review", "to":node_id,"relation":"delivers"})
+        return {"nodes":nodes,"edges":edges,"boundary":"节点只来自 Mission、已保存 Requirement、真实 RAG Evidence 引用与持久化 Deliverable；没有 Evidence 时明确显示未关联。"}

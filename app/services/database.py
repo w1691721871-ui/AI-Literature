@@ -138,6 +138,21 @@ def _apply_lightweight_migrations() -> None:
         if name not in task_columns:
             with engine.begin() as connection:
                 connection.execute(text(f"ALTER TABLE research_tasks ADD COLUMN {name} {definition}"))
+    mission_columns = {column["name"] for column in inspect(engine).get_columns("ai_missions")}
+    mission_additions = {
+        "solution_project_id": "VARCHAR(36)",
+        "evidence_refs_json": "TEXT NOT NULL DEFAULT '[]'",
+        "review_comment": "TEXT NOT NULL DEFAULT ''",
+        "retry_count": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for name, definition in mission_additions.items():
+        if name not in mission_columns:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE ai_missions ADD COLUMN {name} {definition}"))
+    version_columns = {column["name"] for column in inspect(engine).get_columns("solution_versions")}
+    if "created_by" not in version_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE solution_versions ADD COLUMN created_by VARCHAR(80) NOT NULL DEFAULT 'AI'"))
 
 
 def get_database_session() -> Generator[Session, None, None]:

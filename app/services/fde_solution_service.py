@@ -89,7 +89,7 @@ class FDESolutionService:
         finally:
             session.close()
 
-    def blueprint(self, project_id: str) -> dict[str, object]:
+    def blueprint(self, project_id: str, evidence_refs: list[dict[str, object]] | None = None, version_summary: str = "Generated Solution Blueprint draft") -> dict[str, object]:
         session = self._sessions()
         try:
             project = self._project_row(session, project_id)
@@ -97,7 +97,9 @@ class FDESolutionService:
             if not requirements:
                 raise ValueError("请先执行需求分析，再生成解决方案蓝图。")
             gap = self._gap(session)
-            evidence = self._evidence_refs(session)
+            # None uses the legacy library view. An explicit empty list means
+            # retrieval found no Evidence and must remain empty.
+            evidence = self._evidence_refs(session) if evidence_refs is None else self._normalize_evidence_refs(evidence_refs)
             architecture = self._architecture()
             risks = self._risks(gap)
             blueprint = {
@@ -122,7 +124,7 @@ class FDESolutionService:
             self._upsert_deliverable(session, project.id, "DATA_PLAN", "Data & Knowledge Assessment", gap)
             self._upsert_deliverable(session, project.id, "AI_WORKFLOW", "AI Workflow", blueprint["core_workflow"])
             self._upsert_computer_mission(session, project.id)
-            self._version_snapshot(session, project.id, "DRAFT", "Generated Solution Blueprint draft", blueprint)
+            self._version_snapshot(session, project.id, "DRAFT", version_summary, blueprint)
             project.status = "WAITING_REVIEW"; session.commit(); session.refresh(project)
             return {"project": self._project(project), "blueprint": blueprint, "metrics": self._metrics(session, project.id)}
         finally:
@@ -153,7 +155,7 @@ class FDESolutionService:
             if status == "APPROVED":
                 for row in session.scalars(select(SolutionDeliverable).where(SolutionDeliverable.solution_project_id == project.id)).all():
                     row.status = "HUMAN_REVIEWED"
-            self._version_snapshot(session, project.id, "APPROVED" if status == "APPROVED" else "REVISED", f"Human Review: {status}", {"review_status": status, "reviewer_note": note.strip()})
+            self._version_snapshot(session, project.id, "APPROVED" if status == "APPROVED" else "REVISED", f"Human Review: {status}", {"review_status": status, "reviewer_note": note.strip()}, created_by="Reviewer")
             session.commit(); session.refresh(project)
             return self._project(project)
         finally:
@@ -168,11 +170,20 @@ class FDESolutionService:
             deliverables = [self._deliverable(row) for row in session.scalars(select(SolutionDeliverable).where(SolutionDeliverable.solution_project_id == project.id)).all()]
             if not deliverables:
                 raise ValueError("请先生成 Solution Blueprint，再查看 Delivery Package。")
-            status = "Human Reviewed · AI Generated Draft"
+            blueprint = self._find(deliverables, "SOLUTION_BLUEPRINT")
+            # Delivery packages inherit references from the persisted blueprint.
+            # They are references only: never copied text and never fabricated.
+            evidence_refs = []
+            if blueprint and isinstance(blueprint.get("content"), dict):
+                raw_refs = blueprint["content"].get("evidence_refs", [])
+                if isinstance(raw_refs, list):
+                    evidence_refs = self._normalize_evidence_refs(raw_refs)
+            status = "Human Reviewed · AI Generated Draft · NEEDS_CONFIRMATION"
             package = {"label": status, "executive_summary": f"{project.title} 的解决方案交付草稿。", "customer_problem": project.customer_need,
-                       "solution_blueprint": self._find(deliverables, "SOLUTION_BLUEPRINT"), "architecture": self._find(deliverables, "TECHNICAL_ARCHITECTURE"),
+                       "solution_blueprint": blueprint, "architecture": self._find(deliverables, "TECHNICAL_ARCHITECTURE"),
                        "implementation_roadmap": self._find(deliverables, "IMPLEMENTATION_PLAN"), "data_plan": self._find(deliverables, "DATA_PLAN"),
                        "ai_workflow": self._find(deliverables, "AI_WORKFLOW"), "risk_and_security": self._risks(self._gap(session)),
+                       "evidence_references": evidence_refs,
                        "acceptance_criteria": ["客户确认需求范围", "资料授权与索引状态经检查", "高风险项完成人工审核", "交付内容明确草稿/审核状态"],
                        "next_steps": ["确认需求优先级与客户资料授权", "选择或创建组织与 Research Workspace", "运行受控验证并进行 Human Review"]}
             self._upsert_deliverable(session, project.id, "DELIVERY_REPORT", "FDE Delivery Package", package, status)
@@ -285,10 +296,20 @@ class FDESolutionService:
                 setattr(row, key, value)
 
     @staticmethod
-    def _version_snapshot(session: Session, project_id: str, status: str, summary: str, snapshot: object) -> None:
+    def _version_snapshot(session: Session, project_id: str, status: str, summary: str, snapshot: object, created_by: str = "AI") -> None:
         maximum = session.scalar(select(func.max(SolutionVersion.version)).where(SolutionVersion.solution_project_id == project_id)) or 0
         session.add(SolutionVersion(solution_project_id=project_id, version=int(maximum) + 1, status=status,
-                                    change_summary=summary, snapshot_json=json.dumps(snapshot, ensure_ascii=False, default=str)))
+                                    change_summary=summary, snapshot_json=json.dumps(snapshot, ensure_ascii=False, default=str), created_by=created_by))
+
+    @staticmethod
+    def _normalize_evidence_refs(rows: list[dict[str, object]]) -> list[dict[str, str]]:
+        refs: list[dict[str, str]] = []
+        for item in rows:
+            paper_id, chunk_id = str(item.get("paper_id", "")), str(item.get("chunk_id", ""))
+            if not paper_id or not chunk_id:
+                continue
+            refs.append({"paper_id": paper_id, "chunk_id": chunk_id, "source": str(item.get("source") or item.get("filename") or item.get("paper_title") or "未命名资料"), "section": str(item.get("section") or "正文")})
+        return refs
 
     @staticmethod
     def _find(deliverables: list[dict[str, object]], kind: str) -> dict[str, object] | None:
@@ -330,4 +351,4 @@ class FDESolutionService:
 
     @staticmethod
     def _version(row: SolutionVersion) -> dict[str, object]:
-        return {"id": row.id, "version": row.version, "status": row.status, "change_summary": row.change_summary, "created_at": row.created_at}
+        return {"id": row.id, "version": row.version, "status": row.status, "change_summary": row.change_summary, "created_by": row.created_by, "created_at": row.created_at}

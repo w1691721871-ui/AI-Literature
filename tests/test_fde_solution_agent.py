@@ -65,7 +65,7 @@ class FDESolutionAgentTests(unittest.TestCase):
         reviewed = self.service.review(self.project["id"], "APPROVED", "fixture reviewer")
         self.assertEqual(reviewed["review_status"], "APPROVED")
         package = self.service.delivery_package(self.project["id"])
-        self.assertEqual(package["label"], "Human Reviewed · AI Generated Draft")
+        self.assertEqual(package["label"], "Human Reviewed · AI Generated Draft · NEEDS_CONFIRMATION")
         self.assertIn("客户确认", " ".join(package["acceptance_criteria"]))
 
     def test_metrics_reflect_persisted_project_records(self):

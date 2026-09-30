@@ -266,6 +266,9 @@ createApp({
     const aiMissionLoading = ref(false);
     const aiMissionError = ref("");
     const aiNotifications = ref([]);
+    const aiMissionReviewComment = ref("");
+    const aiMissionRevisionSummary = ref("");
+    const aiMissionDelivery = ref(null);
     const onboardingState = ref(null);
     const onboardingOpen = ref(false);
     const artifactGallery = ref([]);
@@ -1064,6 +1067,73 @@ createApp({
         await loadAIMissions();
       } catch (error) { aiMissionError.value = error.message || "Mission 创建失败。"; }
       finally { aiMissionLoading.value = false; }
+    }
+
+    async function runAIMission(missionId) {
+      if (!missionId) return;
+      aiMissionLoading.value = true; aiMissionError.value = ""; aiMissionDelivery.value = null;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/run`, { method: "POST" });
+        selectedAIMission.value = await readResponse(response);
+        await loadAIMissions();
+      } catch (error) { aiMissionError.value = error.message || "Mission 执行失败。"; }
+      finally { aiMissionLoading.value = false; }
+    }
+
+    async function reviewAIMission(status) {
+      const missionId = selectedAIMission.value?.id;
+      if (!missionId) return;
+      aiMissionLoading.value = true; aiMissionError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/review`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ status, review_comment: aiMissionReviewComment.value.trim() }),
+        });
+        const payload = await readResponse(response);
+        selectedAIMission.value = payload.mission;
+        await loadAIMissions();
+      } catch (error) { aiMissionError.value = error.message || "审核状态更新失败。"; }
+      finally { aiMissionLoading.value = false; }
+    }
+
+    async function reviseAIMission() {
+      const missionId = selectedAIMission.value?.id;
+      if (!missionId || !aiMissionRevisionSummary.value.trim()) { aiMissionError.value = "请说明需要调整的内容。"; return; }
+      aiMissionLoading.value = true; aiMissionError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/revise`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ change_summary: aiMissionRevisionSummary.value.trim() }),
+        });
+        selectedAIMission.value = await readResponse(response);
+        aiMissionRevisionSummary.value = "";
+        await loadAIMissions();
+      } catch (error) { aiMissionError.value = error.message || "版本修订失败。"; }
+      finally { aiMissionLoading.value = false; }
+    }
+
+    async function generateAIMissionDelivery() {
+      const missionId = selectedAIMission.value?.id;
+      if (!missionId) return;
+      aiMissionLoading.value = true; aiMissionError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/delivery`, { method: "POST" });
+        const payload = await readResponse(response);
+        selectedAIMission.value = payload.mission;
+        aiMissionDelivery.value = payload.delivery_package;
+        await loadAIMissions();
+      } catch (error) { aiMissionError.value = error.message || "Delivery Package 生成失败。"; }
+      finally { aiMissionLoading.value = false; }
+    }
+
+    async function startFdeMissionDemo() {
+      aiMissionForm.value = {
+        title: "Demo · 低碳建筑材料企业协作方案",
+        mission_type: "SOLUTION",
+        goal: "【Demo】企业希望探索低碳建筑材料的性能优化方向，并建立可审阅的科研协作方案。",
+      };
+      await createAIMission();
+      if (selectedAIMission.value?.id) await runAIMission(selectedAIMission.value.id);
     }
 
     async function markAINotificationRead(notificationId) {
@@ -2876,6 +2946,9 @@ createApp({
       aiMissionLoading,
       aiMissionError,
       aiNotifications,
+      aiMissionReviewComment,
+      aiMissionRevisionSummary,
+      aiMissionDelivery,
       loadFdeSolutions,
       loadFdeSolutionDetail,
       applyFdeSolutionDemo,
@@ -2888,6 +2961,11 @@ createApp({
       loadAIMissions,
       loadAIMissionDetail,
       createAIMission,
+      runAIMission,
+      reviewAIMission,
+      reviseAIMission,
+      generateAIMissionDelivery,
+      startFdeMissionDemo,
       markAINotificationRead,
       onboardingState,
       onboardingOpen,
@@ -3116,12 +3194,13 @@ createApp({
       </section>
 
       <section v-if="activeWorkspaceView === 'mission-center'" class="mission-center" aria-label="AI Mission Center">
-        <header class="dashboard-heading"><div><p class="section-kicker">AI MISSION CENTER</p><h2>Mission lifecycle, without hidden reasoning.</h2><p>Workspace → Mission → AI Team → Evidence → Review → Deliverable。只展示已持久化的用户可理解事件。</p></div><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="loadAIMissions">Refresh</button></header>
+        <header class="dashboard-heading"><div><p class="section-kicker">FDE MISSION CENTER</p><h2>Customer Need → Evidence → Review → Delivery.</h2><p>真实 RAG Evidence、需求确认与人工审核共同驱动交付；不展示内部推理，也不自动批准。</p></div><div class="mission-header-actions"><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="startFdeMissionDemo">Start FDE Demo</button><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="loadAIMissions">Refresh</button></div></header>
         <p v-if="aiMissionError" class="error-alert"><span>!</span>{{ aiMissionError }}</p>
-        <div class="mission-center-layout"><section class="mission-create-surface"><p class="section-kicker">CREATE MISSION</p><label>Mission title<input v-model="aiMissionForm.title" placeholder="例如：RAG 技术路线分析" /></label><label>Mission type<select v-model="aiMissionForm.mission_type"><option>RESEARCH</option><option>SOLUTION</option><option>DELIVERY</option></select></label><label>Goal<textarea v-model="aiMissionForm.goal" rows="5" placeholder="记录研究或解决方案目标；不会在此处生成无依据结论。"></textarea></label><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="createAIMission">Create AI Mission</button></section>
-          <section class="mission-stream-surface"><template v-if="selectedAIMission"><header><div><p class="section-kicker">MISSION RUNTIME</p><h3>{{ selectedAIMission.title }}</h3><small>{{ selectedAIMission.status }} · {{ selectedAIMission.progress }}% · {{ selectedAIMission.current_step }}</small></div></header><ol class="mission-timeline"><li v-for="item in selectedAIMission.timeline || []" :key="item.id"><b>{{ item.stage }}</b><div><strong>{{ item.action }}</strong><p>{{ item.result }}</p><small>Evidence: {{ item.evidence_count }} · {{ item.status }}</small></div></li></ol><section class="mission-graph"><span>EVIDENCE GRAPH</span><div v-for="node in selectedAIMission.evidence_graph?.nodes || []" :key="node.id"><b>{{ node.type }}</b><small>{{ node.label }}</small></div><p>{{ selectedAIMission.evidence_graph?.boundary }}</p></section></template><div v-else class="product-empty-state"><b>No mission selected</b><p>Create or choose an AI Mission to inspect its auditable timeline.</p></div></section>
+        <div class="mission-center-layout"><section class="mission-create-surface"><p class="section-kicker">CREATE MISSION</p><label>Mission title<input v-model="aiMissionForm.title" placeholder="例如：RAG 技术路线分析" /></label><label>Mission type<select v-model="aiMissionForm.mission_type"><option>RESEARCH</option><option>SOLUTION</option><option>DELIVERY</option></select></label><label>Customer need / Goal<textarea v-model="aiMissionForm.goal" rows="5" placeholder="描述客户需求或研究目标；系统仅基于检索到的真实资料形成 Evidence 引用。"></textarea></label><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="createAIMission">Create AI Mission</button></section>
+          <section class="mission-stream-surface"><template v-if="selectedAIMission"><header><div><p class="section-kicker">MISSION RUNTIME</p><h3>{{ selectedAIMission.title }}</h3><small>{{ selectedAIMission.status }} · {{ selectedAIMission.progress }}% · {{ selectedAIMission.current_step }}</small></div><button v-if="['PLANNING','NEEDS_REVISION'].includes(selectedAIMission.status)" class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="runAIMission(selectedAIMission.id)">Run Mission</button></header><section class="mission-requirements"><span>REQUIREMENTS · NEEDS_CONFIRMATION</span><div v-if="selectedAIMission.requirements?.length"><small v-for="item in selectedAIMission.requirements" :key="item.id">{{ item.type }} · {{ item.status }}</small></div><p v-else>执行后将生成 Business、Data、AI、System、Delivery、Security 六类待确认需求。</p></section><ol class="mission-timeline"><li v-for="item in selectedAIMission.timeline || []" :key="item.id"><b>{{ item.stage }}</b><div><strong>{{ item.action }}</strong><p>{{ item.result }}</p><small>Evidence: {{ item.evidence_count }} · {{ item.status }} · {{ item.created_at }}</small></div></li></ol><section class="mission-evidence-list"><span>REAL EVIDENCE REFERENCES</span><div v-for="item in selectedAIMission.evidence_refs || []" :key="item.chunk_id"><b>{{ item.source }}</b><small>{{ item.paper_id }} / {{ item.chunk_id }} · {{ item.section }}</small></div><p v-if="!(selectedAIMission.evidence_refs || []).length">尚未检索到可引用 Evidence；不会产生科研结论。</p></section><section class="mission-graph"><span>EVIDENCE GRAPH</span><div v-for="node in selectedAIMission.evidence_graph?.nodes || []" :key="node.id"><b>{{ node.type }}</b><small>{{ node.label }}</small></div><p>{{ selectedAIMission.evidence_graph?.boundary }}</p></section><section class="mission-review-panel"><span>HUMAN REVIEW</span><template v-if="selectedAIMission.status === 'WAITING_REVIEW'"><textarea v-model="aiMissionReviewComment" rows="3" placeholder="记录审核意见（可选）"></textarea><div><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="reviewAIMission('APPROVED')">Approve</button><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="reviewAIMission('NEEDS_REVISION')">Needs revision</button><button class="text-button" type="button" :disabled="aiMissionLoading" @click="reviewAIMission('REJECTED')">Reject</button></div></template><template v-else-if="selectedAIMission.status === 'NEEDS_REVISION'"><textarea v-model="aiMissionRevisionSummary" rows="3" placeholder="说明版本修订要求"></textarea><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="reviseAIMission">Create revised draft</button></template><template v-else-if="selectedAIMission.status === 'APPROVED'"><p>方案已由人工批准。交付包仍会保留 AI Generated Draft 与 NEEDS_CONFIRMATION 标识。</p><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="generateAIMissionDelivery">Generate Delivery Package</button></template><template v-else-if="selectedAIMission.status === 'COMPLETED'"><p>Mission 已完成。所有内容仍为可追溯的 AI 辅助交付草稿。</p></template><p v-else>等待受控执行和人工审核；系统不会自动生成正式交付。</p></section><section v-if="aiMissionDelivery" class="mission-delivery-package"><span>DELIVERY PACKAGE</span><b>{{ aiMissionDelivery.label }}</b><p>{{ aiMissionDelivery.executive_summary }}</p><small>Evidence references: {{ aiMissionDelivery.evidence_references?.length || 0 }}</small></section></template><div v-else class="product-empty-state"><b>No mission selected</b><p>Create or choose an AI Mission to inspect its auditable timeline.</p></div></section>
           <aside class="mission-intelligence-surface"><p class="section-kicker">AI TEAM</p><article v-for="item in selectedAIMission?.team || aiMissionDashboard?.team_status || []" :key="item.name"><b>{{ item.name }}</b><span>{{ item.role }}</span><small>{{ item.status }} · {{ item.last_action }}</small></article><p class="section-kicker">NOTIFICATIONS</p><button v-for="item in aiNotifications" :key="item.id" class="mission-notification" :class="{ read: item.read }" type="button" @click="markAINotificationRead(item.id)"><b>{{ item.type }}</b><small>{{ item.message }}</small></button><p v-if="!aiNotifications.length" class="quiet-note">No persisted notifications.</p></aside>
         </div>
+        <section v-if="selectedAIMission" class="mission-version-history"><span>VERSION HISTORY</span><div v-for="item in selectedAIMission.versions || []" :key="item.id"><b>v{{ item.version }} · {{ item.status }}</b><small>{{ item.created_by }} · {{ item.change_summary }} · {{ item.created_at }}</small></div><p v-if="!(selectedAIMission.versions || []).length">尚未生成 Blueprint 版本。</p></section>
         <section class="mission-list"><button v-for="item in aiMissions" :key="item.id" type="button" :class="{ active: selectedAIMission?.id === item.id }" @click="loadAIMissionDetail(item.id)"><span>{{ item.type }}</span><b>{{ item.title }}</b><small>{{ item.status }} · {{ item.progress }}% · {{ item.current_step }}</small></button><p v-if="!aiMissions.length">No AI mission yet. Create a mission to begin a reviewable lifecycle.</p></section>
       </section>
 
