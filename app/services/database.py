@@ -40,6 +40,7 @@ def initialize_database() -> None:
     from app.models.agent_memory import AgentMemory  # noqa: F401
     from app.models.execution_graph import ExecutionGraph  # noqa: F401
     from app.models.planner_trace import PlannerTrace  # noqa: F401
+    from app.models.adaptive_iteration import AdaptiveIteration  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
     from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401
@@ -149,6 +150,8 @@ def _apply_lightweight_migrations() -> None:
         "evidence_refs_json": "TEXT NOT NULL DEFAULT '[]'",
         "review_comment": "TEXT NOT NULL DEFAULT ''",
         "retry_count": "INTEGER NOT NULL DEFAULT 0",
+        "adaptive_iteration": "INTEGER NOT NULL DEFAULT 0",
+        "max_iterations": "INTEGER NOT NULL DEFAULT 3",
     }
     for name, definition in mission_additions.items():
         if name not in mission_columns:
@@ -178,15 +181,24 @@ def _apply_lightweight_migrations() -> None:
         "duration": "FLOAT", "input_summary": "TEXT NOT NULL DEFAULT ''",
         "output_summary": "TEXT NOT NULL DEFAULT ''", "tool_used": "VARCHAR(100) NOT NULL DEFAULT ''",
         "evidence_count": "INTEGER NOT NULL DEFAULT 0",
+        "iteration": "INTEGER NOT NULL DEFAULT 0", "decision": "VARCHAR(60) NOT NULL DEFAULT ''",
+        "trigger": "VARCHAR(80) NOT NULL DEFAULT ''", "graph_version": "INTEGER NOT NULL DEFAULT 1",
     }
     for name, definition in trace_additions.items():
         if name not in trace_columns:
             with engine.begin() as connection:
                 connection.execute(text(f"ALTER TABLE agent_traces ADD COLUMN {name} {definition}"))
+    graph_columns = {column["name"] for column in inspect(engine).get_columns("execution_graphs")}
+    for name, definition in {"version":"INTEGER NOT NULL DEFAULT 1", "parent_version":"INTEGER", "change_summary":"TEXT NOT NULL DEFAULT 'Initial plan'"}.items():
+        if name not in graph_columns:
+            with engine.begin() as connection: connection.execute(text(f"ALTER TABLE execution_graphs ADD COLUMN {name} {definition}"))
     evaluation_columns = {column["name"] for column in inspect(engine).get_columns("agent_evaluations")}
     if "planner_score" not in evaluation_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE agent_evaluations ADD COLUMN planner_score INTEGER NOT NULL DEFAULT 0"))
+    for name, definition in {"adaptive_iterations":"INTEGER NOT NULL DEFAULT 0", "replan_count":"INTEGER NOT NULL DEFAULT 0", "evidence_retrieval_rounds":"INTEGER NOT NULL DEFAULT 0", "verification_rounds":"INTEGER NOT NULL DEFAULT 0", "final_decision":"VARCHAR(60) NOT NULL DEFAULT ''"}.items():
+        if name not in evaluation_columns:
+            with engine.begin() as connection: connection.execute(text(f"ALTER TABLE agent_evaluations ADD COLUMN {name} {definition}"))
 
 
 def get_database_session() -> Generator[Session, None, None]:

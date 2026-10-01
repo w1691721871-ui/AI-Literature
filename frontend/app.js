@@ -269,6 +269,7 @@ createApp({
     const aiMissionReviewComment = ref("");
     const aiMissionRevisionSummary = ref("");
     const aiMissionDelivery = ref(null);
+    const adaptiveMissionLoading = ref(false);
     const computerMissionTask = ref("");
     const computerMissionLoading = ref(false);
     const onboardingState = ref(null);
@@ -407,6 +408,7 @@ createApp({
     const systemStatusError = ref("");
     const workflowDiagnostics = ref(null);
     const agentAnalytics = ref([]);
+    const adaptiveAnalytics = ref(null);
     const agentMemories = ref([]);
     const diagnosticsLoading = ref(false);
     const diagnosticsError = ref("");
@@ -1058,11 +1060,26 @@ createApp({
       if (!missionId) return;
       const response = await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}`);
       selectedAIMission.value = await readResponse(response);
-      try {
-        selectedAIMission.value.evaluation = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/evaluations/${missionId}`));
-        selectedAIMission.value.agent_traces = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent-traces/${missionId}`));
-        selectedAIMission.value.planner_plan = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/plan`));
-      } catch (_) { selectedAIMission.value.evaluation = null; selectedAIMission.value.agent_traces = []; selectedAIMission.value.planner_plan = null; }
+      try { selectedAIMission.value.evaluation = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/evaluations/${missionId}`)); } catch (_) { selectedAIMission.value.evaluation = null; }
+      try { selectedAIMission.value.agent_traces = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent-traces/${missionId}`)); } catch (_) { selectedAIMission.value.agent_traces = []; }
+      try { selectedAIMission.value.planner_plan = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/plan`)); } catch (_) { selectedAIMission.value.planner_plan = null; }
+      try { selectedAIMission.value.adaptive_iterations = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/iterations`)); selectedAIMission.value.graph_history = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/graph-history`)); } catch (_) { selectedAIMission.value.adaptive_iterations = []; selectedAIMission.value.graph_history = []; }
+    }
+
+    async function runAdaptiveMission() {
+      if (!selectedAIMission.value?.id) return;
+      adaptiveMissionLoading.value = true;
+      try { await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${selectedAIMission.value.id}/adaptive-run`, { method: "POST" })); await loadAIMissionDetail(selectedAIMission.value.id); }
+      catch (error) { aiMissionError.value = error.message || "Adaptive Loop 暂时无法运行。"; }
+      finally { adaptiveMissionLoading.value = false; }
+    }
+
+    async function reviewAdaptiveMission(status) {
+      if (!selectedAIMission.value?.id) return;
+      adaptiveMissionLoading.value = true;
+      try { await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${selectedAIMission.value.id}/adaptive-review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) })); await loadAIMissionDetail(selectedAIMission.value.id); }
+      catch (error) { aiMissionError.value = error.message || "Adaptive Review 暂时无法提交。"; }
+      finally { adaptiveMissionLoading.value = false; }
     }
 
     async function createAIMission() {
@@ -1334,8 +1351,8 @@ createApp({
     }
 
     async function loadAgentAnalytics() {
-      try { agentAnalytics.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent-metrics`)); }
-      catch (_) { agentAnalytics.value = []; }
+      try { const [metrics, adaptive] = await Promise.all([readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent-metrics`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/adaptive-metrics`))]); agentAnalytics.value = metrics; adaptiveAnalytics.value = adaptive; }
+      catch (_) { agentAnalytics.value = []; adaptiveAnalytics.value = null; }
     }
 
     async function loadAgentMemories() {
@@ -2929,6 +2946,7 @@ createApp({
       systemStatusError,
       workflowDiagnostics,
       agentAnalytics,
+      adaptiveAnalytics,
       agentMemories,
       diagnosticsLoading,
       diagnosticsError,
@@ -3013,6 +3031,7 @@ createApp({
       aiMissionReviewComment,
       aiMissionRevisionSummary,
       aiMissionDelivery,
+      adaptiveMissionLoading,
       computerMissionTask,
       computerMissionLoading,
       loadFdeSolutions,
@@ -3027,6 +3046,8 @@ createApp({
       loadAIMissions,
       loadAIMissionDetail,
       createAIMission,
+      runAdaptiveMission,
+      reviewAdaptiveMission,
       runAIMission,
       reviewAIMission,
       reviseAIMission,
@@ -3275,6 +3296,7 @@ createApp({
         <section v-if="selectedAIMission" class="mission-version-history"><span>VERSION HISTORY</span><div v-for="item in selectedAIMission.versions || []" :key="item.id"><b>v{{ item.version }} · {{ item.status }}</b><small>{{ item.created_by }} · {{ item.change_summary }} · {{ item.created_at }}</small></div><p v-if="!(selectedAIMission.versions || []).length">尚未生成 Blueprint 版本。</p></section>
         <section v-if="selectedAIMission?.evaluation" class="mission-evaluation-card"><span>AGENT EVALUATION</span><b>Agent Score · {{ selectedAIMission.evaluation.evaluation_score }}/100</b><small>Evidence {{ selectedAIMission.evaluation.evidence_coverage }} · Verification {{ selectedAIMission.evaluation.verification_result }} · Human revisions {{ selectedAIMission.evaluation.human_revision_count }} · Safety {{ selectedAIMission.evaluation.execution_safety }}</small><p v-if="selectedAIMission.evaluation.failure_type">{{ selectedAIMission.evaluation.failure_type }} · {{ selectedAIMission.evaluation.failure_reason }}</p><details v-if="selectedAIMission.agent_traces?.length"><summary>Agent Trace View</summary><div v-for="trace in selectedAIMission.agent_traces" :key="trace.created_at + trace.action"><b>{{ trace.agent_name }}</b><small>{{ trace.action }} · {{ trace.tool_used || 'orchestration' }} · {{ trace.evidence_count }} Evidence · {{ trace.status }}</small><p>{{ trace.output_summary }}</p></div></details></section>
         <section v-if="selectedAIMission?.planner_plan" class="mission-evaluation-card"><span>AI PLANNING</span><b>Dynamic execution plan</b><p>{{ selectedAIMission.planner_plan.reason_summary }}</p><div class="planner-agent-list"><small v-for="agent in selectedAIMission.planner_plan.selected_agents" :key="agent">✓ {{ agent }}</small><small v-for="agent in selectedAIMission.planner_plan.skipped_agents" :key="agent">— {{ agent }} skipped</small></div><ol class="mission-timeline"><li v-for="node in selectedAIMission.planner_plan.execution_graph" :key="node.id"><b>{{ node.order }}</b><div><strong>{{ node.agent_name }}</strong><p>{{ node.node_name }}</p><small>{{ node.status }} · depends on {{ node.depends_on?.join(', ') || 'start' }}</small></div></li></ol></section>
+        <section v-if="selectedAIMission" class="mission-evaluation-card"><span>ADAPTIVE LOOP · FINITE</span><b>Loop {{ selectedAIMission.adaptive_iterations?.length || 0 }} / 3</b><p>每次仅执行一个可审计决策；Evidence 不足只请求现有 RAG，Computer 变更始终需要重新审批。</p><button v-if="!['WAITING_ADAPTIVE_REVIEW','COMPLETED','FAILED'].includes(selectedAIMission.status)" class="outline-button" type="button" :disabled="adaptiveMissionLoading" @click="runAdaptiveMission">{{ adaptiveMissionLoading ? 'Evaluating…' : 'Run adaptive decision' }}</button><div v-if="selectedAIMission.status === 'WAITING_ADAPTIVE_REVIEW'"><button class="primary-card-action" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('APPROVE')">Approve next plan</button><button class="text-button" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('REJECT')">Reject</button><button class="outline-button" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('NEEDS_REVISION')">Needs revision</button></div><ol class="mission-timeline"><li v-for="item in selectedAIMission.adaptive_iterations || []" :key="item.created_at + item.iteration"><b>{{ item.iteration }}</b><div><strong>{{ item.decision }}</strong><p>{{ item.summary }}</p><small>{{ item.trigger }} · Graph v{{ item.graph_version }}</small></div></li></ol><details v-if="selectedAIMission.graph_history?.length"><summary>Execution Graph History</summary><div v-for="graph in selectedAIMission.graph_history" :key="graph.version"><b>v{{ graph.version }}</b><small>{{ graph.change_summary }}</small><p>{{ graph.nodes.map(node => node.agent_name).join(' → ') }}</p></div></details></section>
         <section v-if="selectedAIMission" class="computer-mission-center"><header><div><span>COMPUTER MISSION CENTER</span><b>Sandbox · Diff Review · Human Approval · Verification</b></div><small>仅允许当前 ResearchOS 项目的白名单文件与固定验证命令。</small></header><div class="computer-mission-create"><input v-model="computerMissionTask" placeholder="例如：为首页输入区准备可审阅的焦点状态优化" /><button class="outline-button" type="button" :disabled="computerMissionLoading" @click="createComputerMission">Create & Analyze</button></div><article v-for="item in selectedAIMission.computer_missions || []" :key="item.id"><div class="computer-mission-summary"><b>{{ item.task }}</b><small>{{ item.status }} · {{ item.approval_status }} · {{ item.risk_level }} risk</small><details><summary>View plan, Diff & verification</summary><p>Workspace: {{ item.workspace?.boundary || '尚未扫描' }}</p><p>Plan: {{ item.action_plan?.steps?.length || 0 }} reviewable steps · verification {{ item.verification?.status || 'PENDING' }}</p><pre v-if="item.diff_content">{{ item.diff_content }}</pre><p v-else>尚未生成可安全执行的 Diff。</p><small v-if="item.execution_log?.length">{{ item.execution_log[item.execution_log.length - 1].action }} · {{ item.execution_log[item.execution_log.length - 1].status }}</small></details></div><div class="computer-mission-actions"><button v-if="item.status === 'WAITING_APPROVAL'" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'APPROVED')">Approve Diff</button><button v-if="item.status === 'WAITING_APPROVAL'" class="text-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'REJECTED')">Reject</button><button v-if="item.status === 'WAITING_APPROVAL'" class="outline-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'NEEDS_REVISION')">Request Revision</button><button v-if="item.status === 'APPROVED' && item.execution_allowed" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="executeComputerMission(item)">Execute Approved Diff</button></div></article><p v-if="!(selectedAIMission.computer_missions || []).length">尚无 Computer Mission。创建后只扫描受控 Workspace 与生成 Diff，不会自动写入文件。</p></section>
         <section class="mission-list"><button v-for="item in aiMissions" :key="item.id" type="button" :class="{ active: selectedAIMission?.id === item.id }" @click="loadAIMissionDetail(item.id)"><span>{{ item.type }}</span><b>{{ item.title }}</b><small>{{ item.status }} · {{ item.progress }}% · {{ item.current_step }}</small></button><p v-if="!aiMissions.length">No AI mission yet. Create a mission to begin a reviewable lifecycle.</p></section>
       </section>
@@ -3686,7 +3708,7 @@ createApp({
         <section class="workflow-diagnostics-panel"><div class="result-section-heading"><div><p class="section-kicker">REAL WORKFLOW READINESS</p><h3>真实资料闭环检查</h3><p>只检查已有资料、索引与服务配置；不会生成样例论文、证据或科研结论。</p></div><button class="outline-button" type="button" :disabled="diagnosticsLoading" @click="loadWorkflowDiagnostics">{{ diagnosticsLoading ? '检查中…' : '重新检查' }}</button></div><p v-if="diagnosticsError" class="error-alert"><span>!</span>{{ diagnosticsError }}</p><div v-if="workflowDiagnostics" class="diagnostic-summary"><b :class="workflowDiagnostics.overall">{{ workflowDiagnostics.overall }}</b><span>{{ workflowDiagnostics.data_boundary }}</span></div><div v-if="workflowDiagnostics" class="diagnostic-check-grid"><article v-for="check in workflowDiagnostics.checks" :key="check.id"><span :class="check.status">{{ check.status }}</span><h4>{{ check.name }}</h4><p>{{ check.detail }}</p></article></div></section>
         <section class="demo-knowledge-panel"><div><p class="section-kicker">DEMO KNOWLEDGE BASE</p><h3>低碳建筑材料案例资料</h3><p>用于比赛现场讲解知识库、项目资料和产学研协作流程。</p></div><button class="primary-card-action" type="button" @click="initializeDemoKnowledge">{{ demoKnowledgeInitialized ? 'Demo资料已加载' : '初始化 Demo 知识库' }}</button><div v-if="visibleDemoKnowledgeAssets.length" class="demo-asset-grid"><article v-for="asset in visibleDemoKnowledgeAssets" :key="asset.title"><span>{{ asset.status }}</span><h4>{{ asset.title }}</h4><small>{{ asset.type }}</small><p>{{ asset.detail }}</p></article></div><p class="demo-boundary">这些是明确标注的界面展示资料，不会自动写入真实论文库、FAISS 索引或作为 Agent 的科研证据。需要真实分析时，请上传实际可解析的资料。</p></section>
         <section class="activity-log-panel"><div class="result-section-heading"><div><p class="section-kicker">ACTIVITY LOG</p><h3>用户操作日志</h3></div><span>{{ activityLogs.length }} 条</span></div><div v-if="!activityLogs.length" class="activity-empty">暂无操作记录。创建任务、执行 Agent、生成报告或更新项目后会在此显示。</div><ol v-else class="activity-list"><li v-for="item in activityLogs" :key="item.created_at + item.action"><b>{{ item.action }}</b><span>{{ item.detail }}</span><time>{{ formatLibraryDate(item.created_at) }}</time></li></ol></section>
-        <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">AGENT ANALYTICS</p><h3>Execution quality & observability</h3></div><button class="outline-button" type="button" @click="loadAgentAnalytics">Refresh</button></div><article v-for="metric in agentAnalytics" :key="metric.agent_name"><b>{{ metric.agent_name }}</b><span>{{ metric.total_tasks }} tasks · {{ metric.success_rate }}% success · {{ metric.avg_duration }}s avg · {{ metric.avg_evidence_count }} Evidence</span></article><p v-if="!agentAnalytics.length">尚无持久化 Agent Trace；运行新的 Mission 后将显示可审计统计。</p></section>
+        <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">AGENT ANALYTICS</p><h3>Execution quality & observability</h3></div><button class="outline-button" type="button" @click="loadAgentAnalytics">Refresh</button></div><p v-if="adaptiveAnalytics" class="quiet-note">Adaptive Missions {{ adaptiveAnalytics.adaptive_missions }} · Replan rate {{ adaptiveAnalytics.replan_rate }} · Avg iterations {{ adaptiveAnalytics.average_iterations }} · Evidence recovery {{ adaptiveAnalytics.evidence_recovery_rate }}% · Verification recovery {{ adaptiveAnalytics.verification_recovery_rate }}%</p><article v-for="metric in agentAnalytics" :key="metric.agent_name"><b>{{ metric.agent_name }}</b><span>{{ metric.total_tasks }} tasks · {{ metric.success_rate }}% success · {{ metric.avg_duration }}s avg · {{ metric.avg_evidence_count }} Evidence</span></article><p v-if="!agentAnalytics.length">尚无持久化 Agent Trace；运行新的 Mission 后将显示可审计统计。</p></section>
         <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">AGENT MEMORY CENTER</p><h3>Reviewable memory summaries</h3></div><button class="outline-button" type="button" @click="loadAgentMemories">Refresh</button></div><article v-for="memory in agentMemories" :key="memory.id"><b>{{ memory.agent_name }} · {{ memory.memory_type }}</b><span>{{ memory.content_summary }}</span><small>{{ memory.status }} · Mission {{ memory.source_mission_id || 'N/A' }}</small><button class="text-button" type="button" @click="deleteAgentMemory(memory.id)">Delete</button></article><p v-if="!agentMemories.length">暂无 Agent Memory。任务完成后的摘要必须经人工确认后才可作为可复用 Memory。</p></section>
         <p class="demo-boundary">操作日志仅保存在当前浏览器的 localStorage 中，用于现场演示；清除浏览器数据后会被移除。</p>
       </section>

@@ -9,6 +9,7 @@ from app.models.agent_memory import AgentMemory
 from app.models.computer_mission import ComputerMission
 from app.models.execution_graph import ExecutionGraph
 from app.models.planner_trace import PlannerTrace
+from app.models.adaptive_iteration import AdaptiveIteration
 from app.services.agent_evaluation_service import AgentEvaluationService
 from app.services.agent_memory_service import AgentMemoryService
 from app.services.dynamic_planner_service import DynamicPlannerService
@@ -16,7 +17,7 @@ from app.services.dynamic_planner_service import DynamicPlannerService
 class DynamicPlannerTests(unittest.TestCase):
     def setUp(self):
         self.engine=create_engine("sqlite:///:memory:"); self.Session=sessionmaker(bind=self.engine)
-        for table in (AIMission.__table__,ExecutionGraph.__table__,PlannerTrace.__table__,AgentMemory.__table__,AgentEvaluation.__table__,ComputerMission.__table__): table.create(self.engine)
+        for table in (AIMission.__table__,ExecutionGraph.__table__,PlannerTrace.__table__,AgentMemory.__table__,AgentEvaluation.__table__,ComputerMission.__table__,AdaptiveIteration.__table__): table.create(self.engine)
         self.memories=AgentMemoryService(self.Session,initialize=False)
         self.service=DynamicPlannerService(self.Session,initialize=False,memories=self.memories)
     def tearDown(self): self.engine.dispose()

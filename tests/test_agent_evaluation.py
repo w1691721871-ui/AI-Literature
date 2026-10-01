@@ -8,12 +8,13 @@ from app.models.agent_evaluation import AgentEvaluation
 from app.models.agent_metric import AgentMetric
 from app.models.computer_mission import ComputerMission
 from app.models.execution_graph import ExecutionGraph
+from app.models.adaptive_iteration import AdaptiveIteration
 from app.services.agent_evaluation_service import AgentEvaluationService
 
 class AgentEvaluationTests(unittest.TestCase):
     def setUp(self):
         self.engine=create_engine("sqlite:///:memory:"); self.Session=sessionmaker(bind=self.engine)
-        for table in (AIMission.__table__,AgentTrace.__table__,AgentEvaluation.__table__,AgentMetric.__table__,ComputerMission.__table__,ExecutionGraph.__table__): table.create(self.engine)
+        for table in (AIMission.__table__,AgentTrace.__table__,AgentEvaluation.__table__,AgentMetric.__table__,ComputerMission.__table__,ExecutionGraph.__table__,AdaptiveIteration.__table__): table.create(self.engine)
         self.service=AgentEvaluationService(self.Session,initialize=False)
     def tearDown(self): self.engine.dispose()
     def test_trace_metrics_and_evidence_grounded_score(self):

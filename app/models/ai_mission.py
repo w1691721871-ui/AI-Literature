@@ -24,6 +24,8 @@ class AIMission(Base):
     evidence_refs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     review_comment: Mapped[str] = mapped_column(Text, nullable=False, default="")
     retry_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    adaptive_iteration: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    max_iterations: Mapped[int] = mapped_column(Integer, nullable=False, default=3)
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="CREATED")
     progress: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     current_step: Mapped[str] = mapped_column(String(100), nullable=False, default="Requirement Analysis")

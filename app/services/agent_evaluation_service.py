@@ -9,6 +9,7 @@ from app.models.agent_trace import AgentTrace
 from app.models.ai_mission import AIMission
 from app.models.computer_mission import ComputerMission
 from app.models.execution_graph import ExecutionGraph
+from app.models.adaptive_iteration import AdaptiveIteration
 from app.services.database import SessionLocal, initialize_database
 
 class AgentEvaluationService:
@@ -33,10 +34,14 @@ class AgentEvaluationService:
             is_implementation=any(word in (mission.goal or "").lower() for word in ("code","api","ui","bug","python","前端","代码","接口","修复","实现"))
             selected={node.agent_name for node in nodes}
             planner_score=(40 if completed else 0)+(30 if nodes else 0)+(20 if ("Computer Agent" in selected)==is_implementation else 0)+(10 if safety=="PASS" else 0)
-            report={"mission_id":mission_id,"evaluation_score":score,"planner_score":planner_score,"task_completion":"COMPLETED" if completed else mission.status,"evidence_coverage":len(refs),"human_revision_count":revisions,"verification_result":verification,"execution_safety":safety,"failure_type":failure_type,"failure_reason":failure_reason,"boundary":"评分只根据已保存的任务状态、Execution Graph、Evidence 引用、人工修订和受控验证元数据计算；不读取 Prompt、CoT、密钥或隐私文件。"}
+            adaptive=s.scalars(select(AdaptiveIteration).where(AdaptiveIteration.mission_id==mission_id)).all()
+            replans=sum(item.decision=="REPLAN" for item in adaptive); evidence_rounds=sum(item.trigger in {"EVIDENCE_INSUFFICIENT","EVIDENCE_RECOVERED"} for item in adaptive); verification_rounds=sum(item.trigger in {"TOOL_FAILURE","COMPUTER_REVIEW_REQUIRED"} for item in adaptive)
+            final_decision=adaptive[-1].decision if adaptive else ""
+            planning_efficiency=(40 if completed else 0)+(20 if replans<=1 else 0)+(20 if evidence_rounds and refs else 0)+(10 if verification in {"PASS","NOT_APPLICABLE"} else 0)+(10 if safety=="PASS" else 0)
+            report={"mission_id":mission_id,"evaluation_score":score,"planner_score":planner_score,"planning_efficiency":planning_efficiency,"adaptive_iterations":len(adaptive),"replan_count":replans,"evidence_retrieval_rounds":evidence_rounds,"verification_rounds":verification_rounds,"final_decision":final_decision,"task_completion":"COMPLETED" if completed else mission.status,"evidence_coverage":len(refs),"human_revision_count":revisions,"verification_result":verification,"execution_safety":safety,"failure_type":failure_type,"failure_reason":failure_reason,"boundary":"评分只根据已保存的任务状态、Execution Graph、Evidence 引用、人工修订和受控验证元数据计算；不读取 Prompt、CoT、密钥或隐私文件。"}
             row=s.scalar(select(AgentEvaluation).where(AgentEvaluation.mission_id==mission_id))
             if row is None: row=AgentEvaluation(mission_id=mission_id); s.add(row)
-            for key in ("evaluation_score","planner_score","task_completion","evidence_coverage","human_revision_count","verification_result","execution_safety","failure_type","failure_reason"):
+            for key in ("evaluation_score","planner_score","adaptive_iterations","replan_count","evidence_retrieval_rounds","verification_rounds","final_decision","task_completion","evidence_coverage","human_revision_count","verification_result","execution_safety","failure_type","failure_reason"):
                 setattr(row,key,report[key])
             row.report_json=json.dumps(report,ensure_ascii=False); s.commit(); return report
         finally:s.close()
@@ -58,7 +63,14 @@ class AgentEvaluationService:
 
     def traces(self, mission_id):
         s=self.sessions()
-        try:return [{"agent_name":x.agent_name,"action":x.action or x.step,"status":x.status,"duration":x.duration,"input_summary":x.input_summary,"output_summary":x.output_summary or x.message,"tool_used":x.tool_used,"evidence_count":x.evidence_count,"created_at":x.created_at} for x in s.scalars(select(AgentTrace).where(AgentTrace.mission_id==mission_id).order_by(AgentTrace.created_at)).all()]
+        try:return [{"agent_name":x.agent_name,"action":x.action or x.step,"status":x.status,"duration":x.duration,"input_summary":x.input_summary,"output_summary":x.output_summary or x.message,"tool_used":x.tool_used,"evidence_count":x.evidence_count,"iteration":x.iteration,"decision":x.decision,"trigger":x.trigger,"graph_version":x.graph_version,"created_at":x.created_at} for x in s.scalars(select(AgentTrace).where(AgentTrace.mission_id==mission_id).order_by(AgentTrace.created_at)).all()]
+        finally:s.close()
+
+    def adaptive_metrics(self):
+        s=self.sessions()
+        try:
+            rows=s.scalars(select(AgentEvaluation)).all(); total=len(rows)
+            return {"adaptive_missions":sum(row.adaptive_iterations > 0 for row in rows),"replan_rate":round(sum(row.replan_count for row in rows)/total,2) if total else 0,"average_iterations":round(sum(row.adaptive_iterations for row in rows)/total,2) if total else 0,"evidence_recovery_rate":round(sum(row.evidence_retrieval_rounds > 0 for row in rows)/total*100,1) if total else 0,"verification_recovery_rate":round(sum(row.verification_rounds > 0 for row in rows)/total*100,1) if total else 0,"boundary":"指标只聚合已保存的 Evaluation，不代表模型准确率或科研结论质量。"}
         finally:s.close()
 
     def metrics(self):

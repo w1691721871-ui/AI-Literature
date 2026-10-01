@@ -31,6 +31,10 @@ class AgentTrace(Base):
     output_summary: Mapped[str] = mapped_column(Text, nullable=False, default="")
     tool_used: Mapped[str] = mapped_column(String(100), nullable=False, default="")
     evidence_count: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    iteration: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    decision: Mapped[str] = mapped_column(String(60), nullable=False, default="")
+    trigger: Mapped[str] = mapped_column(String(80), nullable=False, default="")
+    graph_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, index=True
     )

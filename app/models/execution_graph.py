@@ -16,4 +16,7 @@ class ExecutionGraph(Base):
     status: Mapped[str] = mapped_column(String(40), nullable=False, default="PENDING")
     node_order: Mapped[int] = mapped_column(Integer, nullable=False)
     depends_on: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    parent_version: Mapped[int | None] = mapped_column(Integer, nullable=True)
+    change_summary: Mapped[str] = mapped_column(Text, nullable=False, default="Initial plan")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)

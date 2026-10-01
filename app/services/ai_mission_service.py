@@ -28,7 +28,7 @@ class AIMissionNotFoundError(ValueError): pass
 class AIMissionService:
     """Coordinates existing FDE + RAG services without fabricating Evidence."""
     max_retries = 3
-    allowed_statuses = {"CREATED","PLANNING","REQUIREMENT_ANALYSIS","EVIDENCE_RETRIEVAL","SOLUTION_GENERATION","RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION","APPROVED","DELIVERY_READY","COMPLETED","FAILED"}
+    allowed_statuses = {"CREATED","PLANNING","REQUIREMENT_ANALYSIS","EVIDENCE_RETRIEVAL","SOLUTION_GENERATION","RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION","ADAPTIVE_REPLANNING","WAITING_ADAPTIVE_REVIEW","APPROVED","DELIVERY_READY","COMPLETED","FAILED"}
 
     def __init__(self, session_factory: Callable[[], Session] = SessionLocal, *, initialize: bool = True, fde_service=None, retrieval_service=None, planner_service=None, memory_service=None):
         if initialize: initialize_database()

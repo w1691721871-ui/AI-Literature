@@ -17,5 +17,8 @@ def evaluation(mission_id:str):
 @router.get("/agent-metrics")
 def agent_metrics(): return service.metrics()
 
+@router.get("/adaptive-metrics")
+def adaptive_metrics(): return service.adaptive_metrics()
+
 @router.get("/agent-traces/{mission_id}")
 def agent_traces(mission_id:str): return service.traces(mission_id)
