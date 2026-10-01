@@ -7,7 +7,7 @@
     <meta name="theme-color" content="#050507" />
     <link rel="manifest" href="./manifest.json" />
     <title>ResearchOS · AI Research Operating System</title>
-    <link rel="stylesheet" href="./styles.css?v=104" />
+    <link rel="stylesheet" href="./styles.css?v=107" />
     <style>
       /* Isolated final theme layer: kept after the legacy stylesheet so its
          visual system remains independent from earlier feature styles. */
@@ -175,13 +175,78 @@
       .app-shell .solution-demo-flow ol>li strong { color:var(--text-primary)!important; }.app-shell .solution-demo-flow ol>li small { color:var(--text-secondary)!important; }
       @media(max-width:720px) { .app-shell .workspace-collaboration-board { grid-template-columns:1fr!important; } }
     </style>
+    <style>
+      /* P43.5 — Enterprise AI Workspace design system.  This final layer
+         intentionally overrides legacy dashboard surfaces without changing
+         routes, data contracts, or product logic. */
+      :root {
+        --p43-bg: #090b12;
+        --p43-bg-deep: #05060a;
+        --p43-surface: rgba(255,255,255,.055);
+        --p43-surface-raised: rgba(255,255,255,.078);
+        --p43-border: rgba(255,255,255,.105);
+        --p43-text: rgba(255,255,255,.94);
+        --p43-muted: rgba(226,231,246,.58);
+        --p43-dim: rgba(226,231,246,.38);
+        --p43-blue: #7b9cff;
+        --p43-purple: #a27cff;
+        --p43-green: #75d7b5;
+        --p43-amber: #f5c77a;
+        --p43-radius: 18px;
+        --p43-radius-lg: 26px;
+        --p43-shadow: 0 24px 70px rgba(0,0,0,.32), inset 0 1px 0 rgba(255,255,255,.045);
+      }
+      body { background: radial-gradient(900px 520px at 50% -100px, rgba(109,130,255,.15), transparent 65%), radial-gradient(760px 520px at 100% 28%, rgba(133,86,255,.09), transparent 66%), var(--p43-bg-deep) !important; color: var(--p43-text) !important; }
+      .app-shell { min-height:100vh; background:linear-gradient(180deg, rgba(9,11,18,.68), rgba(5,6,10,.92)) !important; }
+      .workspace-header { position:sticky !important; top:0; z-index:30; padding:16px 28px 8px !important; background:linear-gradient(180deg,rgba(5,6,10,.9),rgba(5,6,10,.3),transparent) !important; }
+      .top-navigation { max-width:1380px !important; min-height:60px !important; margin:0 auto !important; padding:0 12px !important; border:1px solid var(--p43-border) !important; border-radius:20px !important; background:rgba(17,20,31,.72) !important; box-shadow:var(--p43-shadow) !important; backdrop-filter:blur(22px) saturate(125%); }
+      .brand-button { min-width:194px !important; color:var(--p43-text) !important; }
+      .brand-button small { color:var(--p43-muted) !important; }
+      .top-navigation-links { gap:2px !important; overflow-x:auto; scrollbar-width:none; }
+      .top-navigation-links::-webkit-scrollbar { display:none; }
+      .top-navigation-links button { padding:8px 10px !important; border-radius:10px !important; color:var(--p43-muted) !important; font-size:12px !important; white-space:nowrap; }
+      .top-navigation-links button:hover,.top-navigation-links button.active { color:var(--p43-text) !important; background:rgba(255,255,255,.075) !important; }
+      .top-navigation-links button:nth-child(n+8) { display:none !important; }
+      .nav-utilities { gap:7px !important; }
+      .app-shell .nav-utilities button.system-link { display:none !important; }
+      .nav-utilities .demo-mode-button { border:1px solid rgba(123,156,255,.26) !important; color:#dce5ff !important; background:rgba(123,156,255,.11) !important; box-shadow:none !important; }
+      .top-navigation-status { display:none !important; }
+      .user-avatar { width:30px !important; height:30px !important; color:#dfe8ff !important; background:linear-gradient(145deg,rgba(123,156,255,.4),rgba(162,124,255,.35)) !important; }
+      .home-workspace { max-width:1180px !important; padding:84px 28px 64px !important; margin:0 auto !important; animation:p43-enter .42s ease both; }
+      .home-hero.workspace-home-hero { max-width:860px !important; min-height:0 !important; margin:0 auto !important; padding:44px 0 18px !important; border:0 !important; background:transparent !important; box-shadow:none !important; text-align:center; }
+      .home-hero .section-kicker { color:#aab9ff !important; letter-spacing:.15em !important; }
+      .home-hero h1 { max-width:760px !important; margin:10px auto 16px !important; color:var(--p43-text) !important; font-size:clamp(42px,5.6vw,72px) !important; line-height:1.02 !important; letter-spacing:-.065em !important; }
+      .home-hero>p:not(.section-kicker):not(.quiet-note):not(.error-alert) { max-width:560px; margin:0 auto 28px !important; color:var(--p43-muted) !important; font-size:16px !important; line-height:1.65 !important; }
+      .home-research-input { display:flex !important; align-items:center !important; gap:10px !important; max-width:780px !important; margin:0 auto !important; padding:10px 12px 10px 18px !important; border:1px solid rgba(159,176,255,.26) !important; border-radius:24px !important; background:linear-gradient(145deg,rgba(255,255,255,.09),rgba(255,255,255,.035)) !important; box-shadow:0 20px 60px rgba(0,0,0,.22), inset 0 1px 0 rgba(255,255,255,.06) !important; text-align:left; }
+      .home-research-input textarea { min-height:48px !important; padding:10px 0 !important; color:var(--p43-text) !important; background:transparent !important; font-size:15px !important; line-height:1.45 !important; }
+      .home-research-input textarea::placeholder { color:var(--p43-dim) !important; }
+      .primary-card-action { min-height:42px !important; padding:0 17px !important; border:0 !important; border-radius:999px !important; color:#fff !important; background:linear-gradient(135deg,var(--p43-blue),var(--p43-purple)) !important; box-shadow:0 10px 28px rgba(101,118,255,.25) !important; font-weight:700 !important; }
+      .primary-card-action:hover:not(:disabled) { transform:translateY(-1px); filter:brightness(1.08); }
+      .enterprise-upload-strip,.home-quick-grid,.mission-dashboard-strip,.home-hero>small { display:none !important; }
+      .home-focus-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:14px; margin:44px 0 50px; }
+      .home-focus-card { min-height:196px; padding:20px !important; border:1px solid var(--p43-border) !important; border-radius:var(--p43-radius) !important; background:linear-gradient(145deg,rgba(255,255,255,.075),rgba(255,255,255,.025)) !important; box-shadow:var(--p43-shadow) !important; transition:transform .22s ease,border-color .22s ease,background .22s ease; text-align:left; }
+      .home-focus-card:hover { border-color:rgba(123,156,255,.32) !important; background:linear-gradient(145deg,rgba(123,156,255,.11),rgba(255,255,255,.03)) !important; transform:translateY(-3px); }
+      .home-focus-card header { display:flex; align-items:center; gap:8px; margin-bottom:18px; }.home-focus-card .section-kicker { margin:0 !important; color:var(--p43-dim) !important; font-size:10px !important; }.focus-dot { width:7px;height:7px;border-radius:50%;box-shadow:0 0 12px currentColor; }.mission-dot{color:var(--p43-blue);background:var(--p43-blue)}.team-dot{color:var(--p43-purple);background:var(--p43-purple)}.delivery-dot{color:var(--p43-green);background:var(--p43-green)}
+      .home-focus-card h3 { margin:0 0 8px !important; color:var(--p43-text) !important; font-size:18px !important; }.home-focus-card p { margin:0 0 17px !important; color:var(--p43-muted) !important; font-size:13px !important; line-height:1.55 !important; }.home-focus-card .text-button { padding:0 !important; color:#bac9ff !important; background:transparent !important; font-size:12px !important; }.focus-item { display:grid; gap:4px; margin:0 0 11px; }.focus-item b,.team-status-row b{overflow:hidden;color:var(--p43-text);font-size:12px;text-overflow:ellipsis;white-space:nowrap}.focus-item small,.team-status-row small{color:var(--p43-muted);font-size:11px}.team-status-row{display:grid;grid-template-columns:8px 1fr auto;gap:8px;align-items:center;padding:8px 0;border-bottom:1px solid rgba(255,255,255,.06)}.team-status-row:last-of-type{border:0}.team-status-row i{width:6px;height:6px;border-radius:50%;background:var(--p43-green);box-shadow:0 0 10px rgba(117,215,181,.6)}.team-status-row div{display:grid;gap:3px}.team-status-row span{color:var(--p43-dim);font-size:9px;text-transform:uppercase}
+      .home-recent-workspaces { display:none !important; }.recent-workspace-grid article { border:1px solid var(--p43-border) !important; border-radius:16px !important; background:var(--p43-surface) !important; box-shadow:none !important; }.home-empty-state { min-height:130px !important; padding:25px !important; border:1px dashed var(--p43-border) !important; border-radius:var(--p43-radius) !important; background:rgba(255,255,255,.025) !important; }.home-empty-state b { color:var(--p43-text) !important; }.home-empty-state span { color:var(--p43-muted) !important; }
+      .connector-center,.mission-center,.product-experience-center,.computer-center,.artifact-center,.research-intelligence-workspace,.knowledge-center,.scenario-center,.enterprise-hub { max-width:1180px !important; margin:0 auto !important; padding:54px 28px 64px !important; animation:p43-enter .36s ease both; }
+      .dashboard-heading { max-width:760px !important; margin-bottom:30px !important; }.dashboard-heading h2 { color:var(--p43-text) !important; font-size:clamp(30px,4vw,46px) !important; letter-spacing:-.052em !important; }.dashboard-heading p:not(.section-kicker) { color:var(--p43-muted) !important; font-size:14px !important; line-height:1.65 !important; }.dashboard-heading .section-kicker { color:#aab9ff !important; }
+      .connector-metrics { display:none !important; }.connector-grid { grid-template-columns:repeat(2,minmax(0,1fr)) !important; gap:14px !important; }.connector-grid>article,.product-artifact-grid>article { padding:20px !important; border:1px solid var(--p43-border) !important; border-radius:var(--p43-radius) !important; background:var(--p43-surface) !important; box-shadow:var(--p43-shadow) !important; }.connector-grid h3,.product-artifact-grid h3 { color:var(--p43-text) !important; }.connector-grid p,.product-artifact-grid p,.connector-grid small,.product-artifact-grid small { color:var(--p43-muted) !important; }
+      .product-empty-state,.workspace-intelligence-empty,.home-empty-state { color:var(--p43-muted) !important; }.product-empty-state { min-height:220px !important; border:1px dashed var(--p43-border) !important; border-radius:var(--p43-radius) !important; background:rgba(255,255,255,.025) !important; }.product-empty-state b { color:var(--p43-text) !important; }
+      .mission-center .dashboard-heading,.computer-center .dashboard-heading { max-width:720px !important; }.mission-list,.mission-detail,.computer-task-panel,.computer-canvas,.computer-timeline,.artifact-viewer { border-color:var(--p43-border) !important; background:var(--p43-surface) !important; box-shadow:var(--p43-shadow) !important; }
+      .research-intelligence-layout { grid-template-columns:240px minmax(0,1fr) !important; }.research-workspace-list,.research-workspace-detail>section { border-color:var(--p43-border) !important; background:var(--p43-surface) !important; box-shadow:var(--p43-shadow) !important; }.workspace-goal-card,.workspace-decision-card,.workspace-review-board { background:linear-gradient(145deg,rgba(123,156,255,.11),rgba(255,255,255,.028)) !important; }.workspace-trace-card li { border-color:rgba(255,255,255,.08) !important; }.workspace-metric-grid article,.workspace-draft,.workspace-collaboration-board article,.workspace-graph-flow article { border-color:rgba(255,255,255,.09) !important; background:rgba(255,255,255,.035) !important; }.workspace-goal-card h3,.workspace-trace-card h3,.workspace-quality-card h3,.workspace-decision-card h3,.workspace-deliverable-card h3,.workspace-workflow-board h3,.workspace-collaboration-board h3,.workspace-review-board h3,.workspace-graph-board h3 { color:var(--p43-text) !important; }.workspace-goal-card p,.workspace-trace-card li p,.workspace-quality-card>p,.workspace-decision-card>p,.workspace-draft dd,.workspace-review-board article p { color:var(--p43-muted) !important; }
+      .app-shell input,.app-shell textarea,.app-shell select { color:var(--p43-text) !important; border-color:var(--p43-border) !important; background:rgba(255,255,255,.045) !important; }.app-shell input::placeholder,.app-shell textarea::placeholder { color:var(--p43-dim) !important; }.outline-button,.text-button { border-color:rgba(255,255,255,.14) !important; color:#cbd6ff !important; background:rgba(255,255,255,.025) !important; }.outline-button:hover,.text-button:hover { border-color:rgba(123,156,255,.38) !important; background:rgba(123,156,255,.09) !important; }
+      @keyframes p43-enter { from{opacity:0;transform:translateY(10px)} to{opacity:1;transform:translateY(0)} }
+      @media (max-width:1100px) { .workspace-header{padding-inline:16px!important}.top-navigation{padding-inline:8px!important}.brand-button{min-width:auto!important}.home-workspace,.connector-center,.mission-center,.product-experience-center,.computer-center,.artifact-center,.research-intelligence-workspace,.knowledge-center,.scenario-center,.enterprise-hub{padding-inline:20px!important}.home-focus-grid{grid-template-columns:1fr 1fr}.home-focus-card:last-child{grid-column:1/-1}.nav-utilities .system-link,.user-avatar{display:none!important} }
+      @media (max-width:720px) { .workspace-header{padding:10px 10px 4px!important}.top-navigation{min-height:54px!important;border-radius:16px!important}.brand-button small,.nav-utilities{display:none!important}.home-workspace{padding:52px 16px!important}.home-hero.workspace-home-hero{padding-top:24px!important}.home-hero h1{font-size:42px!important}.home-research-input{align-items:stretch!important;flex-direction:column!important;border-radius:20px!important}.home-focus-grid,.connector-grid{grid-template-columns:1fr!important}.home-focus-card:last-child{grid-column:auto}.research-intelligence-layout{grid-template-columns:1fr!important}.research-workspace-list{display:flex!important;overflow:auto!important}.research-workspace-list button{min-width:180px!important}.top-navigation-links button{font-size:11px!important} }
+    </style>
   </head>
   <body>
     <div id="app"></div>
 
     <!-- Vue 3 browser build keeps this MVP free of a frontend build tool. -->
     <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
-    <script src="./app.js?v=104"></script>
+    <script src="./app.js?v=107"></script>
     <script>
       if ("serviceWorker" in navigator) {
         window.addEventListener("load", () => navigator.serviceWorker.register("./service-worker.js"));
