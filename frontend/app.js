@@ -291,6 +291,7 @@ createApp({
     const connectorError = ref("");
     const connectorForm = ref({ name: "", sqlite_path: "" });
     const collaborationAnalytics = ref(null);
+    const governance = ref({ organizations: [], workspaces: [], logs: [] });
     const computerMissionTask = ref("");
     const computerMissionLoading = ref(false);
     const onboardingState = ref(null);
@@ -814,6 +815,7 @@ createApp({
       if (view === "lab-profile") await loadResearchBi();
       if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadDocumentAnalytics(), loadAgentMemories(), loadConnectorCenter(), loadCollaborationAnalytics()]);
       if (view === "connector-center") await loadConnectorCenter();
+      if (view === "governance") await loadGovernance();
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
       if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
@@ -1124,6 +1126,11 @@ createApp({
     async function loadCollaborationAnalytics() {
       try { collaborationAnalytics.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent/collaboration/analytics`)); }
       catch (_) { collaborationAnalytics.value = null; }
+    }
+
+    async function loadGovernance() {
+      try { const [organizations, workspaces, logs] = await Promise.all([readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/organizations`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/workspaces`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/audit/logs`))]); governance.value = { organizations, workspaces, logs }; }
+      catch (_) { governance.value = { organizations: [], workspaces: [], logs: [] }; }
     }
 
     async function generateMissionArtifact(artifactType) {
@@ -3197,6 +3204,7 @@ createApp({
       connectorError,
       connectorForm,
       collaborationAnalytics,
+      governance,
       entryCopilotSession,
       entryCopilotResult,
       entryCopilotLoading,
@@ -3228,6 +3236,7 @@ createApp({
       loadConnectorCenter,
       registerSqliteConnector,
       loadCollaborationAnalytics,
+      loadGovernance,
       createAIMission,
       startCopilotMission,
       loadEnterpriseFiles,
@@ -3461,6 +3470,7 @@ createApp({
             <button type="button" :class="{ active: activeWorkspaceView === 'copilot' }" @click="openWorkspaceView('copilot')">Action Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'document-intelligence' }" @click="openWorkspaceView('document-intelligence')">Document Intelligence</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'connector-center' }" @click="openWorkspaceView('connector-center')">Connector Center</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'governance' }" @click="openWorkspaceView('governance')">Governance Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'enterprise-hub' }" @click="openWorkspaceView('enterprise-hub')">Enterprise Hub</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'research-workspace' || activeWorkspaceView === 'workspace' || activeWorkspaceView === 'task-center' }" @click="openWorkspaceView('research-workspace')">Research Workspace</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'knowledge' || activeWorkspaceView === 'insights' || activeWorkspaceView === 'evidence' }" @click="openWorkspaceView('knowledge')">Knowledge Intelligence</button>
@@ -3510,6 +3520,8 @@ createApp({
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.collaboration" class="mission-tool-trace collaboration-panel" aria-label="Agent Collaboration"><p class="section-kicker">AGENT COLLABORATION</p><h3>Structured collaboration, not hidden reasoning.</h3><p v-if="!selectedAIMission.collaboration.messages?.length" class="quiet-note">尚无 Agent Message。消息仅在实际协作请求、结果、反馈或风险告警发生时记录。</p><article v-for="item in selectedAIMission.collaboration.messages || []" :key="item.id"><b>{{ item.sender_agent }} → {{ item.receiver_agent }}</b><small>Round {{ item.collaboration_round }} · {{ item.message_type }} · {{ item.status }}</small><p>{{ item.payload_summary }}</p></article><div v-for="item in selectedAIMission.collaboration.conflicts || []" :key="item.id" class="collaboration-conflict"><b>Human review required</b><small>{{ item.participants?.join(' ↔ ') }}</small><p>{{ item.summary }}</p></div></section>
 
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.tools_used?.length" class="mission-tool-trace" aria-label="Mission Tool Trace"><p class="section-kicker">TOOLS USED</p><h3>Read-only enterprise operations</h3><article v-for="item in selectedAIMission.tools_used" :key="item.connector_name + item.operation + item.duration_ms"><b>{{ item.connector_name }}</b><small>{{ item.operation }} · {{ item.status }} · {{ item.duration_ms }}ms</small><p>{{ item.result_summary }}</p></article></section>
+
+      <section v-if="activeWorkspaceView === 'governance'" class="connector-center" aria-label="Governance Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE GOVERNANCE</p><h2>Governance Center</h2><p>Workspace RBAC、Audit 与 Policy 均基于真实持久化记录；本地原型不保存身份凭据。</p></div><button class="outline-button" type="button" @click="loadGovernance">Refresh</button></header><div class="connector-metrics"><article><b>{{ governance.organizations.length }}</b><small>Organizations</small></article><article><b>{{ governance.workspaces.length }}</b><small>Workspaces</small></article><article><b>{{ governance.logs.length }}</b><small>Audit events</small></article><article><b>RBAC</b><small>API enforced</small></article></div><div v-if="governance.logs.length" class="connector-grid"><article v-for="item in governance.logs" :key="item.created_at + item.action"><header><span>{{ item.action }}</span><b>{{ item.resource_type }}</b></header><p>{{ item.summary }}</p><small>{{ item.user_id }} · {{ item.workspace_id || 'Organization' }}</small></article></div><div v-else class="product-empty-state"><b>No governed activity yet</b><p>创建 Organization、设置角色或更新 Policy 后，系统会保存不含 Prompt、CoT 和 Secret 的审计摘要。</p></div></section>
 
       <section v-if="activeWorkspaceView === 'connector-center'" class="connector-center" aria-label="Enterprise Connector Center">
         <header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE TOOL INTEGRATION</p><h2>Connector Center</h2><p>Connector 默认只读、全程留痕。P31 仅实际启用 SQLite；PostgreSQL/MySQL 不接收凭证且保持禁用。</p></div><button class="outline-button" type="button" :disabled="connectorLoading" @click="loadConnectorCenter">Refresh</button></header>

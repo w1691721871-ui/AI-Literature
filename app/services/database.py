@@ -50,6 +50,7 @@ def initialize_database() -> None:
     from app.models.artifact import Artifact, ArtifactVersion, ArtifactEvidence  # noqa: F401
     from app.models.connector import Connector, DataSource, ConnectorTrace, MissionDataSource, ArtifactDataSource  # noqa: F401
     from app.models.agent_collaboration import AgentMessage, CollaborationGraph, AgentConflict  # noqa: F401
+    from app.models.governance import GovernanceWorkspace, WorkspaceUserRole, AuditLog, AgentPolicy  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
     from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401
