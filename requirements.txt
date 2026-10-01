@@ -7,3 +7,7 @@ python-multipart
 SQLAlchemy
 faiss-cpu
 numpy
+python-docx
+openpyxl
+python-pptx
+reportlab

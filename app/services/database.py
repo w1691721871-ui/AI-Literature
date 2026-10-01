@@ -47,6 +47,7 @@ def initialize_database() -> None:
     from app.models.document_summary import DocumentSummary  # noqa: F401
     from app.models.document_requirement import DocumentRequirement  # noqa: F401
     from app.models.mission_file_source import MissionFileSource  # noqa: F401
+    from app.models.artifact import Artifact, ArtifactVersion, ArtifactEvidence  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
     from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401

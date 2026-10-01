@@ -278,6 +278,12 @@ createApp({
     const enterpriseFileError = ref("");
     const documentAnalytics = ref(null);
     const adaptiveMissionLoading = ref(false);
+    // P30: generated files remain reviewable drafts until a human approves them.
+    const missionArtifacts = ref([]);
+    const selectedArtifact = ref(null);
+    const artifactLoading = ref(false);
+    const artifactError = ref("");
+    const artifactAnalytics = ref(null);
     const computerMissionTask = ref("");
     const computerMissionLoading = ref(false);
     const onboardingState = ref(null);
@@ -1074,6 +1080,54 @@ createApp({
       try { selectedAIMission.value.agent_traces = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent-traces/${missionId}`)); } catch (_) { selectedAIMission.value.agent_traces = []; }
       try { selectedAIMission.value.planner_plan = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/plan`)); } catch (_) { selectedAIMission.value.planner_plan = null; }
       try { selectedAIMission.value.adaptive_iterations = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/iterations`)); selectedAIMission.value.graph_history = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/graph-history`)); } catch (_) { selectedAIMission.value.adaptive_iterations = []; selectedAIMission.value.graph_history = []; }
+      await loadMissionArtifacts(missionId);
+    }
+
+    async function loadMissionArtifacts(missionId = selectedAIMission.value?.id) {
+      if (!missionId) { missionArtifacts.value = []; return; }
+      try {
+        missionArtifacts.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/artifacts`));
+        artifactAnalytics.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/artifacts/analytics`));
+      } catch (error) { artifactError.value = error.message || "Artifact 暂时无法读取。"; }
+    }
+
+    async function generateMissionArtifact(artifactType) {
+      if (!selectedAIMission.value?.id) return;
+      artifactLoading.value = true; artifactError.value = "";
+      try {
+        selectedArtifact.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${selectedAIMission.value.id}/artifacts/generate`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ artifact_type: artifactType }) }));
+        await loadMissionArtifacts();
+      } catch (error) { artifactError.value = error.message || "Artifact 生成失败。"; }
+      finally { artifactLoading.value = false; }
+    }
+
+    async function openArtifact(artifactId) {
+      try { selectedArtifact.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/artifacts/${artifactId}`)); }
+      catch (error) { artifactError.value = error.message || "Artifact 详情无法读取。"; }
+    }
+
+    async function reviewArtifact(status) {
+      if (!selectedArtifact.value?.id) return;
+      artifactLoading.value = true; artifactError.value = "";
+      try {
+        selectedArtifact.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/artifacts/${selectedArtifact.value.id}/review`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ status }) }));
+        await loadMissionArtifacts();
+      } catch (error) { artifactError.value = error.message || "审核状态无法更新。"; }
+      finally { artifactLoading.value = false; }
+    }
+
+    async function reviseArtifact() {
+      if (!selectedArtifact.value?.id) return;
+      artifactLoading.value = true; artifactError.value = "";
+      try {
+        selectedArtifact.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/artifacts/${selectedArtifact.value.id}/revise`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ reason: "Human reviewer requested a revision." }) }));
+        await loadMissionArtifacts();
+      } catch (error) { artifactError.value = error.message || "无法创建修订版本。"; }
+      finally { artifactLoading.value = false; }
+    }
+
+    function downloadArtifact() {
+      if (selectedArtifact.value?.id && selectedArtifact.value.status === "APPROVED") window.open(`${API_BASE_URL}/api/artifacts/${selectedArtifact.value.id}/download`, "_blank", "noopener");
     }
 
     async function runAdaptiveMission() {
@@ -3097,6 +3151,11 @@ createApp({
       aiMissionReviewComment,
       aiMissionRevisionSummary,
       aiMissionDelivery,
+      missionArtifacts,
+      selectedArtifact,
+      artifactLoading,
+      artifactError,
+      artifactAnalytics,
       entryCopilotSession,
       entryCopilotResult,
       entryCopilotLoading,
@@ -3119,6 +3178,12 @@ createApp({
       fdeEvidenceRefs,
       loadAIMissions,
       loadAIMissionDetail,
+      loadMissionArtifacts,
+      generateMissionArtifact,
+      openArtifact,
+      reviewArtifact,
+      reviseArtifact,
+      downloadArtifact,
       createAIMission,
       startCopilotMission,
       loadEnterpriseFiles,
@@ -3386,6 +3451,14 @@ createApp({
         <section v-if="selectedAIMission?.planner_plan" class="mission-evaluation-card"><span>AI PLANNING</span><b>Dynamic execution plan</b><p>{{ selectedAIMission.planner_plan.reason_summary }}</p><div class="planner-agent-list"><small v-for="agent in selectedAIMission.planner_plan.selected_agents" :key="agent">✓ {{ agent }}</small><small v-for="agent in selectedAIMission.planner_plan.skipped_agents" :key="agent">— {{ agent }} skipped</small></div><ol class="mission-timeline"><li v-for="node in selectedAIMission.planner_plan.execution_graph" :key="node.id"><b>{{ node.order }}</b><div><strong>{{ node.agent_name }}</strong><p>{{ node.node_name }}</p><small>{{ node.status }} · depends on {{ node.depends_on?.join(', ') || 'start' }}</small></div></li></ol></section>
         <section v-if="selectedAIMission" class="mission-evaluation-card"><span>ADAPTIVE LOOP · FINITE</span><b>Loop {{ selectedAIMission.adaptive_iterations?.length || 0 }} / 3</b><p>每次仅执行一个可审计决策；Evidence 不足只请求现有 RAG，Computer 变更始终需要重新审批。</p><button v-if="!['WAITING_ADAPTIVE_REVIEW','COMPLETED','FAILED'].includes(selectedAIMission.status)" class="outline-button" type="button" :disabled="adaptiveMissionLoading" @click="runAdaptiveMission">{{ adaptiveMissionLoading ? 'Evaluating…' : 'Run adaptive decision' }}</button><div v-if="selectedAIMission.status === 'WAITING_ADAPTIVE_REVIEW'"><button class="primary-card-action" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('APPROVE')">Approve next plan</button><button class="text-button" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('REJECT')">Reject</button><button class="outline-button" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('NEEDS_REVISION')">Needs revision</button></div><ol class="mission-timeline"><li v-for="item in selectedAIMission.adaptive_iterations || []" :key="item.created_at + item.iteration"><b>{{ item.iteration }}</b><div><strong>{{ item.decision }}</strong><p>{{ item.summary }}</p><small>{{ item.trigger }} · Graph v{{ item.graph_version }}</small></div></li></ol><details v-if="selectedAIMission.graph_history?.length"><summary>Execution Graph History</summary><div v-for="graph in selectedAIMission.graph_history" :key="graph.version"><b>v{{ graph.version }}</b><small>{{ graph.change_summary }}</small><p>{{ graph.nodes.map(node => node.agent_name).join(' → ') }}</p></div></details></section>
         <section v-if="selectedAIMission" class="computer-mission-center"><header><div><span>COMPUTER MISSION CENTER</span><b>Sandbox · Diff Review · Human Approval · Verification</b></div><small>仅允许当前 ResearchOS 项目的白名单文件与固定验证命令。</small></header><div class="computer-mission-create"><input v-model="computerMissionTask" placeholder="例如：为首页输入区准备可审阅的焦点状态优化" /><button class="outline-button" type="button" :disabled="computerMissionLoading" @click="createComputerMission">Create & Analyze</button></div><article v-for="item in selectedAIMission.computer_missions || []" :key="item.id"><div class="computer-mission-summary"><b>{{ item.task }}</b><small>{{ item.status }} · {{ item.approval_status }} · {{ item.risk_level }} risk</small><details><summary>View plan, Diff & verification</summary><p>Workspace: {{ item.workspace?.boundary || '尚未扫描' }}</p><p>Plan: {{ item.action_plan?.steps?.length || 0 }} reviewable steps · verification {{ item.verification?.status || 'PENDING' }}</p><pre v-if="item.diff_content">{{ item.diff_content }}</pre><p v-else>尚未生成可安全执行的 Diff。</p><small v-if="item.execution_log?.length">{{ item.execution_log[item.execution_log.length - 1].action }} · {{ item.execution_log[item.execution_log.length - 1].status }}</small></details></div><div class="computer-mission-actions"><button v-if="item.status === 'WAITING_APPROVAL'" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'APPROVED')">Approve Diff</button><button v-if="item.status === 'WAITING_APPROVAL'" class="text-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'REJECTED')">Reject</button><button v-if="item.status === 'WAITING_APPROVAL'" class="outline-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'NEEDS_REVISION')">Request Revision</button><button v-if="item.status === 'APPROVED' && item.execution_allowed" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="executeComputerMission(item)">Execute Approved Diff</button></div></article><p v-if="!(selectedAIMission.computer_missions || []).length">尚无 Computer Mission。创建后只扫描受控 Workspace 与生成 Diff，不会自动写入文件。</p></section>
+        <section v-if="selectedAIMission" class="artifact-studio">
+          <header><div><p class="section-kicker">ARTIFACT AGENT</p><h3>Generate only the deliverable you need.</h3><p>每份产物都从当前 Mission 的真实 Evidence 与客户资料引用生成，且必须经过人工审核。</p></div><small v-if="artifactAnalytics">{{ artifactAnalytics.total_artifacts }} artifacts · {{ artifactAnalytics.average_evidence_coverage }}% evidence coverage</small></header>
+          <p v-if="artifactError" class="error-alert"><span>!</span>{{ artifactError }}</p>
+          <div class="artifact-action-row"><button v-for="item in [{type:'RESEARCH_BRIEF',label:'Research Brief'},{type:'SOLUTION_DOCUMENT',label:'Solution Document'},{type:'PRESENTATION',label:'Presentation'},{type:'DATA_REPORT',label:'Data Report'},{type:'DELIVERY_PACKAGE',label:'Delivery Package'}]" :key="item.type" class="outline-button" type="button" :disabled="artifactLoading" @click="generateMissionArtifact(item.type)">{{ item.label }}</button></div>
+          <div v-if="missionArtifacts.length" class="artifact-grid"><button v-for="item in missionArtifacts" :key="item.id" type="button" class="artifact-card" :class="{ active: selectedArtifact?.id === item.id }" @click="openArtifact(item.id)"><span>{{ item.artifact_type }}</span><b>{{ item.title }}</b><small>v{{ item.version }} · {{ item.status }} · {{ item.evidence_count }} Evidence</small></button></div>
+          <div v-else class="artifact-empty-state"><b>No artifact yet</b><p>选择一个交付物类型后生成可审核草稿；系统不会批量或自动生成。</p></div>
+          <article v-if="selectedArtifact" class="artifact-review-surface"><header><div><span>{{ selectedArtifact.artifact_type }} · v{{ selectedArtifact.version }}</span><h4>{{ selectedArtifact.title }}</h4><p>{{ selectedArtifact.content_summary }}</p></div><small>{{ selectedArtifact.status }}</small></header><section><b>Evidence sources</b><p v-if="!selectedArtifact.evidence?.length">暂无可验证资料。草稿仅用于确认资料缺口，不包含科研结论。</p><div v-for="evidence in selectedArtifact.evidence || []" :key="evidence.evidence_type + '-' + (evidence.chunk_id || evidence.source)"><span>{{ evidence.evidence_type }}</span><small>{{ evidence.source }} · {{ evidence.section || 'Source reference' }}<template v-if="evidence.paper_id"> · {{ evidence.paper_id }} / {{ evidence.chunk_id }}</template></small></div></section><footer><template v-if="selectedArtifact.status === 'NEEDS_REVIEW'"><button class="primary-card-action" type="button" :disabled="artifactLoading" @click="reviewArtifact('APPROVED')">Approve delivery</button><button class="outline-button" type="button" :disabled="artifactLoading" @click="reviewArtifact('REVISION_REQUESTED')">Request revision</button><button class="text-button" type="button" :disabled="artifactLoading" @click="reviewArtifact('REJECTED')">Reject</button></template><button v-else-if="selectedArtifact.status === 'REVISION_REQUESTED'" class="primary-card-action" type="button" :disabled="artifactLoading" @click="reviseArtifact">Generate revised draft</button><button v-else-if="selectedArtifact.status === 'APPROVED'" class="primary-card-action" type="button" @click="downloadArtifact">Download approved artifact</button><small v-else>等待人工审核后才能作为正式交付下载。</small></footer></article>
+        </section>
         <section class="mission-list"><button v-for="item in aiMissions" :key="item.id" type="button" :class="{ active: selectedAIMission?.id === item.id }" @click="loadAIMissionDetail(item.id)"><span>{{ item.type }}</span><b>{{ item.title }}</b><small>{{ item.status }} · {{ item.progress }}% · {{ item.current_step }}</small></button><p v-if="!aiMissions.length">No AI mission yet. Create a mission to begin a reviewable lifecycle.</p></section>
       </section>
 
