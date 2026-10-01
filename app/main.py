@@ -39,6 +39,8 @@ from app.routes.governance import router as governance_router
 from app.routes.runtime import router as runtime_router
 from app.routes.llm_runtime import router as llm_runtime_router
 from app.routes.benchmarks import router as benchmarks_router
+from app.routes.scenarios import router as scenarios_router
+from app.routes.scenarios import router as scenarios_router
 from app.services.runtime_monitor_service import RuntimeMonitor
 
 
@@ -62,6 +64,8 @@ app.include_router(governance_router)
 app.include_router(runtime_router)
 app.include_router(llm_runtime_router)
 app.include_router(benchmarks_router)
+app.include_router(scenarios_router)
+app.include_router(scenarios_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 app.add_middleware(

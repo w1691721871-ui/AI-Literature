@@ -433,6 +433,9 @@ createApp({
     const llmRuntimeStatus = ref(null);
     const benchmarkTasks = ref([]);
     const benchmarkDashboard = ref(null);
+    const enterpriseScenarios = ref([]);
+    const scenarioRunResult = ref(null);
+    const scenarioLoading = ref(false);
     const workflowDiagnostics = ref(null);
     const agentAnalytics = ref([]);
     const adaptiveAnalytics = ref(null);
@@ -822,6 +825,7 @@ createApp({
       if (view === "connector-center") await loadConnectorCenter();
       if (view === "governance") await loadGovernance();
       if (view === "benchmarks") await loadBenchmarks();
+      if (view === "scenario-center") await loadScenarios();
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
       if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
@@ -1155,6 +1159,16 @@ createApp({
     async function loadBenchmarks() {
       try { const [tasks,dashboard] = await Promise.all([readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/benchmarks`)),readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/benchmark/dashboard`))]); benchmarkTasks.value=tasks; benchmarkDashboard.value=dashboard; }
       catch (_) { benchmarkTasks.value=[]; benchmarkDashboard.value=null; }
+    }
+    async function loadScenarios() {
+      try { enterpriseScenarios.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/scenarios`)); }
+      catch (_) { enterpriseScenarios.value = []; }
+    }
+    async function runScenario(scenarioId) {
+      scenarioLoading.value = true; scenarioRunResult.value = null;
+      try { scenarioRunResult.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/scenarios/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario_id: scenarioId }) })); }
+      catch (error) { errorMessage.value = error.message || "Scenario run failed."; }
+      finally { scenarioLoading.value = false; }
     }
 
     async function generateMissionArtifact(artifactType) {
@@ -3134,6 +3148,9 @@ createApp({
       llmRuntimeStatus,
       benchmarkTasks,
       benchmarkDashboard,
+      enterpriseScenarios,
+      scenarioRunResult,
+      scenarioLoading,
       workflowDiagnostics,
       agentAnalytics,
       adaptiveAnalytics,
@@ -3269,6 +3286,8 @@ createApp({
       loadRuntimeStatus,
       loadLlmRuntimeStatus,
       loadBenchmarks,
+      loadScenarios,
+      runScenario,
       createAIMission,
       startCopilotMission,
       loadEnterpriseFiles,
@@ -3504,6 +3523,7 @@ createApp({
             <button type="button" :class="{ active: activeWorkspaceView === 'connector-center' }" @click="openWorkspaceView('connector-center')">Connector Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'governance' }" @click="openWorkspaceView('governance')">Governance Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'benchmarks' }" @click="openWorkspaceView('benchmarks')">Benchmark Center</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'scenario-center' }" @click="openWorkspaceView('scenario-center')">Scenario Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'enterprise-hub' }" @click="openWorkspaceView('enterprise-hub')">Enterprise Hub</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'research-workspace' || activeWorkspaceView === 'workspace' || activeWorkspaceView === 'task-center' }" @click="openWorkspaceView('research-workspace')">Research Workspace</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'knowledge' || activeWorkspaceView === 'insights' || activeWorkspaceView === 'evidence' }" @click="openWorkspaceView('knowledge')">Knowledge Intelligence</button>
@@ -3556,6 +3576,7 @@ createApp({
 
       <section v-if="activeWorkspaceView === 'governance'" class="connector-center" aria-label="Governance Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE GOVERNANCE</p><h2>Governance Center</h2><p>Workspace RBAC、Audit 与 Policy 均基于真实持久化记录；本地原型不保存身份凭据。</p></div><button class="outline-button" type="button" @click="loadGovernance">Refresh</button></header><div class="connector-metrics"><article><b>{{ governance.organizations.length }}</b><small>Organizations</small></article><article><b>{{ governance.workspaces.length }}</b><small>Workspaces</small></article><article><b>{{ governance.logs.length }}</b><small>Audit events</small></article><article><b>RBAC</b><small>API enforced</small></article></div><div v-if="governance.logs.length" class="connector-grid"><article v-for="item in governance.logs" :key="item.created_at + item.action"><header><span>{{ item.action }}</span><b>{{ item.resource_type }}</b></header><p>{{ item.summary }}</p><small>{{ item.user_id }} · {{ item.workspace_id || 'Organization' }}</small></article></div><div v-else class="product-empty-state"><b>No governed activity yet</b><p>创建 Organization、设置角色或更新 Policy 后，系统会保存不含 Prompt、CoT 和 Secret 的审计摘要。</p></div></section>
       <section v-if="activeWorkspaceView === 'benchmarks'" class="connector-center" aria-label="Agent Benchmark Center"><header class="dashboard-heading"><div><p class="section-kicker">AGENT EVALUATION</p><h2>Agent Benchmark Center</h2><p>评分只来自真实 Benchmark Mission 的 Trace、Evidence、Artifact 与 Human Review 状态；未运行时保持 0。</p></div><button class="outline-button" type="button" @click="loadBenchmarks">Refresh</button></header><div v-if="benchmarkDashboard" class="connector-metrics"><article><b>{{ benchmarkDashboard.benchmarks }}</b><small>Benchmarks</small></article><article><b>{{ benchmarkDashboard.runs }}</b><small>Runs</small></article><article><b>{{ benchmarkDashboard.average_score }}</b><small>Average score</small></article><article><b>{{ benchmarkDashboard.success_rate }}%</b><small>Success rate</small></article></div><div v-if="benchmarkDashboard" class="connector-grid"><article v-for="(score, capability) in benchmarkDashboard.capabilities" :key="capability"><header><span>OBSERVED</span><b>{{ capability }}</b></header><p>{{ score }} / 100</p><small>Derived from saved benchmark records only.</small></article></div><div v-if="benchmarkTasks.length" class="connector-grid"><article v-for="task in benchmarkTasks" :key="task.id"><header><span>{{ task.category }}</span><b>{{ task.difficulty }}</b></header><h3>{{ task.name }}</h3><p>{{ task.description }}</p><small>{{ task.expected_agents.length }} expected agents · {{ task.expected_tools.length }} expected tools</small></article></div><div v-else class="product-empty-state"><b>No benchmark task yet</b><p>创建并显式运行受控 Benchmark 后，这里才会显示实际评分，系统不会生成假分数。</p></div></section>
+      <section v-if="activeWorkspaceView === 'scenario-center'" class="connector-center" aria-label="Enterprise Scenario Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE SCENARIO DEMO</p><h2>Scenario Center</h2><p>通过同一条 Mission Runtime 演示需求理解、资料检索、风险提示、待审核 Artifact 与 Benchmark 观察；所有场景均为 DEMO_ONLY。</p></div><button class="outline-button" type="button" @click="loadScenarios">Refresh</button></header><div v-if="enterpriseScenarios.length" class="connector-grid"><article v-for="item in enterpriseScenarios" :key="item.id"><header><span>DEMO_ONLY</span><b>{{ item.industry }}</b></header><h3>{{ item.name }}</h3><p>{{ item.description }}</p><small>AI Team · {{ item.expected_agents.join(' · ') }}</small><footer><button class="primary-card-action" :disabled="scenarioLoading" type="button" @click="runScenario(item.id)">{{ scenarioLoading ? 'Running controlled mission…' : 'Run scenario' }}</button></footer></article></div><div v-else class="product-empty-state"><b>No scenario available</b><p>没有已声明的 Demo 场景；系统不会以虚构客户数据填充该页面。</p></div><section v-if="scenarioRunResult" class="mission-tool-trace"><p class="section-kicker">SCENARIO RUN</p><h3>{{ scenarioRunResult.scenario.name }} · {{ scenarioRunResult.status }}</h3><p>{{ scenarioRunResult.boundary }}</p><article v-for="item in scenarioRunResult.timeline" :key="item.created_at + item.action"><b>{{ item.stage }}</b><small>{{ item.status }} · Evidence {{ item.evidence_count }}</small><p>{{ item.result_summary }}</p></article><article v-if="scenarioRunResult.artifact"><b>Artifact</b><small>{{ scenarioRunResult.artifact.status }} · Human Review required</small><p>{{ scenarioRunResult.artifact.content_summary || 'Reviewable draft generated.' }}</p></article><article v-if="scenarioRunResult.benchmark"><b>Observed Benchmark</b><small>{{ scenarioRunResult.benchmark.score }} · same Mission</small><p>{{ scenarioRunResult.benchmark.trace_summary }}</p></article></section></section>
 
       <section v-if="activeWorkspaceView === 'connector-center'" class="connector-center" aria-label="Enterprise Connector Center">
         <header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE TOOL INTEGRATION</p><h2>Connector Center</h2><p>Connector 默认只读、全程留痕。P31 仅实际启用 SQLite；PostgreSQL/MySQL 不接收凭证且保持禁用。</p></div><button class="outline-button" type="button" :disabled="connectorLoading" @click="loadConnectorCenter">Refresh</button></header>

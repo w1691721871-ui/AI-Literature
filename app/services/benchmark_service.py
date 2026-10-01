@@ -43,6 +43,19 @@ class BenchmarkService:
             return self.score(run.id,runtime_result)
         except Exception:
             return self._fail(run.id)
+    def track_existing_mission(self, data, mission_id, runtime_result):
+        """Score a completed existing Mission; never starts a second benchmark flow."""
+        task = self.create(data)
+        s = self.s()
+        try:
+            mission = s.get(AIMission, mission_id)
+            if not mission: raise BenchmarkError("Mission not found for benchmark observation.")
+            config = LLMGateway().configuration()
+            run = BenchmarkRun(task_id=task["id"], mission_id=mission_id, runtime_version="P36", planner_version="v1", model_version=config["model"])
+            s.add(run); s.add(AgentVersion(runtime_version=run.runtime_version, planner_version=run.planner_version, model_version=run.model_version)); s.commit(); s.refresh(run)
+            run_id = run.id
+        finally: s.close()
+        return self.score(run_id, runtime_result)
     def score(self,run_id,runtime_result=None):
         s=self.s()
         try:
@@ -53,6 +66,15 @@ class BenchmarkService:
             planning=self._coverage(expected_agents,actual_agents);tools=self._coverage(expected_tools,actual_tools);evidence=min(100,len(self._array(mission.evidence_refs_json))*20);artifact=min(100,len(artifacts)*50);safety=0 if any(x.status in {"BLOCKED","UNSAFE"} for x in traces) else 100;human=100 if mission.status in {"WAITING_REVIEW","WAITING_ADAPTIVE_REVIEW"} else 50
             total=round((planning+tools+evidence+artifact+safety+human)/6,1);row=s.scalar(select(BenchmarkScore).where(BenchmarkScore.benchmark_id==run.id)) or BenchmarkScore(benchmark_id=run.id);row.planning_score,row.tool_score,row.evidence_score,row.artifact_score,row.safety_score,row.human_score,row.total_score=planning,tools,evidence,artifact,safety,human,total;s.add(row);run.status="SUCCESS" if runtime_result is not None else "FAILED";run.score=total;s.commit();return self.detail(run.id)
         finally:s.close()
+    def track_existing_mission(self, data, mission_id, runtime_result):
+        """Score an existing Mission; this deliberately does not launch a second flow."""
+        task=self.create(data);s=self.s()
+        try:
+            if not s.get(AIMission,mission_id):raise BenchmarkError("Mission not found for benchmark observation.")
+            config=LLMGateway().configuration();run=BenchmarkRun(task_id=task["id"],mission_id=mission_id,runtime_version="P36",planner_version="v1",model_version=config["model"])
+            s.add(run);s.add(AgentVersion(runtime_version=run.runtime_version,planner_version=run.planner_version,model_version=run.model_version));s.commit();s.refresh(run);run_id=run.id
+        finally:s.close()
+        return self.score(run_id,runtime_result)
     def detail(self,run_id):
         s=self.s()
         try:
