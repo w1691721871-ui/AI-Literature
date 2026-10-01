@@ -1,16 +1,23 @@
 :root {
   /* P6.10 canonical Dark AI surface tokens. Legacy component selectors are
      neutralized by the final audit layer below; new UI must use these. */
-  --bg-primary: #05070D;
-  --bg-secondary: #080D18;
-  --surface: rgba(255,255,255,0.05);
-  --surface-hover: rgba(255,255,255,0.08);
-  --border: rgba(255,255,255,0.12);
-  --text-primary: rgba(255,255,255,0.92);
-  --text-secondary: rgba(255,255,255,0.55);
-  --accent-blue: #5B8CFF;
-  --accent-purple: #8B5CFF;
-  --accent-cyan: #00D4FF;
+  --bg-primary: #090b12;
+  --bg-secondary: #111521;
+  --surface: rgba(255,255,255,0.04);
+  --surface-hover: rgba(255,255,255,0.07);
+  --border: rgba(255,255,255,0.08);
+  --text-primary: rgba(255,255,255,0.94);
+  --text-secondary: rgba(224,230,246,0.58);
+  --accent-blue: #7b9cff;
+  --accent-purple: #a27cff;
+  --accent-cyan: #86dcff;
+  --status-success: #7bd9b7;
+  --status-warning: #f2c57d;
+  --space-1: 8px;
+  --space-2: 16px;
+  --space-3: 24px;
+  --radius-card: 20px;
+  --shadow-soft: 0 20px 60px rgba(0,0,0,.28), inset 0 1px 0 rgba(255,255,255,.04);
   color: var(--text-primary);
   background: var(--bg-primary);
   font-family: Inter, "Microsoft YaHei", system-ui, sans-serif;
