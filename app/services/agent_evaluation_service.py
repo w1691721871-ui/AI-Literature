@@ -46,6 +46,9 @@ class AgentEvaluationService:
                 messages,conflicts=[],[]  # P25 isolated fixtures predate P32 tables.
             delivered=sum(item.status in {"DELIVERED","PROCESSED"} for item in messages); collaboration_score=(50 if not messages else round(delivered/len(messages)*50))+(30 if messages else 0)+(20 if not conflicts else 0)
             report={"mission_id":mission_id,"evaluation_score":score,"planner_score":planner_score,"planning_efficiency":planning_efficiency,"collaboration_score":collaboration_score,"message_count":len(messages),"conflict_count":len(conflicts),"adaptive_iterations":len(adaptive),"replan_count":replans,"evidence_retrieval_rounds":evidence_rounds,"verification_rounds":verification_rounds,"final_decision":final_decision,"task_completion":"COMPLETED" if completed else mission.status,"evidence_coverage":len(refs),"human_revision_count":revisions,"verification_result":verification,"execution_safety":safety,"failure_type":failure_type,"failure_reason":failure_reason,"boundary":"评分只根据已保存的任务状态、Execution Graph、Evidence 引用、协作摘要、人工修订和受控验证元数据计算；不读取 Prompt、CoT、密钥或隐私文件。"}
+            report["tool_selection_score"] = 100 if nodes else 0
+            report["replan_success_rate"] = round((replans > 0 and mission.status != "FAILED") * 100, 1)
+            report["runtime_success_rate"] = 100 if mission.status not in {"FAILED"} else 0
             row=s.scalar(select(AgentEvaluation).where(AgentEvaluation.mission_id==mission_id))
             if row is None: row=AgentEvaluation(mission_id=mission_id); s.add(row)
             for key in ("evaluation_score","planner_score","adaptive_iterations","replan_count","evidence_retrieval_rounds","verification_rounds","final_decision","task_completion","evidence_coverage","human_revision_count","verification_result","execution_safety","failure_type","failure_reason"):

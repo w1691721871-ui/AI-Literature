@@ -430,6 +430,7 @@ createApp({
     const systemStatusError = ref("");
     const runtimeStatus = ref(null);
     const runtimeStatusLoading = ref(false);
+    const llmRuntimeStatus = ref(null);
     const workflowDiagnostics = ref(null);
     const agentAnalytics = ref([]);
     const adaptiveAnalytics = ref(null);
@@ -815,7 +816,7 @@ createApp({
       if (view === "bi") await loadResearchBi();
       if (view === "evidence") await loadEvidenceCenter();
       if (view === "lab-profile") await loadResearchBi();
-      if (view === "system") await Promise.all([loadSystemStatus(), loadRuntimeStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadDocumentAnalytics(), loadAgentMemories(), loadConnectorCenter(), loadCollaborationAnalytics()]);
+      if (view === "system") await Promise.all([loadSystemStatus(), loadRuntimeStatus(), loadLlmRuntimeStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadDocumentAnalytics(), loadAgentMemories(), loadConnectorCenter(), loadCollaborationAnalytics()]);
       if (view === "connector-center") await loadConnectorCenter();
       if (view === "governance") await loadGovernance();
       if (view === "solution-delivery") await loadSolutionDelivery();
@@ -1141,6 +1142,11 @@ createApp({
       try { runtimeStatus.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/runtime/monitor`)); }
       catch (_) { runtimeStatus.value = null; }
       finally { runtimeStatusLoading.value = false; }
+    }
+
+    async function loadLlmRuntimeStatus() {
+      try { llmRuntimeStatus.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/llm-runtime/dashboard`)); }
+      catch (_) { llmRuntimeStatus.value = null; }
     }
 
     async function generateMissionArtifact(artifactType) {
@@ -3117,6 +3123,7 @@ createApp({
       systemStatusError,
       runtimeStatus,
       runtimeStatusLoading,
+      llmRuntimeStatus,
       workflowDiagnostics,
       agentAnalytics,
       adaptiveAnalytics,
@@ -3250,6 +3257,7 @@ createApp({
       loadCollaborationAnalytics,
       loadGovernance,
       loadRuntimeStatus,
+      loadLlmRuntimeStatus,
       createAIMission,
       startCopilotMission,
       loadEnterpriseFiles,
@@ -3949,6 +3957,7 @@ createApp({
         <p v-if="systemStatusError" class="error-alert"><span>!</span>{{ systemStatusError }}</p>
         <div v-if="systemStatus" class="system-status-grid"><article v-for="service in systemStatus.services" :key="service.id"><header><span :class="service.status">{{ service.status === 'ready' || service.status === 'configured' ? '正常' : service.status === 'empty' ? '待初始化' : '需配置' }}</span><b>{{ service.name }}</b></header><p>{{ service.detail }}</p></article></div>
         <section class="workflow-diagnostics-panel runtime-dashboard"><div class="result-section-heading"><div><p class="section-kicker">PRODUCTION RUNTIME</p><h3>Runtime Dashboard</h3><p>队列、Worker 与基础设施状态来自当前运行时；不展示 Prompt、CoT 或 Secret。</p></div><button class="outline-button" type="button" :disabled="runtimeStatusLoading" @click="loadRuntimeStatus">{{ runtimeStatusLoading ? 'Checking…' : 'Refresh runtime' }}</button></div><div v-if="runtimeStatus" class="diagnostic-check-grid"><article><span>QUEUE</span><h4>{{ runtimeStatus.queue_length }}</h4><p>Queued tasks</p></article><article><span>WORKER</span><h4>{{ runtimeStatus.worker_status }}</h4><p>{{ runtimeStatus.running_agents }} running · {{ runtimeStatus.failed_tasks }} failed</p></article><article><span>RETRY</span><h4>{{ runtimeStatus.retry_count }}</h4><p>Average duration {{ runtimeStatus.average_duration }}s</p></article><article v-for="(service, name) in runtimeStatus.services" :key="name"><span :class="service.status">{{ service.status }}</span><h4>{{ name }}</h4><p>{{ service.detail }}</p></article></div><p v-else class="quiet-note">Runtime Dashboard 暂不可用；不会影响已有研究能力。</p></section>
+        <section v-if="llmRuntimeStatus" class="workflow-diagnostics-panel runtime-dashboard"><div class="result-section-heading"><div><p class="section-kicker">LLM NATIVE RUNTIME</p><h3>LLM Runtime Dashboard</h3><p>只展示模型调用元数据；计划、工具与权限仍由系统校验。</p></div></div><div class="diagnostic-check-grid"><article><span>MODEL</span><h4>{{ llmRuntimeStatus.model.model }}</h4><p>{{ llmRuntimeStatus.model.provider }} · {{ llmRuntimeStatus.model.configured ? 'enabled' : 'disabled' }}</p></article><article><span>REQUESTS</span><h4>{{ llmRuntimeStatus.requests }}</h4><p>Validated planning calls</p></article><article><span>LATENCY</span><h4>{{ llmRuntimeStatus.average_latency }}s</h4><p>Average observed latency</p></article><article><span>FAILURES</span><h4>{{ llmRuntimeStatus.failures }}</h4><p>No prompt, response, CoT or secret stored</p></article></div></section>
         <section class="workflow-diagnostics-panel"><div class="result-section-heading"><div><p class="section-kicker">REAL WORKFLOW READINESS</p><h3>真实资料闭环检查</h3><p>只检查已有资料、索引与服务配置；不会生成样例论文、证据或科研结论。</p></div><button class="outline-button" type="button" :disabled="diagnosticsLoading" @click="loadWorkflowDiagnostics">{{ diagnosticsLoading ? '检查中…' : '重新检查' }}</button></div><p v-if="diagnosticsError" class="error-alert"><span>!</span>{{ diagnosticsError }}</p><div v-if="workflowDiagnostics" class="diagnostic-summary"><b :class="workflowDiagnostics.overall">{{ workflowDiagnostics.overall }}</b><span>{{ workflowDiagnostics.data_boundary }}</span></div><div v-if="workflowDiagnostics" class="diagnostic-check-grid"><article v-for="check in workflowDiagnostics.checks" :key="check.id"><span :class="check.status">{{ check.status }}</span><h4>{{ check.name }}</h4><p>{{ check.detail }}</p></article></div></section>
         <section class="demo-knowledge-panel"><div><p class="section-kicker">DEMO KNOWLEDGE BASE</p><h3>低碳建筑材料案例资料</h3><p>用于比赛现场讲解知识库、项目资料和产学研协作流程。</p></div><button class="primary-card-action" type="button" @click="initializeDemoKnowledge">{{ demoKnowledgeInitialized ? 'Demo资料已加载' : '初始化 Demo 知识库' }}</button><div v-if="visibleDemoKnowledgeAssets.length" class="demo-asset-grid"><article v-for="asset in visibleDemoKnowledgeAssets" :key="asset.title"><span>{{ asset.status }}</span><h4>{{ asset.title }}</h4><small>{{ asset.type }}</small><p>{{ asset.detail }}</p></article></div><p class="demo-boundary">这些是明确标注的界面展示资料，不会自动写入真实论文库、FAISS 索引或作为 Agent 的科研证据。需要真实分析时，请上传实际可解析的资料。</p></section>
         <section class="activity-log-panel"><div class="result-section-heading"><div><p class="section-kicker">ACTIVITY LOG</p><h3>用户操作日志</h3></div><span>{{ activityLogs.length }} 条</span></div><div v-if="!activityLogs.length" class="activity-empty">暂无操作记录。创建任务、执行 Agent、生成报告或更新项目后会在此显示。</div><ol v-else class="activity-list"><li v-for="item in activityLogs" :key="item.created_at + item.action"><b>{{ item.action }}</b><span>{{ item.detail }}</span><time>{{ formatLibraryDate(item.created_at) }}</time></li></ol></section>

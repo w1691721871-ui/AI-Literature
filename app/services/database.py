@@ -55,6 +55,8 @@ def initialize_database() -> None:
     from app.models.agent_collaboration import AgentMessage, CollaborationGraph, AgentConflict  # noqa: F401
     from app.models.governance import GovernanceWorkspace, WorkspaceUserRole, AuditLog, AgentPolicy  # noqa: F401
     from app.models.runtime_task import RuntimeTask  # noqa: F401
+    from app.models.agent_observation import AgentObservation  # noqa: F401
+    from app.models.prompt_template import PromptTemplate  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
     from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401
@@ -197,6 +199,7 @@ def _apply_lightweight_migrations() -> None:
         "evidence_count": "INTEGER NOT NULL DEFAULT 0",
         "iteration": "INTEGER NOT NULL DEFAULT 0", "decision": "VARCHAR(60) NOT NULL DEFAULT ''",
         "trigger": "VARCHAR(80) NOT NULL DEFAULT ''", "graph_version": "INTEGER NOT NULL DEFAULT 1",
+        "model_name": "VARCHAR(100) NOT NULL DEFAULT ''", "latency": "FLOAT", "token_usage_summary": "VARCHAR(120) NOT NULL DEFAULT ''",
     }
     for name, definition in trace_additions.items():
         if name not in trace_columns:

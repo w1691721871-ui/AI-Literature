@@ -35,6 +35,9 @@ class AgentTrace(Base):
     decision: Mapped[str] = mapped_column(String(60), nullable=False, default="")
     trigger: Mapped[str] = mapped_column(String(80), nullable=False, default="")
     graph_version: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+    model_name: Mapped[str] = mapped_column(String(100), nullable=False, default="")
+    latency: Mapped[float | None] = mapped_column(Float, nullable=True)
+    token_usage_summary: Mapped[str] = mapped_column(String(120), nullable=False, default="")
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), nullable=False, default=utc_now, index=True
     )
