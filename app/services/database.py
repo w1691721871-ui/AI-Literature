@@ -59,6 +59,7 @@ def initialize_database() -> None:
     from app.models.prompt_template import PromptTemplate  # noqa: F401
     from app.models.benchmark import BenchmarkTask, BenchmarkRun, BenchmarkScore, AgentVersion  # noqa: F401
     from app.models.enterprise_scenario import EnterpriseScenario, ScenarioRun, DemoDataSource  # noqa: F401
+    from app.models.workspace_experience import ActivityEvent, ArtifactComment  # noqa: F401
     from app.models.enterprise_scenario import EnterpriseScenario, ScenarioRun, DemoDataSource  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401

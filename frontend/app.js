@@ -436,6 +436,7 @@ createApp({
     const enterpriseScenarios = ref([]);
     const scenarioRunResult = ref(null);
     const scenarioLoading = ref(false);
+    const workspaceExperience = ref(null);
     const workflowDiagnostics = ref(null);
     const agentAnalytics = ref([]);
     const adaptiveAnalytics = ref(null);
@@ -826,6 +827,7 @@ createApp({
       if (view === "governance") await loadGovernance();
       if (view === "benchmarks") await loadBenchmarks();
       if (view === "scenario-center") await loadScenarios();
+      if (view === "ai-workspace") await loadWorkspaceExperience();
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
       if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
@@ -1169,6 +1171,10 @@ createApp({
       try { scenarioRunResult.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/scenarios/run`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ scenario_id: scenarioId }) })); }
       catch (error) { errorMessage.value = error.message || "Scenario run failed."; }
       finally { scenarioLoading.value = false; }
+    }
+    async function loadWorkspaceExperience() {
+      try { workspaceExperience.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/workspace/dashboard`)); }
+      catch (_) { workspaceExperience.value = null; }
     }
 
     async function generateMissionArtifact(artifactType) {
@@ -3151,6 +3157,7 @@ createApp({
       enterpriseScenarios,
       scenarioRunResult,
       scenarioLoading,
+      workspaceExperience,
       workflowDiagnostics,
       agentAnalytics,
       adaptiveAnalytics,
@@ -3288,6 +3295,7 @@ createApp({
       loadBenchmarks,
       loadScenarios,
       runScenario,
+      loadWorkspaceExperience,
       createAIMission,
       startCopilotMission,
       loadEnterpriseFiles,
@@ -3514,7 +3522,8 @@ createApp({
            <button class="brand-button" type="button" @click="openWorkspaceView('dashboard')"><span class="brand-orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2.8 14.4 9.6 21.2 12l-6.8 2.4L12 21.2l-2.4-6.8L2.8 12l6.8-2.4L12 2.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><span><b>ResearchOS</b><small>AI Research Workspace</small></span></button>
            <div class="top-navigation-links product-navigation">
              <button type="button" :class="{ active: activeWorkspaceView === 'dashboard' }" @click="openWorkspaceView('dashboard')">AI Command Center</button>
-              <button type="button" :class="{ active: activeWorkspaceView === 'mission-center' || activeWorkspaceView === 'team-workspace' }" @click="openWorkspaceView('mission-center')">Mission Center</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'mission-center' || activeWorkspaceView === 'team-workspace' }" @click="openWorkspaceView('mission-center')">Mission Center</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'ai-workspace' }" @click="openWorkspaceView('ai-workspace')">Mission Workspace</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'tasks' || activeWorkspaceView === 'workflow-studio' || activeWorkspaceView === 'assistant' || activeWorkspaceView === 'worker' || activeWorkspaceView === 'agents' || activeWorkspaceView === 'timeline' }" @click="openWorkspaceView('tasks')">Research Engine</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'operator' }" @click="openWorkspaceView('operator')">Operator Studio</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'computer' }" @click="openWorkspaceView('computer')">Computer Lab</button>
@@ -3577,6 +3586,7 @@ createApp({
       <section v-if="activeWorkspaceView === 'governance'" class="connector-center" aria-label="Governance Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE GOVERNANCE</p><h2>Governance Center</h2><p>Workspace RBAC、Audit 与 Policy 均基于真实持久化记录；本地原型不保存身份凭据。</p></div><button class="outline-button" type="button" @click="loadGovernance">Refresh</button></header><div class="connector-metrics"><article><b>{{ governance.organizations.length }}</b><small>Organizations</small></article><article><b>{{ governance.workspaces.length }}</b><small>Workspaces</small></article><article><b>{{ governance.logs.length }}</b><small>Audit events</small></article><article><b>RBAC</b><small>API enforced</small></article></div><div v-if="governance.logs.length" class="connector-grid"><article v-for="item in governance.logs" :key="item.created_at + item.action"><header><span>{{ item.action }}</span><b>{{ item.resource_type }}</b></header><p>{{ item.summary }}</p><small>{{ item.user_id }} · {{ item.workspace_id || 'Organization' }}</small></article></div><div v-else class="product-empty-state"><b>No governed activity yet</b><p>创建 Organization、设置角色或更新 Policy 后，系统会保存不含 Prompt、CoT 和 Secret 的审计摘要。</p></div></section>
       <section v-if="activeWorkspaceView === 'benchmarks'" class="connector-center" aria-label="Agent Benchmark Center"><header class="dashboard-heading"><div><p class="section-kicker">AGENT EVALUATION</p><h2>Agent Benchmark Center</h2><p>评分只来自真实 Benchmark Mission 的 Trace、Evidence、Artifact 与 Human Review 状态；未运行时保持 0。</p></div><button class="outline-button" type="button" @click="loadBenchmarks">Refresh</button></header><div v-if="benchmarkDashboard" class="connector-metrics"><article><b>{{ benchmarkDashboard.benchmarks }}</b><small>Benchmarks</small></article><article><b>{{ benchmarkDashboard.runs }}</b><small>Runs</small></article><article><b>{{ benchmarkDashboard.average_score }}</b><small>Average score</small></article><article><b>{{ benchmarkDashboard.success_rate }}%</b><small>Success rate</small></article></div><div v-if="benchmarkDashboard" class="connector-grid"><article v-for="(score, capability) in benchmarkDashboard.capabilities" :key="capability"><header><span>OBSERVED</span><b>{{ capability }}</b></header><p>{{ score }} / 100</p><small>Derived from saved benchmark records only.</small></article></div><div v-if="benchmarkTasks.length" class="connector-grid"><article v-for="task in benchmarkTasks" :key="task.id"><header><span>{{ task.category }}</span><b>{{ task.difficulty }}</b></header><h3>{{ task.name }}</h3><p>{{ task.description }}</p><small>{{ task.expected_agents.length }} expected agents · {{ task.expected_tools.length }} expected tools</small></article></div><div v-else class="product-empty-state"><b>No benchmark task yet</b><p>创建并显式运行受控 Benchmark 后，这里才会显示实际评分，系统不会生成假分数。</p></div></section>
       <section v-if="activeWorkspaceView === 'scenario-center'" class="connector-center" aria-label="Enterprise Scenario Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE SCENARIO DEMO</p><h2>Scenario Center</h2><p>通过同一条 Mission Runtime 演示需求理解、资料检索、风险提示、待审核 Artifact 与 Benchmark 观察；所有场景均为 DEMO_ONLY。</p></div><button class="outline-button" type="button" @click="loadScenarios">Refresh</button></header><div v-if="enterpriseScenarios.length" class="connector-grid"><article v-for="item in enterpriseScenarios" :key="item.id"><header><span>DEMO_ONLY</span><b>{{ item.industry }}</b></header><h3>{{ item.name }}</h3><p>{{ item.description }}</p><small>AI Team · {{ item.expected_agents.join(' · ') }}</small><footer><button class="primary-card-action" :disabled="scenarioLoading" type="button" @click="runScenario(item.id)">{{ scenarioLoading ? 'Running controlled mission…' : 'Run scenario' }}</button></footer></article></div><div v-else class="product-empty-state"><b>No scenario available</b><p>没有已声明的 Demo 场景；系统不会以虚构客户数据填充该页面。</p></div><section v-if="scenarioRunResult" class="mission-tool-trace"><p class="section-kicker">SCENARIO RUN</p><h3>{{ scenarioRunResult.scenario.name }} · {{ scenarioRunResult.status }}</h3><p>{{ scenarioRunResult.boundary }}</p><article v-for="item in scenarioRunResult.timeline" :key="item.created_at + item.action"><b>{{ item.stage }}</b><small>{{ item.status }} · Evidence {{ item.evidence_count }}</small><p>{{ item.result_summary }}</p></article><article v-if="scenarioRunResult.artifact"><b>Artifact</b><small>{{ scenarioRunResult.artifact.status }} · Human Review required</small><p>{{ scenarioRunResult.artifact.content_summary || 'Reviewable draft generated.' }}</p></article><article v-if="scenarioRunResult.benchmark"><b>Observed Benchmark</b><small>{{ scenarioRunResult.benchmark.score }} · same Mission</small><p>{{ scenarioRunResult.benchmark.trace_summary }}</p></article></section></section>
+      <section v-if="activeWorkspaceView === 'ai-workspace'" class="connector-center" aria-label="AI Mission Workspace"><header class="dashboard-heading"><div><p class="section-kicker">AI COMMAND CENTER</p><h2>Enterprise AI Workspace</h2><p>管理 AI 团队的已保存 Mission、Evidence、Artifact 与人工审核；仅展示真实持久化记录。</p></div><button class="outline-button" type="button" @click="loadWorkspaceExperience">Refresh</button></header><div v-if="workspaceExperience" class="connector-metrics"><article><b>{{ workspaceExperience.active_missions }}</b><small>Active missions</small></article><article><b>{{ workspaceExperience.reviews.pending }}</b><small>Pending review</small></article><article><b>{{ workspaceExperience.artifacts.length }}</b><small>Recent artifacts</small></article><article><b>{{ workspaceExperience.agents.filter(item => item.status === 'RUNNING').length }}</b><small>AI team running</small></article></div><div v-if="workspaceExperience" class="connector-grid"><article v-for="item in workspaceExperience.missions" :key="item.id"><header><span>{{ item.status }}</span><b>{{ item.progress }}%</b></header><h3>{{ item.title }}</h3><p>{{ item.current_step }}</p><small>Evidence · {{ item.evidence_refs.length }} · {{ item.created_at }}</small><button class="text-button" type="button" @click="openWorkspaceView('mission-center'); loadAIMissionDetail(item.id)">Open Mission →</button></article></div><div v-if="workspaceExperience && !workspaceExperience.missions.length" class="product-empty-state"><b>No mission yet</b><p>从 Command Center 创建任务后，AI Plan、Timeline、Evidence、Artifact 与 Review 会在同一工作空间中可追溯。</p></div><section v-if="workspaceExperience?.artifacts.length" class="mission-tool-trace"><p class="section-kicker">RECENT ARTIFACTS</p><article v-for="item in workspaceExperience.artifacts" :key="item.id"><b>{{ item.title }}</b><small>{{ item.artifact_type }} · v{{ item.version }} · {{ item.status }}</small><p>Evidence {{ item.evidence_count }} · {{ item.created_at }}</p></article></section></section>
 
       <section v-if="activeWorkspaceView === 'connector-center'" class="connector-center" aria-label="Enterprise Connector Center">
         <header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE TOOL INTEGRATION</p><h2>Connector Center</h2><p>Connector 默认只读、全程留痕。P31 仅实际启用 SQLite；PostgreSQL/MySQL 不接收凭证且保持禁用。</p></div><button class="outline-button" type="button" :disabled="connectorLoading" @click="loadConnectorCenter">Refresh</button></header>
