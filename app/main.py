@@ -30,6 +30,7 @@ from app.routes.computer_missions import router as computer_missions_router
 from app.routes.evaluations import router as evaluations_router
 from app.routes.planner import router as planner_router
 from app.routes.adaptive import router as adaptive_router
+from app.routes.copilot import router as copilot_router
 
 
 app = FastAPI(title="ResearchOS · AI科研创新决策平台")
@@ -43,6 +44,7 @@ app.include_router(computer_missions_router)
 app.include_router(evaluations_router)
 app.include_router(planner_router)
 app.include_router(adaptive_router)
+app.include_router(copilot_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 app.add_middleware(

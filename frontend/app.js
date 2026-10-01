@@ -269,6 +269,9 @@ createApp({
     const aiMissionReviewComment = ref("");
     const aiMissionRevisionSummary = ref("");
     const aiMissionDelivery = ref(null);
+    const entryCopilotSession = ref(null);
+    const entryCopilotResult = ref(null);
+    const entryCopilotLoading = ref(false);
     const adaptiveMissionLoading = ref(false);
     const computerMissionTask = ref("");
     const computerMissionLoading = ref(false);
@@ -409,6 +412,7 @@ createApp({
     const workflowDiagnostics = ref(null);
     const agentAnalytics = ref([]);
     const adaptiveAnalytics = ref(null);
+    const copilotAnalytics = ref(null);
     const agentMemories = ref([]);
     const diagnosticsLoading = ref(false);
     const diagnosticsError = ref("");
@@ -789,7 +793,7 @@ createApp({
       if (view === "bi") await loadResearchBi();
       if (view === "evidence") await loadEvidenceCenter();
       if (view === "lab-profile") await loadResearchBi();
-      if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadAgentMemories()]);
+      if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadAgentMemories()]);
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
       if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
@@ -1095,6 +1099,20 @@ createApp({
       finally { aiMissionLoading.value = false; }
     }
 
+    async function startCopilotMission() {
+      const goal = researchOsGoal.value.trim();
+      if (!goal || entryCopilotLoading.value) return;
+      entryCopilotLoading.value = true;
+      try {
+        const session = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/copilot/session`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({}) }));
+        const understanding = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/copilot/chat`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ session_id: session.id, message: goal }) }));
+        const started = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/copilot/session/${session.id}/start`, { method: "POST" }));
+        entryCopilotSession.value = session; entryCopilotResult.value = { ...understanding, ...started };
+        selectedAIMission.value = started.mission; activeWorkspaceView.value = "missions"; await loadAIMissions(); await loadAIMissionDetail(started.mission.id);
+      } catch (error) { aiMissionError.value = error.message || "Copilot 暂时无法创建 Mission。"; }
+      finally { entryCopilotLoading.value = false; }
+    }
+
     async function runAIMission(missionId) {
       if (!missionId) return;
       aiMissionLoading.value = true; aiMissionError.value = ""; aiMissionDelivery.value = null;
@@ -1353,6 +1371,11 @@ createApp({
     async function loadAgentAnalytics() {
       try { const [metrics, adaptive] = await Promise.all([readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent-metrics`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/adaptive-metrics`))]); agentAnalytics.value = metrics; adaptiveAnalytics.value = adaptive; }
       catch (_) { agentAnalytics.value = []; adaptiveAnalytics.value = null; }
+    }
+
+    async function loadCopilotAnalytics() {
+      try { copilotAnalytics.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/copilot/analytics`)); }
+      catch (_) { copilotAnalytics.value = null; }
     }
 
     async function loadAgentMemories() {
@@ -2947,6 +2970,7 @@ createApp({
       workflowDiagnostics,
       agentAnalytics,
       adaptiveAnalytics,
+      copilotAnalytics,
       agentMemories,
       diagnosticsLoading,
       diagnosticsError,
@@ -3031,6 +3055,9 @@ createApp({
       aiMissionReviewComment,
       aiMissionRevisionSummary,
       aiMissionDelivery,
+      entryCopilotSession,
+      entryCopilotResult,
+      entryCopilotLoading,
       adaptiveMissionLoading,
       computerMissionTask,
       computerMissionLoading,
@@ -3046,6 +3073,7 @@ createApp({
       loadAIMissions,
       loadAIMissionDetail,
       createAIMission,
+      startCopilotMission,
       runAdaptiveMission,
       reviewAdaptiveMission,
       runAIMission,
@@ -3166,6 +3194,7 @@ createApp({
       loadSystemStatus,
       loadWorkflowDiagnostics,
       loadAgentAnalytics,
+      loadCopilotAnalytics,
       loadAgentMemories,
       deleteAgentMemory,
       initializeDemoKnowledge,
@@ -3280,7 +3309,7 @@ createApp({
       </header>
 
       <section v-if="activeWorkspaceView === 'dashboard'" class="home-workspace" aria-label="ResearchOS Home">
-          <div class="home-hero"><p class="section-kicker">RESEARCHOS AI WORKSPACE</p><h1>From research question to<br />evidence-backed decision.</h1><p>一个面向科研团队的 AI Research Operating System。</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="Describe your research goal or task..."></textarea><button type="button" class="primary-card-action" :disabled="workflowLoading" @click="generateResearchWorkflow()">{{ workflowLoading ? 'Building workflow…' : 'Generate Workflow' }}</button></div><small>工作流可先审阅；研究结论只在已有索引资料和 Evidence 支撑下生成。</small></div>
+          <div class="home-hero"><p class="section-kicker">RESEARCHOS AI COPILOT</p><h1>From research question to<br />evidence-backed decision.</h1><p>一个面向科研团队的 AI Research Operating System。</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="告诉我你想完成什么任务，例如：分析某领域研究趋势"></textarea><button type="button" class="primary-card-action" :disabled="entryCopilotLoading" @click="startCopilotMission">{{ entryCopilotLoading ? 'Understanding…' : 'Start Mission' }}</button></div><small>Copilot 将创建可审阅 Mission，再复用 Planner、Evidence 与 Human Review；不会生成无依据科研结论。</small><p v-if="entryCopilotResult" class="quiet-note">{{ entryCopilotResult.summary }} · Mission 已创建。</p></div>
           <div class="home-quick-grid product-capability-grid"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><b>Research Agent</b><small>Explore research, Evidence and deliverables</small></button><button type="button" @click="openWorkspaceView('mission-center')"><b>AI Mission Center</b><small>Track planned work, review and delivery states</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Review my project code'; computerPlanPreview = null"><b>Computer Agent</b><small>Analyze a workspace and prepare reviewable changes</small></button><button type="button" @click="openWorkspaceView('enterprise-hub')"><b>Enterprise Workspace</b><small>Connect research collaboration and delivery</small></button></div>
           <section v-if="aiMissionDashboard" class="mission-dashboard-strip"><article v-for="(value, key) in aiMissionDashboard.metrics" :key="key"><span>{{ key.replaceAll('_', ' ') }}</span><b>{{ value }}</b></article></section>
         <section class="home-recent-workspaces"><header><div><p class="section-kicker">RECENT WORKSPACES</p><h3>继续正在进行的研究</h3></div><button class="text-button" type="button" @click="openWorkspaceView('research-workspace')">查看全部</button></header><div v-if="researchWorkspaces.length" class="recent-workspace-grid"><article v-for="item in researchWorkspaces.slice(0,3)" :key="item.workspace_id"><span>{{ item.strategy_type || 'research' }}</span><h4>{{ item.title }}</h4><p><b>{{ item.status || 'created' }}</b> · {{ item.human_review_required ? 'Review Pending' : 'Review not required' }}</p><small>Evidence：{{ item.evidence_count || 0 }}</small><button type="button" @click="resumeResearchWorkspace(item)">继续研究 →</button></article></div><div v-else class="home-empty-state"><b>暂无持续研究 Workspace</b><span>提交一项有依据的研究任务后，系统会保存策略、Evidence 和审核状态。</span></div></section>
@@ -3709,6 +3738,7 @@ createApp({
         <section class="demo-knowledge-panel"><div><p class="section-kicker">DEMO KNOWLEDGE BASE</p><h3>低碳建筑材料案例资料</h3><p>用于比赛现场讲解知识库、项目资料和产学研协作流程。</p></div><button class="primary-card-action" type="button" @click="initializeDemoKnowledge">{{ demoKnowledgeInitialized ? 'Demo资料已加载' : '初始化 Demo 知识库' }}</button><div v-if="visibleDemoKnowledgeAssets.length" class="demo-asset-grid"><article v-for="asset in visibleDemoKnowledgeAssets" :key="asset.title"><span>{{ asset.status }}</span><h4>{{ asset.title }}</h4><small>{{ asset.type }}</small><p>{{ asset.detail }}</p></article></div><p class="demo-boundary">这些是明确标注的界面展示资料，不会自动写入真实论文库、FAISS 索引或作为 Agent 的科研证据。需要真实分析时，请上传实际可解析的资料。</p></section>
         <section class="activity-log-panel"><div class="result-section-heading"><div><p class="section-kicker">ACTIVITY LOG</p><h3>用户操作日志</h3></div><span>{{ activityLogs.length }} 条</span></div><div v-if="!activityLogs.length" class="activity-empty">暂无操作记录。创建任务、执行 Agent、生成报告或更新项目后会在此显示。</div><ol v-else class="activity-list"><li v-for="item in activityLogs" :key="item.created_at + item.action"><b>{{ item.action }}</b><span>{{ item.detail }}</span><time>{{ formatLibraryDate(item.created_at) }}</time></li></ol></section>
         <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">AGENT ANALYTICS</p><h3>Execution quality & observability</h3></div><button class="outline-button" type="button" @click="loadAgentAnalytics">Refresh</button></div><p v-if="adaptiveAnalytics" class="quiet-note">Adaptive Missions {{ adaptiveAnalytics.adaptive_missions }} · Replan rate {{ adaptiveAnalytics.replan_rate }} · Avg iterations {{ adaptiveAnalytics.average_iterations }} · Evidence recovery {{ adaptiveAnalytics.evidence_recovery_rate }}% · Verification recovery {{ adaptiveAnalytics.verification_recovery_rate }}%</p><article v-for="metric in agentAnalytics" :key="metric.agent_name"><b>{{ metric.agent_name }}</b><span>{{ metric.total_tasks }} tasks · {{ metric.success_rate }}% success · {{ metric.avg_duration }}s avg · {{ metric.avg_evidence_count }} Evidence</span></article><p v-if="!agentAnalytics.length">尚无持久化 Agent Trace；运行新的 Mission 后将显示可审计统计。</p></section>
+        <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">COPILOT ANALYTICS</p><h3>AI Copilot usage overview</h3></div><button class="outline-button" type="button" @click="loadCopilotAnalytics">Refresh</button></div><template v-if="copilotAnalytics"><p class="quiet-note">Sessions {{ copilotAnalytics.sessions || 0 }} · Created Missions {{ copilotAnalytics.created_missions || 0 }} · Completion {{ copilotAnalytics.completion_rate || '0%' }} · Average session time {{ copilotAnalytics.average_session_time || 'not available' }}</p><article v-for="(count, intent) in (copilotAnalytics.intent_distribution || {})" :key="intent"><b>{{ intent }}</b><span>{{ count }} classified session message{{ count === 1 ? '' : 's' }}</span></article></template><p v-else>暂无 Copilot 会话统计；发起 Mission 后可查看真实使用概览。</p></section>
         <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">AGENT MEMORY CENTER</p><h3>Reviewable memory summaries</h3></div><button class="outline-button" type="button" @click="loadAgentMemories">Refresh</button></div><article v-for="memory in agentMemories" :key="memory.id"><b>{{ memory.agent_name }} · {{ memory.memory_type }}</b><span>{{ memory.content_summary }}</span><small>{{ memory.status }} · Mission {{ memory.source_mission_id || 'N/A' }}</small><button class="text-button" type="button" @click="deleteAgentMemory(memory.id)">Delete</button></article><p v-if="!agentMemories.length">暂无 Agent Memory。任务完成后的摘要必须经人工确认后才可作为可复用 Memory。</p></section>
         <p class="demo-boundary">操作日志仅保存在当前浏览器的 localStorage 中，用于现场演示；清除浏览器数据后会被移除。</p>
       </section>
