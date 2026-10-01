@@ -44,6 +44,7 @@ from app.routes.workspace_experience import router as workspace_experience_route
 from app.routes.enterprise_memory import router as enterprise_memory_router
 from app.routes.product_showcase import router as product_showcase_router
 from app.routes.advanced_computer import router as advanced_computer_router
+from app.routes.computer_vision import router as computer_vision_router
 from app.services.runtime_monitor_service import RuntimeMonitor
 
 
@@ -72,6 +73,7 @@ app.include_router(workspace_experience_router)
 app.include_router(enterprise_memory_router)
 app.include_router(product_showcase_router)
 app.include_router(advanced_computer_router)
+app.include_router(computer_vision_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 app.add_middleware(
