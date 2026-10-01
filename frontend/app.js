@@ -128,6 +128,8 @@ createApp({
     const asking = ref(false);
     const errorMessage = ref("");
     const activeWorkspaceView = ref("dashboard");
+    const connectionState = ref("CONNECTING");
+    const connectionMessage = ref("Connecting your workspace");
     const assistantPanelOpen = ref(false);
     const assistantDraft = ref("");
     const libraryPapers = ref([]);
@@ -2955,11 +2957,16 @@ createApp({
       }, REQUEST_TIMEOUT_MS);
 
       try {
-        return await fetch(url, { ...options, signal: controller.signal });
+        const response = await fetch(url, { ...options, signal: controller.signal });
+        connectionState.value = "CONNECTED";
+        connectionMessage.value = "Workspace connected";
+        return response;
       } catch (error) {
-        if (timedOut) throw new Error("请求超时，请稍后重试或上传篇幅更短的文档。");
+        connectionState.value = "OFFLINE";
+        connectionMessage.value = "Workspace unavailable";
+        if (timedOut) throw new Error("Workspace temporarily unavailable. Please reconnect and try again.");
         if (error instanceof TypeError) {
-          throw new Error("无法连接后端服务，请确认后端已启动后重试。");
+          throw new Error("Workspace temporarily unavailable. Live AI data could not be loaded.");
         }
         throw error;
       } finally {
@@ -3072,6 +3079,8 @@ createApp({
       agentTrace,
       agentWorkflow,
       activeWorkspaceView,
+      connectionState,
+      connectionMessage,
       assistantPanelOpen,
       assistantDraft,
       analysisFromLibrary,
@@ -3566,6 +3575,10 @@ createApp({
         </nav>
       </header>
 
+      <button class="connection-status" :class="connectionState.toLowerCase()" type="button" aria-live="polite" @click="openWorkspaceView(activeWorkspaceView)">
+        <i></i><span>{{ connectionMessage }}</span>
+      </button>
+
       <section v-if="activeWorkspaceView === 'dashboard'" class="home-workspace" aria-label="ResearchOS Home">
           <div class="home-hero workspace-home-hero"><p class="section-kicker">RESEARCHOS · ENTERPRISE INTELLIGENCE</p><h1>Your AI team<br />is ready to work.</h1><p>Research, planning and delivery — coordinated in one reviewable workspace.</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="What would you like your AI team to accomplish?"></textarea><button type="button" class="primary-card-action" :disabled="entryCopilotLoading" @click="startCopilotMission">{{ entryCopilotLoading ? 'Planning mission…' : 'Start Mission' }}</button></div><div class="enterprise-upload-strip"><button class="outline-button" type="button" @click="openWorkspaceView('showcase')">Try Demo</button><label class="outline-button"><input type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt" @change="uploadEnterpriseFile" hidden />{{ enterpriseFileLoading ? 'Analyzing material…' : 'Add material' }}</label><button class="text-button" type="button" @click="openWorkspaceView('ai-workspace')">Open Workspace →</button></div><small>AI drafts remain reviewable. Customer material never becomes Knowledge Evidence automatically.</small><p v-if="entryCopilotResult" class="quiet-note">{{ entryCopilotResult.summary }} · Mission 已创建。</p><p v-if="enterpriseFileError" class="error-alert"><span>!</span>{{ enterpriseFileError }}</p></div>
           <div class="home-quick-grid product-capability-grid"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><b>Research Agent</b><small>Explore research, Evidence and deliverables</small></button><button type="button" @click="openWorkspaceView('mission-center')"><b>AI Mission Center</b><small>Track planned work, review and delivery states</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Review my project code'; computerPlanPreview = null"><b>Computer Agent</b><small>Analyze a workspace and prepare reviewable changes</small></button><button type="button" @click="openWorkspaceView('enterprise-hub')"><b>Enterprise Workspace</b><small>Connect research collaboration and delivery</small></button></div>
@@ -3579,7 +3592,7 @@ createApp({
         <div class="document-intelligence-layout"><aside><p class="section-kicker">CUSTOMER MATERIAL</p><button v-for="file in enterpriseFiles" :key="file.id" type="button" :class="{ active: selectedEnterpriseFile?.id === file.id }" @click="openEnterpriseFile(file.id)"><b>{{ file.filename }}</b><small>{{ file.file_type }} · {{ file.status }}</small></button><p v-if="!enterpriseFiles.length" class="quiet-note">尚无客户资料。上传后才会出现解析结果。</p></aside><main v-if="selectedEnterpriseFile"><section class="document-summary-card"><span>{{ selectedEnterpriseFile.classification }}</span><h3>{{ selectedEnterpriseFile.filename }}</h3><p>{{ selectedEnterpriseFile.summary?.summary }}</p><small>{{ selectedEnterpriseFile.summary?.limitations }}</small></section><section class="document-analysis-card"><p class="section-kicker">EXTRACTED REQUIREMENTS</p><h3>所有识别项均待客户确认</h3><article v-for="item in selectedEnterpriseFile.requirements || []" :key="item.id"><b>{{ item.category }}</b><p>{{ item.description }}</p><small>{{ item.status }}</small></article><p v-if="!(selectedEnterpriseFile.requirements || []).length" class="quiet-note">资料不足以生成需求草稿；请补充可解析内容。</p></section><footer class="document-mission-action"><div><b>Human confirmation required</b><p>确认后将通过 Copilot 创建现有 Mission 与 Planner Graph，并关联此客户材料。</p></div><button class="primary-card-action" type="button" :disabled="enterpriseFileLoading || selectedEnterpriseFile.status !== 'COMPLETED'" @click="createMissionFromDocument">Confirm requirements & create Mission</button></footer></main><main v-else class="document-empty-state"><b>Upload a customer document</b><p>支持 PDF、DOCX、XLSX、PPTX、图片、文本和安全代码文件。</p></main></div>
       </section>
 
-      <section v-if="activeWorkspaceView === 'mission-center'" class="mission-center" aria-label="AI Mission Center">
+      <section v-if="activeWorkspaceView === 'mission-center'" class="mission-center mission-collaboration-workspace" aria-label="AI Mission Center">
         <header class="dashboard-heading"><div><p class="section-kicker">FDE MISSION CENTER</p><h2>Customer Need → Evidence → Review → Delivery.</h2><p>真实 RAG Evidence、需求确认与人工审核共同驱动交付；不展示内部推理，也不自动批准。</p></div><div class="mission-header-actions"><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="startFdeMissionDemo">Start FDE Demo</button><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="loadAIMissions">Refresh</button></div></header>
         <p v-if="aiMissionError" class="error-alert"><span>!</span>{{ aiMissionError }}</p>
         <div class="mission-center-layout"><section class="mission-create-surface"><p class="section-kicker">CREATE MISSION</p><label>Mission title<input v-model="aiMissionForm.title" placeholder="例如：RAG 技术路线分析" /></label><label>Mission type<select v-model="aiMissionForm.mission_type"><option>RESEARCH</option><option>SOLUTION</option><option>DELIVERY</option></select></label><label>Customer need / Goal<textarea v-model="aiMissionForm.goal" rows="5" placeholder="描述客户需求或研究目标；系统仅基于检索到的真实资料形成 Evidence 引用。"></textarea></label><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="createAIMission">Create AI Mission</button></section>
@@ -3716,7 +3729,7 @@ createApp({
         <p><strong>Next recommended action：</strong>{{ researchActions.length ? '前往研究成果中心查看依据并完成人工确认。' : '将有依据的研究建议纳入行动中心，再由负责人确认。' }}</p>
       </section>
 
-      <section v-if="activeWorkspaceView === 'computer'" class="computer-studio" aria-label="Research Computer Operator Pro">
+      <section v-if="activeWorkspaceView === 'computer'" class="computer-studio computer-agent-workspace" aria-label="Research Computer Operator Pro">
         <header class="operator-studio-heading computer-operator-heading"><div><p class="section-kicker">COMPUTER OPERATOR PRO</p><h2>Computer Command Center</h2><p>从自然语言任务到受控执行、实时事件与人工审批。默认只分析，不自动修改资料或代码。</p></div><span class="operator-status">{{ computerPlanPreview ? 'Plan ready' : (computerTask?.status || 'Ready') }}</span></header>
         <p v-if="computerError" class="error-alert"><span>!</span>{{ computerError }}</p>
         <div class="computer-studio-grid">
