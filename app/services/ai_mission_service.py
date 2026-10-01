@@ -6,6 +6,8 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from app.models.ai_mission import AIMission, AIMissionEvent
+# Register the P39 tables before legacy in-memory fixtures call Base.metadata.create_all.
+from app.models.enterprise_memory import DecisionRecord  # noqa: F401
 from app.models.agent_trace import AgentTrace
 from app.models.computer_mission import ComputerMission
 from app.models.execution_graph import ExecutionGraph
@@ -112,6 +114,14 @@ class AIMissionService:
         self._graph_status(mission_id,"Delivery Agent","COMPLETED")
         self._transition(mission_id,"DELIVERY_READY",97,"Delivery","Delivery Package Generated","COMPLETED",len(mission["evidence_refs"]),"交付包保留 AI Generated Draft 与 Evidence References 标记。")
         self._transition(mission_id,"COMPLETED",100,"Delivery","Mission Completed","COMPLETED",len(mission["evidence_refs"]),"Mission 交付流程完成。"); self._notify("MISSION_COMPLETED",f"Mission 已完成：{mission['title']}")
+        # Extract a review-gated draft only; human approval is required before reuse.
+        from app.services.enterprise_memory_service import DecisionMemoryService
+        try:
+            DecisionMemoryService(self._sessions, initialize=False).extract(mission_id)
+        except OperationalError:
+            # Isolated legacy fixtures may intentionally create a narrowed table set.
+            # Production initialization registers the P39 tables before Mission delivery.
+            pass
         return {"mission":self.detail(mission_id),"delivery_package":package}
 
     def list(self):

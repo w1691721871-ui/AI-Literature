@@ -437,6 +437,7 @@ createApp({
     const scenarioRunResult = ref(null);
     const scenarioLoading = ref(false);
     const workspaceExperience = ref(null);
+    const knowledgeMemory = ref({ assets: [], decisions: [], dashboard: null });
     const workflowDiagnostics = ref(null);
     const agentAnalytics = ref([]);
     const adaptiveAnalytics = ref(null);
@@ -828,6 +829,7 @@ createApp({
       if (view === "benchmarks") await loadBenchmarks();
       if (view === "scenario-center") await loadScenarios();
       if (view === "ai-workspace") await loadWorkspaceExperience();
+      if (view === "memory-center") await loadKnowledgeMemory();
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
       if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
@@ -1175,6 +1177,10 @@ createApp({
     async function loadWorkspaceExperience() {
       try { workspaceExperience.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/workspace/dashboard`)); }
       catch (_) { workspaceExperience.value = null; }
+    }
+    async function loadKnowledgeMemory() {
+      try { const [assets, decisions, dashboard] = await Promise.all([readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/knowledge/assets`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/knowledge/decisions`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/knowledge/dashboard`))]); knowledgeMemory.value = { assets, decisions, dashboard }; }
+      catch (_) { knowledgeMemory.value = { assets: [], decisions: [], dashboard: null }; }
     }
 
     async function generateMissionArtifact(artifactType) {
@@ -3158,6 +3164,7 @@ createApp({
       scenarioRunResult,
       scenarioLoading,
       workspaceExperience,
+      knowledgeMemory,
       workflowDiagnostics,
       agentAnalytics,
       adaptiveAnalytics,
@@ -3296,6 +3303,7 @@ createApp({
       loadScenarios,
       runScenario,
       loadWorkspaceExperience,
+      loadKnowledgeMemory,
       createAIMission,
       startCopilotMission,
       loadEnterpriseFiles,
@@ -3524,6 +3532,7 @@ createApp({
              <button type="button" :class="{ active: activeWorkspaceView === 'dashboard' }" @click="openWorkspaceView('dashboard')">AI Command Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'mission-center' || activeWorkspaceView === 'team-workspace' }" @click="openWorkspaceView('mission-center')">Mission Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'ai-workspace' }" @click="openWorkspaceView('ai-workspace')">Mission Workspace</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'memory-center' }" @click="openWorkspaceView('memory-center')">Enterprise Memory</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'tasks' || activeWorkspaceView === 'workflow-studio' || activeWorkspaceView === 'assistant' || activeWorkspaceView === 'worker' || activeWorkspaceView === 'agents' || activeWorkspaceView === 'timeline' }" @click="openWorkspaceView('tasks')">Research Engine</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'operator' }" @click="openWorkspaceView('operator')">Operator Studio</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'computer' }" @click="openWorkspaceView('computer')">Computer Lab</button>
@@ -3587,6 +3596,7 @@ createApp({
       <section v-if="activeWorkspaceView === 'benchmarks'" class="connector-center" aria-label="Agent Benchmark Center"><header class="dashboard-heading"><div><p class="section-kicker">AGENT EVALUATION</p><h2>Agent Benchmark Center</h2><p>评分只来自真实 Benchmark Mission 的 Trace、Evidence、Artifact 与 Human Review 状态；未运行时保持 0。</p></div><button class="outline-button" type="button" @click="loadBenchmarks">Refresh</button></header><div v-if="benchmarkDashboard" class="connector-metrics"><article><b>{{ benchmarkDashboard.benchmarks }}</b><small>Benchmarks</small></article><article><b>{{ benchmarkDashboard.runs }}</b><small>Runs</small></article><article><b>{{ benchmarkDashboard.average_score }}</b><small>Average score</small></article><article><b>{{ benchmarkDashboard.success_rate }}%</b><small>Success rate</small></article></div><div v-if="benchmarkDashboard" class="connector-grid"><article v-for="(score, capability) in benchmarkDashboard.capabilities" :key="capability"><header><span>OBSERVED</span><b>{{ capability }}</b></header><p>{{ score }} / 100</p><small>Derived from saved benchmark records only.</small></article></div><div v-if="benchmarkTasks.length" class="connector-grid"><article v-for="task in benchmarkTasks" :key="task.id"><header><span>{{ task.category }}</span><b>{{ task.difficulty }}</b></header><h3>{{ task.name }}</h3><p>{{ task.description }}</p><small>{{ task.expected_agents.length }} expected agents · {{ task.expected_tools.length }} expected tools</small></article></div><div v-else class="product-empty-state"><b>No benchmark task yet</b><p>创建并显式运行受控 Benchmark 后，这里才会显示实际评分，系统不会生成假分数。</p></div></section>
       <section v-if="activeWorkspaceView === 'scenario-center'" class="connector-center" aria-label="Enterprise Scenario Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE SCENARIO DEMO</p><h2>Scenario Center</h2><p>通过同一条 Mission Runtime 演示需求理解、资料检索、风险提示、待审核 Artifact 与 Benchmark 观察；所有场景均为 DEMO_ONLY。</p></div><button class="outline-button" type="button" @click="loadScenarios">Refresh</button></header><div v-if="enterpriseScenarios.length" class="connector-grid"><article v-for="item in enterpriseScenarios" :key="item.id"><header><span>DEMO_ONLY</span><b>{{ item.industry }}</b></header><h3>{{ item.name }}</h3><p>{{ item.description }}</p><small>AI Team · {{ item.expected_agents.join(' · ') }}</small><footer><button class="primary-card-action" :disabled="scenarioLoading" type="button" @click="runScenario(item.id)">{{ scenarioLoading ? 'Running controlled mission…' : 'Run scenario' }}</button></footer></article></div><div v-else class="product-empty-state"><b>No scenario available</b><p>没有已声明的 Demo 场景；系统不会以虚构客户数据填充该页面。</p></div><section v-if="scenarioRunResult" class="mission-tool-trace"><p class="section-kicker">SCENARIO RUN</p><h3>{{ scenarioRunResult.scenario.name }} · {{ scenarioRunResult.status }}</h3><p>{{ scenarioRunResult.boundary }}</p><article v-for="item in scenarioRunResult.timeline" :key="item.created_at + item.action"><b>{{ item.stage }}</b><small>{{ item.status }} · Evidence {{ item.evidence_count }}</small><p>{{ item.result_summary }}</p></article><article v-if="scenarioRunResult.artifact"><b>Artifact</b><small>{{ scenarioRunResult.artifact.status }} · Human Review required</small><p>{{ scenarioRunResult.artifact.content_summary || 'Reviewable draft generated.' }}</p></article><article v-if="scenarioRunResult.benchmark"><b>Observed Benchmark</b><small>{{ scenarioRunResult.benchmark.score }} · same Mission</small><p>{{ scenarioRunResult.benchmark.trace_summary }}</p></article></section></section>
       <section v-if="activeWorkspaceView === 'ai-workspace'" class="connector-center" aria-label="AI Mission Workspace"><header class="dashboard-heading"><div><p class="section-kicker">AI COMMAND CENTER</p><h2>Enterprise AI Workspace</h2><p>管理 AI 团队的已保存 Mission、Evidence、Artifact 与人工审核；仅展示真实持久化记录。</p></div><button class="outline-button" type="button" @click="loadWorkspaceExperience">Refresh</button></header><div v-if="workspaceExperience" class="connector-metrics"><article><b>{{ workspaceExperience.active_missions }}</b><small>Active missions</small></article><article><b>{{ workspaceExperience.reviews.pending }}</b><small>Pending review</small></article><article><b>{{ workspaceExperience.artifacts.length }}</b><small>Recent artifacts</small></article><article><b>{{ workspaceExperience.agents.filter(item => item.status === 'RUNNING').length }}</b><small>AI team running</small></article></div><div v-if="workspaceExperience" class="connector-grid"><article v-for="item in workspaceExperience.missions" :key="item.id"><header><span>{{ item.status }}</span><b>{{ item.progress }}%</b></header><h3>{{ item.title }}</h3><p>{{ item.current_step }}</p><small>Evidence · {{ item.evidence_refs.length }} · {{ item.created_at }}</small><button class="text-button" type="button" @click="openWorkspaceView('mission-center'); loadAIMissionDetail(item.id)">Open Mission →</button></article></div><div v-if="workspaceExperience && !workspaceExperience.missions.length" class="product-empty-state"><b>No mission yet</b><p>从 Command Center 创建任务后，AI Plan、Timeline、Evidence、Artifact 与 Review 会在同一工作空间中可追溯。</p></div><section v-if="workspaceExperience?.artifacts.length" class="mission-tool-trace"><p class="section-kicker">RECENT ARTIFACTS</p><article v-for="item in workspaceExperience.artifacts" :key="item.id"><b>{{ item.title }}</b><small>{{ item.artifact_type }} · v{{ item.version }} · {{ item.status }}</small><p>Evidence {{ item.evidence_count }} · {{ item.created_at }}</p></article></section></section>
+      <section v-if="activeWorkspaceView === 'memory-center'" class="connector-center" aria-label="Enterprise Memory Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE KNOWLEDGE MEMORY</p><h2>Enterprise Memory Center</h2><p>只有经人工审批的决策才会成为可复用的企业知识资产；客户文件与 Demo 数据不会自动进入 Experience Library。</p></div><button class="outline-button" type="button" @click="loadKnowledgeMemory">Refresh</button></header><div v-if="knowledgeMemory.dashboard" class="connector-metrics"><article><b>{{ knowledgeMemory.dashboard.approved_knowledge }}</b><small>Approved knowledge</small></article><article><b>{{ knowledgeMemory.dashboard.decision_count }}</b><small>Decision records</small></article><article><b>{{ knowledgeMemory.dashboard.average_confidence }}</b><small>Avg confidence</small></article><article><b>{{ knowledgeMemory.dashboard.experience_reuse_count }}</b><small>Experience reuse</small></article></div><div class="connector-grid"><article v-for="item in knowledgeMemory.assets" :key="item.id"><header><span>{{ item.status }}</span><b>{{ item.confidence }}/100</b></header><h3>{{ item.title }}</h3><p>{{ item.summary }}</p><small>{{ item.asset_type }} · {{ item.source_type }}</small></article></div><section v-if="knowledgeMemory.decisions.length" class="mission-tool-trace"><p class="section-kicker">DECISION RECORDS</p><article v-for="item in knowledgeMemory.decisions" :key="item.id"><b>{{ item.title }}</b><small>{{ item.review_status }} · Evidence {{ item.evidence_refs.length }}</small><p>{{ item.decision_summary }}</p></article></section><div v-if="!knowledgeMemory.assets.length && !knowledgeMemory.decisions.length" class="product-empty-state"><b>No approved enterprise memory yet</b><p>完成 Mission 后会生成待审核 Decision Draft；只有 Reviewer 审批后才可进入 Experience Library。</p></div></section>
 
       <section v-if="activeWorkspaceView === 'connector-center'" class="connector-center" aria-label="Enterprise Connector Center">
         <header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE TOOL INTEGRATION</p><h2>Connector Center</h2><p>Connector 默认只读、全程留痕。P31 仅实际启用 SQLite；PostgreSQL/MySQL 不接收凭证且保持禁用。</p></div><button class="outline-button" type="button" :disabled="connectorLoading" @click="loadConnectorCenter">Refresh</button></header>
