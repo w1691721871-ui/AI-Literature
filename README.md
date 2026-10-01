@@ -1,5 +1,21 @@
 # ResearchOS
 
+## Overview
+
+ResearchOS is an enterprise AI operating workspace for governed research, solution delivery and reviewable AI work.
+
+## Problem and Solution
+
+It connects customer needs to planning, multi-agent execution, evidence, human review, delivery and approved knowledge memory without treating AI drafts as verified enterprise knowledge.
+
+## Architecture
+
+AI Workspace → Copilot → Mission Engine → Planner → Agent Runtime → Evidence / Artifact / Human Review / Governance / Knowledge Memory.
+
+## RAG Evidence and Security
+
+RAG references remain traceable. Prompts, chain-of-thought, secrets and unapproved customer materials are not exposed as enterprise knowledge. Demo flows are explicitly `DEMO_ONLY`.
+
 > **AI Research Operating System · AI 科研决策与执行平台**
 
 ResearchOS 是面向高校实验室、科研机构、企业研发团队与产学研协作场景的 AI 产品原型。它以一个明确的研究目标为起点，把授权资料、AI 研究、Evidence、人工确认、项目执行与成果交付组织为同一条可追溯的科研闭环。
