@@ -4,6 +4,37 @@
 
 ResearchOS 是面向高校实验室、科研机构、企业研发团队与产学研协作场景的 AI 产品原型。它以一个明确的研究目标为起点，把授权资料、AI 研究、Evidence、人工确认、项目执行与成果交付组织为同一条可追溯的科研闭环。
 
+## P34 Enterprise Deployment Runtime
+
+P34 adds a bounded production-runtime layer around the existing Mission, Governance and Evidence workflows. It does not replace the RAG pipeline or authorize autonomous research decisions.
+
+```text
+Frontend container → Backend API → SQLite-compatible state / FAISS index
+                         ↘ Agent Worker → queued Mission → Human Review
+```
+
+- **Configuration management**: `ConfigService` reads model, database, storage and security settings from environment variables and only returns redacted configuration summaries.
+- **Task runtime**: `RuntimeTask` records `QUEUED → RUNNING → SUCCESS | FAILED | WAITING_REVIEW`; `AgentWorker` applies a finite retry policy (default: 3) and routes exhausted failures to human review.
+- **Storage boundary**: generated runtime artifacts use `StorageProvider`; LOCAL is implemented and `S3_COMPATIBLE` is deliberately configuration-only until an approved adapter is supplied.
+- **Operational visibility**: `/health` and `/api/runtime/monitor` expose database, storage, worker and vector-store health without prompts, model reasoning or secrets.
+
+### Container deployment
+
+1. Copy `.env.example` to a private `.env` and provide deployment secrets only through the host or secret manager. Do not commit `.env`.
+2. Start the stack: `docker compose up --build`.
+3. Open the frontend at `http://localhost:8080`; the API is available at `http://localhost:8000`.
+4. Verify `GET /health`, `GET /api/runtime/health` and `GET /researchos/diagnostics` before accepting workloads.
+
+The compose `database` service is an optional future external-database boundary (`external-db` profile). The current application remains SQLite-compatible, with state stored in the `researchos_state` volume. Generated files and the local FAISS/index state remain outside Git.
+
+### Production checklist
+
+- Configure `DASHSCOPE_API_KEY` in the deployment secret store only; never place a real key in source, README or image layers.
+- Set `DATABASE_URL`, `STORAGE_PROVIDER`, `STORAGE_ROOT`, `RUNTIME_MAX_RETRIES`, `WORKER_POLL_SECONDS` and `REQUIRE_HUMAN_REVIEW` for the target environment.
+- Persist the state volume and back it up under the organization’s data-retention policy.
+- Keep the worker separate from the API process and monitor queue length, retry count and `WAITING_REVIEW` tasks.
+- Confirm RBAC, Audit Log and Agent Policy controls for every workspace before allowing connector access.
+
 ```text
 Research Goal → Knowledge → AI Research → Evidence → Decision
               → Human Review → Project → Tasks → Deliverables → Knowledge Asset

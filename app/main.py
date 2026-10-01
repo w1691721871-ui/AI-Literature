@@ -36,6 +36,8 @@ from app.routes.artifacts import router as artifacts_router
 from app.routes.connectors import router as connectors_router
 from app.routes.agent_collaboration import router as agent_collaboration_router
 from app.routes.governance import router as governance_router
+from app.routes.runtime import router as runtime_router
+from app.services.runtime_monitor_service import RuntimeMonitor
 
 
 app = FastAPI(title="ResearchOS · AI科研创新决策平台")
@@ -55,6 +57,7 @@ app.include_router(artifacts_router)
 app.include_router(connectors_router)
 app.include_router(agent_collaboration_router)
 app.include_router(governance_router)
+app.include_router(runtime_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 app.add_middleware(
@@ -87,9 +90,11 @@ async def request_validation_error_handler(
 
 
 @app.get("/health")
-def health_check() -> dict[str, str]:
-    """Return a simple status to confirm that the service is running."""
-    return {"status": "ok"}
+def health_check() -> dict[str, object]:
+    """Return runtime component status without exposing operational secrets."""
+    components = RuntimeMonitor().health_components()
+    overall = "ok" if all(item["status"] != "FAILED" for item in components.values()) else "warning"
+    return {"status": overall, "components": components}
 
 
 @app.post("/analyze-paper")

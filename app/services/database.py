@@ -1,6 +1,7 @@
 """Small SQLite setup for the local research paper library."""
 
 from collections.abc import Generator
+import os
 from pathlib import Path
 
 from sqlalchemy import create_engine, inspect, text
@@ -10,7 +11,9 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 WORK_DIRECTORY = PROJECT_ROOT / "work"
 DATABASE_PATH = WORK_DIRECTORY / "research_library.db"
-DATABASE_URL = f"sqlite:///{DATABASE_PATH.as_posix()}"
+# Deployment may supply an external-compatible URL later; local development
+# remains intentionally SQLite-compatible. No credential value is logged.
+DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{DATABASE_PATH.as_posix()}")
 
 
 class Base(DeclarativeBase):
@@ -51,6 +54,7 @@ def initialize_database() -> None:
     from app.models.connector import Connector, DataSource, ConnectorTrace, MissionDataSource, ArtifactDataSource  # noqa: F401
     from app.models.agent_collaboration import AgentMessage, CollaborationGraph, AgentConflict  # noqa: F401
     from app.models.governance import GovernanceWorkspace, WorkspaceUserRole, AuditLog, AgentPolicy  # noqa: F401
+    from app.models.runtime_task import RuntimeTask  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
     from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401
