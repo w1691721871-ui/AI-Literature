@@ -272,6 +272,11 @@ createApp({
     const entryCopilotSession = ref(null);
     const entryCopilotResult = ref(null);
     const entryCopilotLoading = ref(false);
+    const enterpriseFiles = ref([]);
+    const selectedEnterpriseFile = ref(null);
+    const enterpriseFileLoading = ref(false);
+    const enterpriseFileError = ref("");
+    const documentAnalytics = ref(null);
     const adaptiveMissionLoading = ref(false);
     const computerMissionTask = ref("");
     const computerMissionLoading = ref(false);
@@ -782,6 +787,7 @@ createApp({
       if (view === "operator") await loadOperatorStudio();
       if (view === "computer") await loadComputerStudio();
       if (view === "copilot") await loadCopilotCenter();
+      if (view === "document-intelligence") await Promise.all([loadEnterpriseFiles(), loadDocumentAnalytics()]);
       if (view === "workspace" || view === "task-center") await loadEnterpriseWorkspace();
       if (view === "agent-monitor") await loadAgentMonitor();
       if (view === "delivery-center") await loadClientDelivery();
@@ -793,7 +799,7 @@ createApp({
       if (view === "bi") await loadResearchBi();
       if (view === "evidence") await loadEvidenceCenter();
       if (view === "lab-profile") await loadResearchBi();
-      if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadAgentMemories()]);
+      if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadDocumentAnalytics(), loadAgentMemories()]);
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
       if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
@@ -1111,6 +1117,42 @@ createApp({
         selectedAIMission.value = started.mission; activeWorkspaceView.value = "missions"; await loadAIMissions(); await loadAIMissionDetail(started.mission.id);
       } catch (error) { aiMissionError.value = error.message || "Copilot 暂时无法创建 Mission。"; }
       finally { entryCopilotLoading.value = false; }
+    }
+
+    async function loadEnterpriseFiles() {
+      try { enterpriseFiles.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/files`)); }
+      catch (error) { enterpriseFileError.value = error.message || "客户资料暂时无法加载。"; }
+    }
+
+    async function loadDocumentAnalytics() {
+      try { documentAnalytics.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/files/analytics`)); }
+      catch (_) { documentAnalytics.value = null; }
+    }
+
+    async function uploadEnterpriseFile(event) {
+      const file = event.target?.files?.[0]; if (!file || enterpriseFileLoading.value) return;
+      enterpriseFileLoading.value = true; enterpriseFileError.value = "";
+      try {
+        const form = new FormData(); form.append("file", file);
+        const result = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/files/upload`, { method: "POST", body: form }));
+        selectedEnterpriseFile.value = result; await Promise.all([loadEnterpriseFiles(), loadDocumentAnalytics()]); activeWorkspaceView.value = "document-intelligence";
+      } catch (error) { enterpriseFileError.value = error.message || "文件上传或解析失败。"; }
+      finally { enterpriseFileLoading.value = false; event.target.value = ""; }
+    }
+
+    async function openEnterpriseFile(fileId) {
+      try { selectedEnterpriseFile.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/files/${fileId}/analysis`)); activeWorkspaceView.value = "document-intelligence"; }
+      catch (error) { enterpriseFileError.value = error.message || "资料分析暂时无法加载。"; }
+    }
+
+    async function createMissionFromDocument() {
+      if (!selectedEnterpriseFile.value || enterpriseFileLoading.value) return;
+      enterpriseFileLoading.value = true; enterpriseFileError.value = "";
+      try {
+        const result = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/files/${selectedEnterpriseFile.value.id}/create-mission`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ confirmed: true }) }));
+        selectedAIMission.value = result.mission; await loadAIMissions(); await loadAIMissionDetail(result.mission.id); activeWorkspaceView.value = "mission-center";
+      } catch (error) { enterpriseFileError.value = error.message || "Mission 创建失败。"; }
+      finally { enterpriseFileLoading.value = false; }
     }
 
     async function runAIMission(missionId) {
@@ -3058,6 +3100,11 @@ createApp({
       entryCopilotSession,
       entryCopilotResult,
       entryCopilotLoading,
+      enterpriseFiles,
+      selectedEnterpriseFile,
+      enterpriseFileLoading,
+      enterpriseFileError,
+      documentAnalytics,
       adaptiveMissionLoading,
       computerMissionTask,
       computerMissionLoading,
@@ -3074,6 +3121,11 @@ createApp({
       loadAIMissionDetail,
       createAIMission,
       startCopilotMission,
+      loadEnterpriseFiles,
+      loadDocumentAnalytics,
+      uploadEnterpriseFile,
+      openEnterpriseFile,
+      createMissionFromDocument,
       runAdaptiveMission,
       reviewAdaptiveMission,
       runAIMission,
@@ -3298,6 +3350,7 @@ createApp({
              <button type="button" :class="{ active: activeWorkspaceView === 'operator' }" @click="openWorkspaceView('operator')">Operator Studio</button>
              <button type="button" :class="{ active: activeWorkspaceView === 'computer' }" @click="openWorkspaceView('computer')">Computer Lab</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'copilot' }" @click="openWorkspaceView('copilot')">Action Center</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'document-intelligence' }" @click="openWorkspaceView('document-intelligence')">Document Intelligence</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'enterprise-hub' }" @click="openWorkspaceView('enterprise-hub')">Enterprise Hub</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'research-workspace' || activeWorkspaceView === 'workspace' || activeWorkspaceView === 'task-center' }" @click="openWorkspaceView('research-workspace')">Research Workspace</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'knowledge' || activeWorkspaceView === 'insights' || activeWorkspaceView === 'evidence' }" @click="openWorkspaceView('knowledge')">Knowledge Intelligence</button>
@@ -3309,10 +3362,16 @@ createApp({
       </header>
 
       <section v-if="activeWorkspaceView === 'dashboard'" class="home-workspace" aria-label="ResearchOS Home">
-          <div class="home-hero"><p class="section-kicker">RESEARCHOS AI COPILOT</p><h1>From research question to<br />evidence-backed decision.</h1><p>一个面向科研团队的 AI Research Operating System。</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="告诉我你想完成什么任务，例如：分析某领域研究趋势"></textarea><button type="button" class="primary-card-action" :disabled="entryCopilotLoading" @click="startCopilotMission">{{ entryCopilotLoading ? 'Understanding…' : 'Start Mission' }}</button></div><small>Copilot 将创建可审阅 Mission，再复用 Planner、Evidence 与 Human Review；不会生成无依据科研结论。</small><p v-if="entryCopilotResult" class="quiet-note">{{ entryCopilotResult.summary }} · Mission 已创建。</p></div>
+          <div class="home-hero"><p class="section-kicker">RESEARCHOS AI COPILOT</p><h1>From research question to<br />evidence-backed decision.</h1><p>一个面向科研团队的 AI Research Operating System。</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="告诉我你想完成什么任务，例如：分析某领域研究趋势"></textarea><button type="button" class="primary-card-action" :disabled="entryCopilotLoading" @click="startCopilotMission">{{ entryCopilotLoading ? 'Understanding…' : 'Start Mission' }}</button></div><div class="enterprise-upload-strip"><label class="outline-button"><input type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.cs,.go,.rs,.sql,.html,.css,.json,.yaml,.yml" @change="uploadEnterpriseFile" hidden />{{ enterpriseFileLoading ? 'Analyzing material…' : 'Upload enterprise material' }}</label><button class="text-button" type="button" @click="openWorkspaceView('document-intelligence')">Document Intelligence →</button></div><small>客户资料先进行安全解析与待确认需求提取；不会直接成为 RAG Evidence 或自动创建 Mission。</small><p v-if="entryCopilotResult" class="quiet-note">{{ entryCopilotResult.summary }} · Mission 已创建。</p><p v-if="enterpriseFileError" class="error-alert"><span>!</span>{{ enterpriseFileError }}</p></div>
           <div class="home-quick-grid product-capability-grid"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><b>Research Agent</b><small>Explore research, Evidence and deliverables</small></button><button type="button" @click="openWorkspaceView('mission-center')"><b>AI Mission Center</b><small>Track planned work, review and delivery states</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Review my project code'; computerPlanPreview = null"><b>Computer Agent</b><small>Analyze a workspace and prepare reviewable changes</small></button><button type="button" @click="openWorkspaceView('enterprise-hub')"><b>Enterprise Workspace</b><small>Connect research collaboration and delivery</small></button></div>
           <section v-if="aiMissionDashboard" class="mission-dashboard-strip"><article v-for="(value, key) in aiMissionDashboard.metrics" :key="key"><span>{{ key.replaceAll('_', ' ') }}</span><b>{{ value }}</b></article></section>
         <section class="home-recent-workspaces"><header><div><p class="section-kicker">RECENT WORKSPACES</p><h3>继续正在进行的研究</h3></div><button class="text-button" type="button" @click="openWorkspaceView('research-workspace')">查看全部</button></header><div v-if="researchWorkspaces.length" class="recent-workspace-grid"><article v-for="item in researchWorkspaces.slice(0,3)" :key="item.workspace_id"><span>{{ item.strategy_type || 'research' }}</span><h4>{{ item.title }}</h4><p><b>{{ item.status || 'created' }}</b> · {{ item.human_review_required ? 'Review Pending' : 'Review not required' }}</p><small>Evidence：{{ item.evidence_count || 0 }}</small><button type="button" @click="resumeResearchWorkspace(item)">继续研究 →</button></article></div><div v-else class="home-empty-state"><b>暂无持续研究 Workspace</b><span>提交一项有依据的研究任务后，系统会保存策略、Evidence 和审核状态。</span></div></section>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'document-intelligence'" class="document-intelligence-center" aria-label="Document Intelligence">
+        <header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE INPUT LAYER</p><h2>Document Intelligence</h2><p>将客户提供的资料解析为可确认需求，再创建可审阅 Mission。客户材料不会伪装为知识库 Evidence。</p></div><label class="primary-card-action"><input type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt,.py,.js,.ts,.tsx,.jsx,.java,.c,.cpp,.cs,.go,.rs,.sql,.html,.css,.json,.yaml,.yml" @change="uploadEnterpriseFile" hidden />{{ enterpriseFileLoading ? 'Analyzing…' : 'Upload file' }}</label></header>
+        <p v-if="enterpriseFileError" class="error-alert"><span>!</span>{{ enterpriseFileError }}</p>
+        <div class="document-intelligence-layout"><aside><p class="section-kicker">CUSTOMER MATERIAL</p><button v-for="file in enterpriseFiles" :key="file.id" type="button" :class="{ active: selectedEnterpriseFile?.id === file.id }" @click="openEnterpriseFile(file.id)"><b>{{ file.filename }}</b><small>{{ file.file_type }} · {{ file.status }}</small></button><p v-if="!enterpriseFiles.length" class="quiet-note">尚无客户资料。上传后才会出现解析结果。</p></aside><main v-if="selectedEnterpriseFile"><section class="document-summary-card"><span>{{ selectedEnterpriseFile.classification }}</span><h3>{{ selectedEnterpriseFile.filename }}</h3><p>{{ selectedEnterpriseFile.summary?.summary }}</p><small>{{ selectedEnterpriseFile.summary?.limitations }}</small></section><section class="document-analysis-card"><p class="section-kicker">EXTRACTED REQUIREMENTS</p><h3>所有识别项均待客户确认</h3><article v-for="item in selectedEnterpriseFile.requirements || []" :key="item.id"><b>{{ item.category }}</b><p>{{ item.description }}</p><small>{{ item.status }}</small></article><p v-if="!(selectedEnterpriseFile.requirements || []).length" class="quiet-note">资料不足以生成需求草稿；请补充可解析内容。</p></section><footer class="document-mission-action"><div><b>Human confirmation required</b><p>确认后将通过 Copilot 创建现有 Mission 与 Planner Graph，并关联此客户材料。</p></div><button class="primary-card-action" type="button" :disabled="enterpriseFileLoading || selectedEnterpriseFile.status !== 'COMPLETED'" @click="createMissionFromDocument">Confirm requirements & create Mission</button></footer></main><main v-else class="document-empty-state"><b>Upload a customer document</b><p>支持 PDF、DOCX、XLSX、PPTX、图片、文本和安全代码文件。</p></main></div>
       </section>
 
       <section v-if="activeWorkspaceView === 'mission-center'" class="mission-center" aria-label="AI Mission Center">
@@ -3739,6 +3798,7 @@ createApp({
         <section class="activity-log-panel"><div class="result-section-heading"><div><p class="section-kicker">ACTIVITY LOG</p><h3>用户操作日志</h3></div><span>{{ activityLogs.length }} 条</span></div><div v-if="!activityLogs.length" class="activity-empty">暂无操作记录。创建任务、执行 Agent、生成报告或更新项目后会在此显示。</div><ol v-else class="activity-list"><li v-for="item in activityLogs" :key="item.created_at + item.action"><b>{{ item.action }}</b><span>{{ item.detail }}</span><time>{{ formatLibraryDate(item.created_at) }}</time></li></ol></section>
         <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">AGENT ANALYTICS</p><h3>Execution quality & observability</h3></div><button class="outline-button" type="button" @click="loadAgentAnalytics">Refresh</button></div><p v-if="adaptiveAnalytics" class="quiet-note">Adaptive Missions {{ adaptiveAnalytics.adaptive_missions }} · Replan rate {{ adaptiveAnalytics.replan_rate }} · Avg iterations {{ adaptiveAnalytics.average_iterations }} · Evidence recovery {{ adaptiveAnalytics.evidence_recovery_rate }}% · Verification recovery {{ adaptiveAnalytics.verification_recovery_rate }}%</p><article v-for="metric in agentAnalytics" :key="metric.agent_name"><b>{{ metric.agent_name }}</b><span>{{ metric.total_tasks }} tasks · {{ metric.success_rate }}% success · {{ metric.avg_duration }}s avg · {{ metric.avg_evidence_count }} Evidence</span></article><p v-if="!agentAnalytics.length">尚无持久化 Agent Trace；运行新的 Mission 后将显示可审计统计。</p></section>
         <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">COPILOT ANALYTICS</p><h3>AI Copilot usage overview</h3></div><button class="outline-button" type="button" @click="loadCopilotAnalytics">Refresh</button></div><template v-if="copilotAnalytics"><p class="quiet-note">Sessions {{ copilotAnalytics.sessions || 0 }} · Created Missions {{ copilotAnalytics.created_missions || 0 }} · Completion {{ copilotAnalytics.completion_rate || '0%' }} · Average session time {{ copilotAnalytics.average_session_time || 'not available' }}</p><article v-for="(count, intent) in (copilotAnalytics.intent_distribution || {})" :key="intent"><b>{{ intent }}</b><span>{{ count }} classified session message{{ count === 1 ? '' : 's' }}</span></article></template><p v-else>暂无 Copilot 会话统计；发起 Mission 后可查看真实使用概览。</p></section>
+        <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">DOCUMENT ANALYTICS</p><h3>Enterprise input understanding</h3></div><button class="outline-button" type="button" @click="loadDocumentAnalytics">Refresh</button></div><template v-if="documentAnalytics"><p class="quiet-note">Uploaded {{ documentAnalytics.uploaded_files }} · Processed {{ documentAnalytics.processed_files }} · Failed {{ documentAnalytics.failed_files }} · Requirement drafts {{ documentAnalytics.requirement_extraction_count }}</p><p>Parse success {{ documentAnalytics.input_understanding_score?.parse_success_rate }}% · Requirement coverage {{ documentAnalytics.input_understanding_score?.requirement_coverage }} · Confirmation modifications {{ documentAnalytics.input_understanding_score?.user_confirmation_modifications }}</p><small>{{ documentAnalytics.boundary }}</small></template><p v-else>暂无已上传客户资料。</p></section>
         <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">AGENT MEMORY CENTER</p><h3>Reviewable memory summaries</h3></div><button class="outline-button" type="button" @click="loadAgentMemories">Refresh</button></div><article v-for="memory in agentMemories" :key="memory.id"><b>{{ memory.agent_name }} · {{ memory.memory_type }}</b><span>{{ memory.content_summary }}</span><small>{{ memory.status }} · Mission {{ memory.source_mission_id || 'N/A' }}</small><button class="text-button" type="button" @click="deleteAgentMemory(memory.id)">Delete</button></article><p v-if="!agentMemories.length">暂无 Agent Memory。任务完成后的摘要必须经人工确认后才可作为可复用 Memory。</p></section>
         <p class="demo-boundary">操作日志仅保存在当前浏览器的 localStorage 中，用于现场演示；清除浏览器数据后会被移除。</p>
       </section>
@@ -4083,6 +4143,7 @@ createApp({
         </div>
       </section>
       </div>
+      <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.source_materials?.length" class="mission-source-material"><p class="section-kicker">SOURCE MATERIAL</p><h3>Customer-provided input files</h3><article v-for="item in selectedAIMission.source_materials" :key="item.file_id"><b>{{ item.filename }}</b><small>{{ item.file_type }} · {{ item.classification }} · 不作为 RAG Evidence</small></article></section>
     </main>
   `,
 }).mount("#app");

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections.abc import Callable
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from app.models.ai_mission import AIMission, AIMissionEvent
 from app.models.agent_trace import AgentTrace
@@ -15,6 +16,8 @@ from app.models.solution_deliverable import SolutionDeliverable
 from app.models.solution_project import SolutionProject
 from app.models.solution_requirement import SolutionRequirement
 from app.models.solution_version import SolutionVersion
+from app.models.file_asset import FileAsset
+from app.models.mission_file_source import MissionFileSource
 from app.services.database import SessionLocal, initialize_database
 from app.services.fde_solution_service import FDESolutionService
 from app.services.retrieval_service import RetrievalService
@@ -128,7 +131,8 @@ class AIMissionService:
                                   "verification": self._object(x.verification_json, {}),
                                   "retry_count": x.retry_count} for x in s.scalars(select(ComputerMission).where(ComputerMission.mission_id == m.id).order_by(ComputerMission.created_at.asc())).all()]
             plan_nodes=[{"id":x.id,"node_name":x.node_name,"agent_name":x.agent_name,"status":x.status,"order":x.node_order,"depends_on":self._decode(x.depends_on),"created_at":x.created_at} for x in s.scalars(select(ExecutionGraph).where(ExecutionGraph.mission_id==m.id).order_by(ExecutionGraph.node_order)).all()]
-            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m, computer_missions),"requirements":reqs,"deliverables":dels,"versions":versions,"computer_missions":computer_missions,"execution_graph":plan_nodes,"evidence_graph":self._graph(m,reqs,dels)}
+            sources=self._source_materials(s,m.id)
+            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m, computer_missions),"requirements":reqs,"deliverables":dels,"versions":versions,"computer_missions":computer_missions,"execution_graph":plan_nodes,"evidence_graph":self._graph(m,reqs,dels),"source_materials":sources}
         finally:s.close()
     def timeline(self,mission_id):
         s=self._sessions()
@@ -231,6 +235,13 @@ class AIMissionService:
     def _mission(self,x):return {"id":x.id,"title":x.title,"type":x.mission_type,"goal":x.goal,"solution_project_id":x.solution_project_id,"status":x.status,"progress":x.progress,"current_step":x.current_step,"evidence_refs":self._decode(x.evidence_refs_json),"review_comment":x.review_comment,"retry_count":x.retry_count,"created_at":x.created_at,"updated_at":x.updated_at}
     @staticmethod
     def _timeline(s,mid):return [{"id":x.id,"stage":x.stage,"action":x.action,"status":x.status,"evidence_count":x.evidence_count,"result":x.result_summary,"created_at":x.created_at} for x in s.scalars(select(AIMissionEvent).where(AIMissionEvent.mission_id==mid).order_by(AIMissionEvent.created_at.asc())).all()]
+    @staticmethod
+    def _source_materials(s, mission_id):
+        """P29 is optional for legacy isolated test databases created before its tables."""
+        try:
+            return [{"file_id":x.file_id,"filename":asset.filename,"file_type":asset.file_type,"status":asset.status,"classification":"CUSTOMER_PROVIDED_DOCUMENT"} for x in s.scalars(select(MissionFileSource).where(MissionFileSource.mission_id==mission_id)).all() if (asset:=s.get(FileAsset,x.file_id))]
+        except OperationalError:
+            return []
     @staticmethod
     def _solution_records(s,pid):
         if not pid:return [],[]

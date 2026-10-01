@@ -43,6 +43,10 @@ def initialize_database() -> None:
     from app.models.adaptive_iteration import AdaptiveIteration  # noqa: F401
     from app.models.copilot_session import CopilotSession  # noqa: F401
     from app.models.copilot_message import CopilotMessage  # noqa: F401
+    from app.models.file_asset import FileAsset  # noqa: F401
+    from app.models.document_summary import DocumentSummary  # noqa: F401
+    from app.models.document_requirement import DocumentRequirement  # noqa: F401
+    from app.models.mission_file_source import MissionFileSource  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
     from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401
