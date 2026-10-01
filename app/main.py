@@ -33,6 +33,7 @@ from app.routes.adaptive import router as adaptive_router
 from app.routes.copilot import router as copilot_router
 from app.routes.files import router as files_router
 from app.routes.artifacts import router as artifacts_router
+from app.routes.connectors import router as connectors_router
 
 
 app = FastAPI(title="ResearchOS · AI科研创新决策平台")
@@ -49,6 +50,7 @@ app.include_router(adaptive_router)
 app.include_router(copilot_router)
 app.include_router(files_router)
 app.include_router(artifacts_router)
+app.include_router(connectors_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 app.add_middleware(

@@ -23,6 +23,7 @@ from app.services.fde_solution_service import FDESolutionService
 from app.services.retrieval_service import RetrievalService
 from app.services.dynamic_planner_service import DynamicPlannerService
 from app.services.agent_memory_service import AgentMemoryService
+from app.services.connector_service import ConnectorManager
 
 
 class AIMissionNotFoundError(ValueError): pass
@@ -132,7 +133,13 @@ class AIMissionService:
                                   "retry_count": x.retry_count} for x in s.scalars(select(ComputerMission).where(ComputerMission.mission_id == m.id).order_by(ComputerMission.created_at.asc())).all()]
             plan_nodes=[{"id":x.id,"node_name":x.node_name,"agent_name":x.agent_name,"status":x.status,"order":x.node_order,"depends_on":self._decode(x.depends_on),"created_at":x.created_at} for x in s.scalars(select(ExecutionGraph).where(ExecutionGraph.mission_id==m.id).order_by(ExecutionGraph.node_order)).all()]
             sources=self._source_materials(s,m.id)
-            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m, computer_missions),"requirements":reqs,"deliverables":dels,"versions":versions,"computer_missions":computer_missions,"execution_graph":plan_nodes,"evidence_graph":self._graph(m,reqs,dels),"source_materials":sources}
+            try:
+                connector_manager=ConnectorManager(self._sessions,initialize=False)
+                tools_used=connector_manager.mission_tools(m.id)
+                data_sources=connector_manager.mission_sources(m.id)
+            except OperationalError:
+                tools_used,data_sources=[],[]
+            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m, computer_missions),"requirements":reqs,"deliverables":dels,"versions":versions,"computer_missions":computer_missions,"execution_graph":plan_nodes,"evidence_graph":self._graph(m,reqs,dels),"source_materials":sources,"tools_used":tools_used,"data_sources":data_sources}
         finally:s.close()
     def timeline(self,mission_id):
         s=self._sessions()

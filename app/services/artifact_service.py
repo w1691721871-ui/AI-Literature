@@ -3,12 +3,14 @@ from __future__ import annotations
 import hashlib,json,re
 from pathlib import Path
 from sqlalchemy import func,select
+from sqlalchemy.exc import OperationalError
 from app.models.ai_mission import AIMission,AIMissionEvent
 from app.models.artifact import Artifact,ArtifactEvidence,ArtifactVersion
 from app.models.file_asset import FileAsset
 from app.models.mission_file_source import MissionFileSource
 from app.models.paper import Paper
 from app.models.paper_chunk import PaperChunk
+from app.models.connector import ArtifactDataSource, DataSource, MissionDataSource
 from app.services.database import PROJECT_ROOT,SessionLocal,initialize_database
 
 class ArtifactError(ValueError):pass
@@ -35,6 +37,15 @@ class ArtifactService:
             filename=self._filename(row); path=self.root/filename;path.parent.mkdir(parents=True,exist_ok=True);self._write(path,row,content,evidence)
             row.file_path=str(path);row.status="GENERATED";s.query(ArtifactEvidence).filter_by(artifact_id=row.id).delete()
             for item in evidence:s.add(ArtifactEvidence(artifact_id=row.id,**item))
+            # P31 retains provenance without copying enterprise rows into the Artifact.
+            try:
+                for link in s.scalars(select(MissionDataSource).where(MissionDataSource.mission_id==mission_id)).all():
+                    if not s.scalar(select(ArtifactDataSource).where(ArtifactDataSource.artifact_id==row.id,ArtifactDataSource.data_source_id==link.data_source_id)):
+                        s.add(ArtifactDataSource(artifact_id=row.id,data_source_id=link.data_source_id))
+            except OperationalError:
+                # Legacy isolated fixtures and older local databases can still
+                # generate a draft without P31 provenance tables.
+                pass
             digest=hashlib.sha256(path.read_bytes()).hexdigest();s.add(ArtifactVersion(artifact_id=row.id,version=version,change_summary="Initial generation" if version==1 else "Regenerated after human revision",content_hash=digest))
             validation=self._validate(s,row,evidence);row.status="NEEDS_REVIEW" if validation["status"]!="FAIL" else "FAILED";self._trace(s,mission_id,"GENERATE_ARTIFACT",row,"Artifact generated as reviewable draft.");self._trace(s,mission_id,"VALIDATE_ARTIFACT",row,validation["summary"]);s.commit();return self.detail(row.id,s)
         finally:s.close()
@@ -135,7 +146,12 @@ class ArtifactService:
         return row
     def _data(self,row,s,detail=False):
         data={"id":row.id,"mission_id":row.mission_id,"project_id":row.project_id,"artifact_type":row.artifact_type,"title":row.title,"version":row.version,"status":row.status,"source_type":row.source_type,"content_summary":row.content_summary,"evidence_count":row.evidence_count,"evidence_coverage":row.evidence_coverage,"generation_rounds":row.generation_rounds,"created_at":row.created_at,"updated_at":row.updated_at}
-        if detail:data.update({"preview":{"title":row.title,"summary":row.content_summary,"review_status":row.status},"versions":[{"version":x.version,"change_summary":x.change_summary,"created_at":x.created_at} for x in s.scalars(select(ArtifactVersion).where(ArtifactVersion.artifact_id==row.id).order_by(ArtifactVersion.version)).all()],"evidence":[{"evidence_type":x.evidence_type,"paper_id":x.paper_id,"chunk_id":x.chunk_id,"source":x.source,"section":x.section,"claim_summary":x.claim_summary} for x in s.scalars(select(ArtifactEvidence).where(ArtifactEvidence.artifact_id==row.id)).all()]})
+        if detail:
+            data.update({"preview":{"title":row.title,"summary":row.content_summary,"review_status":row.status},"versions":[{"version":x.version,"change_summary":x.change_summary,"created_at":x.created_at} for x in s.scalars(select(ArtifactVersion).where(ArtifactVersion.artifact_id==row.id).order_by(ArtifactVersion.version)).all()],"evidence":[{"evidence_type":x.evidence_type,"paper_id":x.paper_id,"chunk_id":x.chunk_id,"source":x.source,"section":x.section,"claim_summary":x.claim_summary} for x in s.scalars(select(ArtifactEvidence).where(ArtifactEvidence.artifact_id==row.id)).all()]})
+            try:
+                data["data_sources"]=[{"id":source.id,"name":source.name,"type":source.source_type} for link in s.scalars(select(ArtifactDataSource).where(ArtifactDataSource.artifact_id==row.id)).all() if (source:=s.get(DataSource,link.data_source_id))]
+            except OperationalError:
+                data["data_sources"]=[]
         return data
     @staticmethod
     def _trace(s,mid,action,row,summary):s.add(AIMissionEvent(mission_id=mid,stage="Artifact Agent",action=action,status=row.status,evidence_count=row.evidence_count,result_summary=f"Artifact {row.id} v{row.version}: {summary}"))

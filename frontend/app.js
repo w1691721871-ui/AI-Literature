@@ -284,6 +284,12 @@ createApp({
     const artifactLoading = ref(false);
     const artifactError = ref("");
     const artifactAnalytics = ref(null);
+    // P31 exposes registered connector metadata only; credentials are never entered or displayed here.
+    const connectors = ref([]);
+    const connectorAnalytics = ref(null);
+    const connectorLoading = ref(false);
+    const connectorError = ref("");
+    const connectorForm = ref({ name: "", sqlite_path: "" });
     const computerMissionTask = ref("");
     const computerMissionLoading = ref(false);
     const onboardingState = ref(null);
@@ -805,7 +811,8 @@ createApp({
       if (view === "bi") await loadResearchBi();
       if (view === "evidence") await loadEvidenceCenter();
       if (view === "lab-profile") await loadResearchBi();
-      if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadDocumentAnalytics(), loadAgentMemories()]);
+      if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadDocumentAnalytics(), loadAgentMemories(), loadConnectorCenter()]);
+      if (view === "connector-center") await loadConnectorCenter();
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
       if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
@@ -1089,6 +1096,28 @@ createApp({
         missionArtifacts.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/artifacts`));
         artifactAnalytics.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/artifacts/analytics`));
       } catch (error) { artifactError.value = error.message || "Artifact 暂时无法读取。"; }
+    }
+
+    async function loadConnectorCenter() {
+      connectorLoading.value = true; connectorError.value = "";
+      try {
+        const [items, analytics] = await Promise.all([
+          readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/connectors`)),
+          readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/connectors/analytics`)),
+        ]);
+        connectors.value = items; connectorAnalytics.value = analytics;
+      } catch (error) { connectorError.value = error.message || "Connector Center 暂时无法读取。"; }
+      finally { connectorLoading.value = false; }
+    }
+
+    async function registerSqliteConnector() {
+      if (!connectorForm.value.name || !connectorForm.value.sqlite_path) { connectorError.value = "请输入名称和现有 SQLite 文件路径。"; return; }
+      connectorLoading.value = true; connectorError.value = "";
+      try {
+        await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/connectors/register`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ name: connectorForm.value.name, type: "DATABASE", permission: "READ_ONLY", config: { backend: "SQLITE", sqlite_path: connectorForm.value.sqlite_path } }) }));
+        connectorForm.value = { name: "", sqlite_path: "" }; await loadConnectorCenter();
+      } catch (error) { connectorError.value = error.message || "Connector 注册失败。"; }
+      finally { connectorLoading.value = false; }
     }
 
     async function generateMissionArtifact(artifactType) {
@@ -3156,6 +3185,11 @@ createApp({
       artifactLoading,
       artifactError,
       artifactAnalytics,
+      connectors,
+      connectorAnalytics,
+      connectorLoading,
+      connectorError,
+      connectorForm,
       entryCopilotSession,
       entryCopilotResult,
       entryCopilotLoading,
@@ -3184,6 +3218,8 @@ createApp({
       reviewArtifact,
       reviseArtifact,
       downloadArtifact,
+      loadConnectorCenter,
+      registerSqliteConnector,
       createAIMission,
       startCopilotMission,
       loadEnterpriseFiles,
@@ -3416,6 +3452,7 @@ createApp({
              <button type="button" :class="{ active: activeWorkspaceView === 'computer' }" @click="openWorkspaceView('computer')">Computer Lab</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'copilot' }" @click="openWorkspaceView('copilot')">Action Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'document-intelligence' }" @click="openWorkspaceView('document-intelligence')">Document Intelligence</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'connector-center' }" @click="openWorkspaceView('connector-center')">Connector Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'enterprise-hub' }" @click="openWorkspaceView('enterprise-hub')">Enterprise Hub</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'research-workspace' || activeWorkspaceView === 'workspace' || activeWorkspaceView === 'task-center' }" @click="openWorkspaceView('research-workspace')">Research Workspace</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'knowledge' || activeWorkspaceView === 'insights' || activeWorkspaceView === 'evidence' }" @click="openWorkspaceView('knowledge')">Knowledge Intelligence</button>
@@ -3460,6 +3497,16 @@ createApp({
           <article v-if="selectedArtifact" class="artifact-review-surface"><header><div><span>{{ selectedArtifact.artifact_type }} · v{{ selectedArtifact.version }}</span><h4>{{ selectedArtifact.title }}</h4><p>{{ selectedArtifact.content_summary }}</p></div><small>{{ selectedArtifact.status }}</small></header><section><b>Evidence sources</b><p v-if="!selectedArtifact.evidence?.length">暂无可验证资料。草稿仅用于确认资料缺口，不包含科研结论。</p><div v-for="evidence in selectedArtifact.evidence || []" :key="evidence.evidence_type + '-' + (evidence.chunk_id || evidence.source)"><span>{{ evidence.evidence_type }}</span><small>{{ evidence.source }} · {{ evidence.section || 'Source reference' }}<template v-if="evidence.paper_id"> · {{ evidence.paper_id }} / {{ evidence.chunk_id }}</template></small></div></section><footer><template v-if="selectedArtifact.status === 'NEEDS_REVIEW'"><button class="primary-card-action" type="button" :disabled="artifactLoading" @click="reviewArtifact('APPROVED')">Approve delivery</button><button class="outline-button" type="button" :disabled="artifactLoading" @click="reviewArtifact('REVISION_REQUESTED')">Request revision</button><button class="text-button" type="button" :disabled="artifactLoading" @click="reviewArtifact('REJECTED')">Reject</button></template><button v-else-if="selectedArtifact.status === 'REVISION_REQUESTED'" class="primary-card-action" type="button" :disabled="artifactLoading" @click="reviseArtifact">Generate revised draft</button><button v-else-if="selectedArtifact.status === 'APPROVED'" class="primary-card-action" type="button" @click="downloadArtifact">Download approved artifact</button><small v-else>等待人工审核后才能作为正式交付下载。</small></footer></article>
         </section>
         <section class="mission-list"><button v-for="item in aiMissions" :key="item.id" type="button" :class="{ active: selectedAIMission?.id === item.id }" @click="loadAIMissionDetail(item.id)"><span>{{ item.type }}</span><b>{{ item.title }}</b><small>{{ item.status }} · {{ item.progress }}% · {{ item.current_step }}</small></button><p v-if="!aiMissions.length">No AI mission yet. Create a mission to begin a reviewable lifecycle.</p></section>
+      </section>
+
+      <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.tools_used?.length" class="mission-tool-trace" aria-label="Mission Tool Trace"><p class="section-kicker">TOOLS USED</p><h3>Read-only enterprise operations</h3><article v-for="item in selectedAIMission.tools_used" :key="item.connector_name + item.operation + item.duration_ms"><b>{{ item.connector_name }}</b><small>{{ item.operation }} · {{ item.status }} · {{ item.duration_ms }}ms</small><p>{{ item.result_summary }}</p></article></section>
+
+      <section v-if="activeWorkspaceView === 'connector-center'" class="connector-center" aria-label="Enterprise Connector Center">
+        <header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE TOOL INTEGRATION</p><h2>Connector Center</h2><p>Connector 默认只读、全程留痕。P31 仅实际启用 SQLite；PostgreSQL/MySQL 不接收凭证且保持禁用。</p></div><button class="outline-button" type="button" :disabled="connectorLoading" @click="loadConnectorCenter">Refresh</button></header>
+        <p v-if="connectorError" class="error-alert"><span>!</span>{{ connectorError }}</p>
+        <div v-if="connectorAnalytics" class="connector-metrics"><article><b>{{ connectorAnalytics.connectors }}</b><small>Connectors</small></article><article><b>{{ connectorAnalytics.tool_usage_count }}</b><small>Read-only calls</small></article><article><b>{{ connectorAnalytics.connector_success_rate }}%</b><small>Success rate</small></article><article><b>{{ connectorAnalytics.average_duration_ms }}ms</b><small>Average duration</small></article></div>
+        <section class="connector-register"><div><p class="section-kicker">REGISTER SQLITE</p><h3>Attach a read-only data source</h3><p>仅接受已有 .db/.sqlite/.sqlite3 路径；不会保存密码、Token 或数据库写权限。</p></div><input v-model="connectorForm.name" placeholder="Connector name" /><input v-model="connectorForm.sqlite_path" placeholder="Existing SQLite file path" /><button class="primary-card-action" type="button" :disabled="connectorLoading" @click="registerSqliteConnector">Register read-only</button></section>
+        <div v-if="connectors.length" class="connector-grid"><article v-for="connector in connectors" :key="connector.id"><header><span :class="connector.status">{{ connector.status }}</span><b>{{ connector.name }}</b></header><p>{{ connector.type }} · {{ connector.permission }}</p><small v-for="source in connector.data_sources || []" :key="source.id">{{ source.name }} · {{ source.type }}</small></article></div><div v-else class="product-empty-state"><b>No connector registered</b><p>注册受控的只读 SQLite 数据源后，Agent 才能在 Mission 中引用其真实数据。</p></div>
       </section>
 
       <section v-if="activeWorkspaceView === 'artifact-center'" class="product-experience-center" aria-label="Artifact Center"><header class="dashboard-heading"><div><p class="section-kicker">ARTIFACT CENTER</p><h2>Reviewable AI outputs in one place.</h2><p>只展示已有运行记录产生的研究草稿和 Computer 产物；没有产物时保持空状态。</p></div><button class="outline-button" type="button" @click="openWorkspaceView('dashboard')">Back to Command Center</button></header><div v-if="artifactGallery.length" class="product-artifact-grid"><article v-for="item in artifactGallery" :key="item.category + item.id"><span>{{ item.category }}</span><h3>{{ item.title }}</h3><p>{{ item.type }} · {{ item.status }}</p><small>Reference · {{ item.reference }}</small><button class="text-button" type="button" @click="item.category === 'Computer' ? openWorkspaceView('computer') : openWorkspaceView('outcome-center')">Review →</button></article></div><div v-else class="product-empty-state"><b>Nothing generated yet</b><p>Start a controlled research or Computer mission to collect reviewable output here.</p><button class="primary-card-action" type="button" @click="openWorkspaceView('dashboard')">Start a mission</button></div></section>
@@ -3875,6 +3922,8 @@ createApp({
         <section class="agent-analytics-panel"><div class="result-section-heading"><div><p class="section-kicker">AGENT MEMORY CENTER</p><h3>Reviewable memory summaries</h3></div><button class="outline-button" type="button" @click="loadAgentMemories">Refresh</button></div><article v-for="memory in agentMemories" :key="memory.id"><b>{{ memory.agent_name }} · {{ memory.memory_type }}</b><span>{{ memory.content_summary }}</span><small>{{ memory.status }} · Mission {{ memory.source_mission_id || 'N/A' }}</small><button class="text-button" type="button" @click="deleteAgentMemory(memory.id)">Delete</button></article><p v-if="!agentMemories.length">暂无 Agent Memory。任务完成后的摘要必须经人工确认后才可作为可复用 Memory。</p></section>
         <p class="demo-boundary">操作日志仅保存在当前浏览器的 localStorage 中，用于现场演示；清除浏览器数据后会被移除。</p>
       </section>
+
+      <section v-if="activeWorkspaceView === 'system' && connectorAnalytics" class="mission-tool-trace" aria-label="Connector Analytics"><p class="section-kicker">TOOL ANALYTICS</p><h3>Read-only Connector Operations</h3><article><b>{{ connectorAnalytics.connectors }} connectors</b><small>{{ connectorAnalytics.tool_usage_count }} calls · {{ connectorAnalytics.failures }} failures</small><p>{{ connectorAnalytics.connector_success_rate }}% success · {{ connectorAnalytics.average_duration_ms }}ms average · {{ connectorAnalytics.data_source_usage }} data sources</p></article></section>
 
       <section v-if="activeWorkspaceView === 'timeline'" class="agent-timeline-center" aria-label="Agent执行时间线">
         <div class="dashboard-heading"><div><p class="section-kicker">AGENT TIMELINE</p><h2>AI 团队执行时间线</h2><p>展示面向用户的任务协作摘要，而非模型内部思维过程。</p></div><button class="outline-button" type="button" @click="openWorkspaceView('tasks')">运行科研任务</button></div>

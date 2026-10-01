@@ -5,6 +5,7 @@ import re
 from pathlib import Path
 from uuid import uuid4
 from sqlalchemy import func, select
+from sqlalchemy.exc import OperationalError
 from sqlalchemy.orm import Session
 from app.models.ai_mission import AIMissionEvent
 from app.models.document_requirement import DocumentRequirement
@@ -15,6 +16,7 @@ from app.services.copilot_mission_service import CopilotMissionService
 from app.services.database import PROJECT_ROOT, SessionLocal, initialize_database
 from app.services.document_parser_service import DocumentParserService
 from app.services.requirement_extractor import RequirementExtractor
+from app.services.connector_service import ConnectorManager
 
 
 class FileInputError(ValueError): pass
@@ -50,6 +52,9 @@ class FileInputService:
                 summary=self._summary(file_type,structure,text); key_points=self._key_points(structure); limitations=str(parsed.get("limitations", ""))
                 session.add(DocumentSummary(file_id=asset.id,summary=summary,key_points_json=json.dumps(key_points,ensure_ascii=False),entities_json="[]",limitations=limitations))
                 for item in requirements: session.add(DocumentRequirement(file_id=asset.id,category=item["category"],description=item["description"],status="NEEDS_CONFIRMATION"))
+                if file_type == "XLSX":
+                    try: ConnectorManager.register_file_data_source(session, asset)
+                    except OperationalError: pass  # legacy isolated P29 fixtures
                 asset.status="COMPLETED"; session.commit(); return self.analysis(asset.id, session=session)
             except Exception as error:
                 asset.status="FAILED"; session.commit(); raise FileInputError("文件无法安全解析；未生成需求或 Mission。") from error
