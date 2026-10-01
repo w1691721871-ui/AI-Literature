@@ -57,6 +57,7 @@ def initialize_database() -> None:
     from app.models.runtime_task import RuntimeTask  # noqa: F401
     from app.models.agent_observation import AgentObservation  # noqa: F401
     from app.models.prompt_template import PromptTemplate  # noqa: F401
+    from app.models.benchmark import BenchmarkTask, BenchmarkRun, BenchmarkScore, AgentVersion  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
     from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401

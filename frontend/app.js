@@ -431,6 +431,8 @@ createApp({
     const runtimeStatus = ref(null);
     const runtimeStatusLoading = ref(false);
     const llmRuntimeStatus = ref(null);
+    const benchmarkTasks = ref([]);
+    const benchmarkDashboard = ref(null);
     const workflowDiagnostics = ref(null);
     const agentAnalytics = ref([]);
     const adaptiveAnalytics = ref(null);
@@ -819,6 +821,7 @@ createApp({
       if (view === "system") await Promise.all([loadSystemStatus(), loadRuntimeStatus(), loadLlmRuntimeStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadDocumentAnalytics(), loadAgentMemories(), loadConnectorCenter(), loadCollaborationAnalytics()]);
       if (view === "connector-center") await loadConnectorCenter();
       if (view === "governance") await loadGovernance();
+      if (view === "benchmarks") await loadBenchmarks();
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
       if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
@@ -1147,6 +1150,11 @@ createApp({
     async function loadLlmRuntimeStatus() {
       try { llmRuntimeStatus.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/llm-runtime/dashboard`)); }
       catch (_) { llmRuntimeStatus.value = null; }
+    }
+
+    async function loadBenchmarks() {
+      try { const [tasks,dashboard] = await Promise.all([readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/benchmarks`)),readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/benchmark/dashboard`))]); benchmarkTasks.value=tasks; benchmarkDashboard.value=dashboard; }
+      catch (_) { benchmarkTasks.value=[]; benchmarkDashboard.value=null; }
     }
 
     async function generateMissionArtifact(artifactType) {
@@ -3124,6 +3132,8 @@ createApp({
       runtimeStatus,
       runtimeStatusLoading,
       llmRuntimeStatus,
+      benchmarkTasks,
+      benchmarkDashboard,
       workflowDiagnostics,
       agentAnalytics,
       adaptiveAnalytics,
@@ -3258,6 +3268,7 @@ createApp({
       loadGovernance,
       loadRuntimeStatus,
       loadLlmRuntimeStatus,
+      loadBenchmarks,
       createAIMission,
       startCopilotMission,
       loadEnterpriseFiles,
@@ -3492,6 +3503,7 @@ createApp({
             <button type="button" :class="{ active: activeWorkspaceView === 'document-intelligence' }" @click="openWorkspaceView('document-intelligence')">Document Intelligence</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'connector-center' }" @click="openWorkspaceView('connector-center')">Connector Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'governance' }" @click="openWorkspaceView('governance')">Governance Center</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'benchmarks' }" @click="openWorkspaceView('benchmarks')">Benchmark Center</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'enterprise-hub' }" @click="openWorkspaceView('enterprise-hub')">Enterprise Hub</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'research-workspace' || activeWorkspaceView === 'workspace' || activeWorkspaceView === 'task-center' }" @click="openWorkspaceView('research-workspace')">Research Workspace</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'knowledge' || activeWorkspaceView === 'insights' || activeWorkspaceView === 'evidence' }" @click="openWorkspaceView('knowledge')">Knowledge Intelligence</button>
@@ -3543,6 +3555,7 @@ createApp({
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.tools_used?.length" class="mission-tool-trace" aria-label="Mission Tool Trace"><p class="section-kicker">TOOLS USED</p><h3>Read-only enterprise operations</h3><article v-for="item in selectedAIMission.tools_used" :key="item.connector_name + item.operation + item.duration_ms"><b>{{ item.connector_name }}</b><small>{{ item.operation }} · {{ item.status }} · {{ item.duration_ms }}ms</small><p>{{ item.result_summary }}</p></article></section>
 
       <section v-if="activeWorkspaceView === 'governance'" class="connector-center" aria-label="Governance Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE GOVERNANCE</p><h2>Governance Center</h2><p>Workspace RBAC、Audit 与 Policy 均基于真实持久化记录；本地原型不保存身份凭据。</p></div><button class="outline-button" type="button" @click="loadGovernance">Refresh</button></header><div class="connector-metrics"><article><b>{{ governance.organizations.length }}</b><small>Organizations</small></article><article><b>{{ governance.workspaces.length }}</b><small>Workspaces</small></article><article><b>{{ governance.logs.length }}</b><small>Audit events</small></article><article><b>RBAC</b><small>API enforced</small></article></div><div v-if="governance.logs.length" class="connector-grid"><article v-for="item in governance.logs" :key="item.created_at + item.action"><header><span>{{ item.action }}</span><b>{{ item.resource_type }}</b></header><p>{{ item.summary }}</p><small>{{ item.user_id }} · {{ item.workspace_id || 'Organization' }}</small></article></div><div v-else class="product-empty-state"><b>No governed activity yet</b><p>创建 Organization、设置角色或更新 Policy 后，系统会保存不含 Prompt、CoT 和 Secret 的审计摘要。</p></div></section>
+      <section v-if="activeWorkspaceView === 'benchmarks'" class="connector-center" aria-label="Agent Benchmark Center"><header class="dashboard-heading"><div><p class="section-kicker">AGENT EVALUATION</p><h2>Agent Benchmark Center</h2><p>评分只来自真实 Benchmark Mission 的 Trace、Evidence、Artifact 与 Human Review 状态；未运行时保持 0。</p></div><button class="outline-button" type="button" @click="loadBenchmarks">Refresh</button></header><div v-if="benchmarkDashboard" class="connector-metrics"><article><b>{{ benchmarkDashboard.benchmarks }}</b><small>Benchmarks</small></article><article><b>{{ benchmarkDashboard.runs }}</b><small>Runs</small></article><article><b>{{ benchmarkDashboard.average_score }}</b><small>Average score</small></article><article><b>{{ benchmarkDashboard.success_rate }}%</b><small>Success rate</small></article></div><div v-if="benchmarkDashboard" class="connector-grid"><article v-for="(score, capability) in benchmarkDashboard.capabilities" :key="capability"><header><span>OBSERVED</span><b>{{ capability }}</b></header><p>{{ score }} / 100</p><small>Derived from saved benchmark records only.</small></article></div><div v-if="benchmarkTasks.length" class="connector-grid"><article v-for="task in benchmarkTasks" :key="task.id"><header><span>{{ task.category }}</span><b>{{ task.difficulty }}</b></header><h3>{{ task.name }}</h3><p>{{ task.description }}</p><small>{{ task.expected_agents.length }} expected agents · {{ task.expected_tools.length }} expected tools</small></article></div><div v-else class="product-empty-state"><b>No benchmark task yet</b><p>创建并显式运行受控 Benchmark 后，这里才会显示实际评分，系统不会生成假分数。</p></div></section>
 
       <section v-if="activeWorkspaceView === 'connector-center'" class="connector-center" aria-label="Enterprise Connector Center">
         <header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE TOOL INTEGRATION</p><h2>Connector Center</h2><p>Connector 默认只读、全程留痕。P31 仅实际启用 SQLite；PostgreSQL/MySQL 不接收凭证且保持禁用。</p></div><button class="outline-button" type="button" :disabled="connectorLoading" @click="loadConnectorCenter">Refresh</button></header>
