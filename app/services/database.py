@@ -61,6 +61,7 @@ def initialize_database() -> None:
     from app.models.enterprise_scenario import EnterpriseScenario, ScenarioRun, DemoDataSource  # noqa: F401
     from app.models.workspace_experience import ActivityEvent, ArtifactComment  # noqa: F401
     from app.models.enterprise_memory import DecisionRecord, KnowledgeAsset  # noqa: F401
+    from app.models.advanced_computer import ComputerEnvironment, ComputerPlan, ComputerObservation, ComputerExperience  # noqa: F401
     from app.models.enterprise_scenario import EnterpriseScenario, ScenarioRun, DemoDataSource  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
