@@ -290,6 +290,7 @@ createApp({
     const connectorLoading = ref(false);
     const connectorError = ref("");
     const connectorForm = ref({ name: "", sqlite_path: "" });
+    const collaborationAnalytics = ref(null);
     const computerMissionTask = ref("");
     const computerMissionLoading = ref(false);
     const onboardingState = ref(null);
@@ -811,7 +812,7 @@ createApp({
       if (view === "bi") await loadResearchBi();
       if (view === "evidence") await loadEvidenceCenter();
       if (view === "lab-profile") await loadResearchBi();
-      if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadDocumentAnalytics(), loadAgentMemories(), loadConnectorCenter()]);
+      if (view === "system") await Promise.all([loadSystemStatus(), loadWorkflowDiagnostics(), loadAgentAnalytics(), loadCopilotAnalytics(), loadDocumentAnalytics(), loadAgentMemories(), loadConnectorCenter(), loadCollaborationAnalytics()]);
       if (view === "connector-center") await loadConnectorCenter();
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
@@ -1118,6 +1119,11 @@ createApp({
         connectorForm.value = { name: "", sqlite_path: "" }; await loadConnectorCenter();
       } catch (error) { connectorError.value = error.message || "Connector 注册失败。"; }
       finally { connectorLoading.value = false; }
+    }
+
+    async function loadCollaborationAnalytics() {
+      try { collaborationAnalytics.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent/collaboration/analytics`)); }
+      catch (_) { collaborationAnalytics.value = null; }
     }
 
     async function generateMissionArtifact(artifactType) {
@@ -3190,6 +3196,7 @@ createApp({
       connectorLoading,
       connectorError,
       connectorForm,
+      collaborationAnalytics,
       entryCopilotSession,
       entryCopilotResult,
       entryCopilotLoading,
@@ -3220,6 +3227,7 @@ createApp({
       downloadArtifact,
       loadConnectorCenter,
       registerSqliteConnector,
+      loadCollaborationAnalytics,
       createAIMission,
       startCopilotMission,
       loadEnterpriseFiles,
@@ -3498,6 +3506,8 @@ createApp({
         </section>
         <section class="mission-list"><button v-for="item in aiMissions" :key="item.id" type="button" :class="{ active: selectedAIMission?.id === item.id }" @click="loadAIMissionDetail(item.id)"><span>{{ item.type }}</span><b>{{ item.title }}</b><small>{{ item.status }} · {{ item.progress }}% · {{ item.current_step }}</small></button><p v-if="!aiMissions.length">No AI mission yet. Create a mission to begin a reviewable lifecycle.</p></section>
       </section>
+
+      <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.collaboration" class="mission-tool-trace collaboration-panel" aria-label="Agent Collaboration"><p class="section-kicker">AGENT COLLABORATION</p><h3>Structured collaboration, not hidden reasoning.</h3><p v-if="!selectedAIMission.collaboration.messages?.length" class="quiet-note">尚无 Agent Message。消息仅在实际协作请求、结果、反馈或风险告警发生时记录。</p><article v-for="item in selectedAIMission.collaboration.messages || []" :key="item.id"><b>{{ item.sender_agent }} → {{ item.receiver_agent }}</b><small>Round {{ item.collaboration_round }} · {{ item.message_type }} · {{ item.status }}</small><p>{{ item.payload_summary }}</p></article><div v-for="item in selectedAIMission.collaboration.conflicts || []" :key="item.id" class="collaboration-conflict"><b>Human review required</b><small>{{ item.participants?.join(' ↔ ') }}</small><p>{{ item.summary }}</p></div></section>
 
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.tools_used?.length" class="mission-tool-trace" aria-label="Mission Tool Trace"><p class="section-kicker">TOOLS USED</p><h3>Read-only enterprise operations</h3><article v-for="item in selectedAIMission.tools_used" :key="item.connector_name + item.operation + item.duration_ms"><b>{{ item.connector_name }}</b><small>{{ item.operation }} · {{ item.status }} · {{ item.duration_ms }}ms</small><p>{{ item.result_summary }}</p></article></section>
 
@@ -3924,6 +3934,8 @@ createApp({
       </section>
 
       <section v-if="activeWorkspaceView === 'system' && connectorAnalytics" class="mission-tool-trace" aria-label="Connector Analytics"><p class="section-kicker">TOOL ANALYTICS</p><h3>Read-only Connector Operations</h3><article><b>{{ connectorAnalytics.connectors }} connectors</b><small>{{ connectorAnalytics.tool_usage_count }} calls · {{ connectorAnalytics.failures }} failures</small><p>{{ connectorAnalytics.connector_success_rate }}% success · {{ connectorAnalytics.average_duration_ms }}ms average · {{ connectorAnalytics.data_source_usage }} data sources</p></article></section>
+
+      <section v-if="activeWorkspaceView === 'system' && collaborationAnalytics" class="mission-tool-trace" aria-label="Agent Collaboration Analytics"><p class="section-kicker">AGENT COLLABORATION ANALYTICS</p><h3>Summary-only collaboration health</h3><article><b>{{ collaborationAnalytics.message_count }} messages</b><small>{{ collaborationAnalytics.average_collaboration_round }} average round · {{ collaborationAnalytics.agent_participation }} participants</small><p>{{ collaborationAnalytics.conflict_count }} conflicts · {{ collaborationAnalytics.message_completion_rate }}% completed messages</p></article></section>
 
       <section v-if="activeWorkspaceView === 'timeline'" class="agent-timeline-center" aria-label="Agent执行时间线">
         <div class="dashboard-heading"><div><p class="section-kicker">AGENT TIMELINE</p><h2>AI 团队执行时间线</h2><p>展示面向用户的任务协作摘要，而非模型内部思维过程。</p></div><button class="outline-button" type="button" @click="openWorkspaceView('tasks')">运行科研任务</button></div>

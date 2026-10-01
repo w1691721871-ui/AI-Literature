@@ -24,6 +24,7 @@ from app.services.retrieval_service import RetrievalService
 from app.services.dynamic_planner_service import DynamicPlannerService
 from app.services.agent_memory_service import AgentMemoryService
 from app.services.connector_service import ConnectorManager
+from app.services.agent_collaboration_service import AgentMessageBus
 
 
 class AIMissionNotFoundError(ValueError): pass
@@ -139,7 +140,12 @@ class AIMissionService:
                 data_sources=connector_manager.mission_sources(m.id)
             except OperationalError:
                 tools_used,data_sources=[],[]
-            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m, computer_missions),"requirements":reqs,"deliverables":dels,"versions":versions,"computer_missions":computer_missions,"execution_graph":plan_nodes,"evidence_graph":self._graph(m,reqs,dels),"source_materials":sources,"tools_used":tools_used,"data_sources":data_sources}
+            try:
+                bus=AgentMessageBus(self._sessions,initialize=False)
+                collaboration={"graph":bus.graph(m.id),"messages":bus.messages(m.id),"conflicts":bus.conflicts(m.id)}
+            except OperationalError:
+                collaboration={"graph":{"participants":[],"edges":[],"message_count":0,"status":"NOT_AVAILABLE"},"messages":[],"conflicts":[]}
+            return {**self._mission(m),"timeline":self._timeline(s,m.id),"team":self._team(m, computer_missions),"requirements":reqs,"deliverables":dels,"versions":versions,"computer_missions":computer_missions,"execution_graph":plan_nodes,"evidence_graph":self._graph(m,reqs,dels),"source_materials":sources,"tools_used":tools_used,"data_sources":data_sources,"collaboration":collaboration}
         finally:s.close()
     def timeline(self,mission_id):
         s=self._sessions()

@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 from collections import defaultdict
 from sqlalchemy import select
+from sqlalchemy.exc import OperationalError
 from app.models.agent_evaluation import AgentEvaluation
 from app.models.agent_metric import AgentMetric
 from app.models.agent_trace import AgentTrace
@@ -10,6 +11,7 @@ from app.models.ai_mission import AIMission
 from app.models.computer_mission import ComputerMission
 from app.models.execution_graph import ExecutionGraph
 from app.models.adaptive_iteration import AdaptiveIteration
+from app.models.agent_collaboration import AgentConflict, AgentMessage
 from app.services.database import SessionLocal, initialize_database
 
 class AgentEvaluationService:
@@ -38,7 +40,12 @@ class AgentEvaluationService:
             replans=sum(item.decision=="REPLAN" for item in adaptive); evidence_rounds=sum(item.trigger in {"EVIDENCE_INSUFFICIENT","EVIDENCE_RECOVERED"} for item in adaptive); verification_rounds=sum(item.trigger in {"TOOL_FAILURE","COMPUTER_REVIEW_REQUIRED"} for item in adaptive)
             final_decision=adaptive[-1].decision if adaptive else ""
             planning_efficiency=(40 if completed else 0)+(20 if replans<=1 else 0)+(20 if evidence_rounds and refs else 0)+(10 if verification in {"PASS","NOT_APPLICABLE"} else 0)+(10 if safety=="PASS" else 0)
-            report={"mission_id":mission_id,"evaluation_score":score,"planner_score":planner_score,"planning_efficiency":planning_efficiency,"adaptive_iterations":len(adaptive),"replan_count":replans,"evidence_retrieval_rounds":evidence_rounds,"verification_rounds":verification_rounds,"final_decision":final_decision,"task_completion":"COMPLETED" if completed else mission.status,"evidence_coverage":len(refs),"human_revision_count":revisions,"verification_result":verification,"execution_safety":safety,"failure_type":failure_type,"failure_reason":failure_reason,"boundary":"评分只根据已保存的任务状态、Execution Graph、Evidence 引用、人工修订和受控验证元数据计算；不读取 Prompt、CoT、密钥或隐私文件。"}
+            try:
+                messages=s.scalars(select(AgentMessage).where(AgentMessage.mission_id==mission_id)).all(); conflicts=s.scalars(select(AgentConflict).where(AgentConflict.mission_id==mission_id)).all()
+            except OperationalError:
+                messages,conflicts=[],[]  # P25 isolated fixtures predate P32 tables.
+            delivered=sum(item.status in {"DELIVERED","PROCESSED"} for item in messages); collaboration_score=(50 if not messages else round(delivered/len(messages)*50))+(30 if messages else 0)+(20 if not conflicts else 0)
+            report={"mission_id":mission_id,"evaluation_score":score,"planner_score":planner_score,"planning_efficiency":planning_efficiency,"collaboration_score":collaboration_score,"message_count":len(messages),"conflict_count":len(conflicts),"adaptive_iterations":len(adaptive),"replan_count":replans,"evidence_retrieval_rounds":evidence_rounds,"verification_rounds":verification_rounds,"final_decision":final_decision,"task_completion":"COMPLETED" if completed else mission.status,"evidence_coverage":len(refs),"human_revision_count":revisions,"verification_result":verification,"execution_safety":safety,"failure_type":failure_type,"failure_reason":failure_reason,"boundary":"评分只根据已保存的任务状态、Execution Graph、Evidence 引用、协作摘要、人工修订和受控验证元数据计算；不读取 Prompt、CoT、密钥或隐私文件。"}
             row=s.scalar(select(AgentEvaluation).where(AgentEvaluation.mission_id==mission_id))
             if row is None: row=AgentEvaluation(mission_id=mission_id); s.add(row)
             for key in ("evaluation_score","planner_score","adaptive_iterations","replan_count","evidence_retrieval_rounds","verification_rounds","final_decision","task_completion","evidence_coverage","human_revision_count","verification_result","execution_safety","failure_type","failure_reason"):
