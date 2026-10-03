@@ -14,6 +14,7 @@ class Artifact(Base):
     title: Mapped[str]=mapped_column(String(240),nullable=False)
     version: Mapped[int]=mapped_column(Integer,nullable=False,default=1)
     status: Mapped[str]=mapped_column(String(40),nullable=False,default="DRAFT")
+    release_status: Mapped[str]=mapped_column(String(30),nullable=False,default="DRAFT")
     source_type: Mapped[str]=mapped_column(String(40),nullable=False,default="AI_GENERATED")
     file_path: Mapped[str]=mapped_column(String(1000),nullable=False,default="")
     content_summary: Mapped[str]=mapped_column(Text,nullable=False,default="")

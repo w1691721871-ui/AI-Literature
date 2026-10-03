@@ -1,12 +1,26 @@
 services:
   - type: web
-    name: ai-research-agent-api
+    name: researchos-api
     runtime: python
     plan: free
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn app.main:app --host 0.0.0.0 --port $PORT
     healthCheckPath: /health
     envVars:
+      - key: DATABASE_URL
+        value: sqlite:////opt/render/project/src/work/research_library.db
+      - key: STORAGE_PROVIDER
+        value: LOCAL
+      - key: STORAGE_ROOT
+        value: /opt/render/project/src/work/runtime_storage
+      - key: TOKEN_EXPIRE
+        value: "43200"
+      - key: DEMO_MODE
+        value: "true"
+      - key: REQUIRE_HUMAN_REVIEW
+        value: "true"
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
       - key: DASHSCOPE_API_KEY
         sync: false
       - key: LLM_BASE_URL

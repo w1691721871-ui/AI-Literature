@@ -15,10 +15,16 @@ class WorkspaceExperienceService:
  def __init__(self,sessions=SessionLocal,*,initialize=True,missions=None,artifacts=None,planner=None,permissions=None):
   if initialize:initialize_database()
   self.s=sessions;self.missions=missions or AIMissionService(sessions,initialize=False);self.artifacts=artifacts or ArtifactService(sessions,initialize=False);self.planner=planner or DynamicPlannerService(sessions,initialize=False);self.permissions=permissions or PermissionService(sessions,initialize=False)
- def dashboard(self):
+ def dashboard(self,workspace_id=None):
   s=self.s()
   try:
-   missions=list(s.scalars(select(AIMission).order_by(AIMission.updated_at.desc())).all());arts=list(s.scalars(select(Artifact).order_by(Artifact.updated_at.desc())).all())
+   mission_query=select(AIMission).order_by(AIMission.updated_at.desc())
+   if workspace_id:mission_query=mission_query.where(AIMission.workspace_id==workspace_id)
+   missions=list(s.scalars(mission_query).all())
+   mission_ids=[item.id for item in missions]
+   artifact_query=select(Artifact).order_by(Artifact.updated_at.desc())
+   if workspace_id:artifact_query=artifact_query.where(Artifact.mission_id.in_(mission_ids)) if mission_ids else artifact_query.where(Artifact.mission_id=="")
+   arts=list(s.scalars(artifact_query).all())
    return {"missions":[self.missions._mission(x) for x in missions[:8]],"artifacts":[self.artifacts._data(x,s) for x in arts[:8]],"reviews":{"pending":sum(x.status in {"NEEDS_REVIEW","REVISION_REQUESTED"} for x in arts),"revision_requested":sum(x.status=="REVISION_REQUESTED" for x in arts)},"agents":self.missions._team(None),"active_missions":sum(x.status not in {"COMPLETED","FAILED"} for x in missions),"boundary":"Workspace only projects persisted Mission, Artifact, Evidence and Human Review records; no prompts or hidden reasoning are exposed."}
   finally:s.close()
  def mission_workspace(self,mission_id):

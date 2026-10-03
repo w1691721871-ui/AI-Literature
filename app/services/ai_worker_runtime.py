@@ -1,0 +1,281 @@
+"""P53 unified, approval-bounded runtime for the single AI Worker product role."""
+
+from __future__ import annotations
+
+from collections.abc import Callable, Mapping
+import json
+from typing import Any
+
+from sqlalchemy import select
+
+from app.models.runtime_execution import RuntimeExecution
+from app.models.mission_contract import MissionContract as MissionContractRecord, RuntimeExecutionState
+from app.services.adaptive_agent_service import AdaptiveAgentService
+from app.services.autonomous_execution_service import AutonomousExecutionService
+from app.services.ai_mission_service import AIMissionNotFoundError, AIMissionService
+from app.services.ai_worker_service import AIWorkerService
+from app.services.database import SessionLocal, initialize_database
+from app.services.research_strategy_service import ResearchStrategyService
+from app.services.mission_intelligence_service import MissionIntelligenceService
+from app.services.mission_quality_service import MissionQualityService
+from app.services.skill_capability_registry import SkillCapabilityRegistry
+from app.services.skill_registry import SkillRegistry, SkillResult
+
+
+class ResearchOrchestrator:
+    """Product control role: selects existing Skills, never reimplements them."""
+
+    def __init__(self, strategy_service: ResearchStrategyService | None = None):
+        self._strategy = strategy_service or ResearchStrategyService()
+
+    def build_plan(self, registry: SkillRegistry, mission: Mapping[str, Any]) -> list[tuple[str, object]]:
+        return registry.plan(mission)
+
+    def research_insight(self, mission: Mapping[str, Any]) -> dict[str, object]:
+        """Expose a safe, Evidence-bounded strategy projection for the product UI."""
+        return self._strategy.mission_insight(mission)
+
+
+class AIWorkerRuntime:
+    """Runs legacy capabilities as a single, finite, auditable AI Worker lifecycle."""
+
+    def __init__(
+        self,
+        session_factory: Callable = SessionLocal,
+        *,
+        initialize: bool = True,
+        mission_service=None,
+        worker_service=None,
+        registry=None,
+        adaptive_service=None,
+        autonomous_service=None,
+        mission_intelligence=None,
+        quality_service=None,
+        capability_registry=None,
+    ):
+        if initialize:
+            initialize_database()
+        self._sessions = session_factory
+        self._missions = mission_service or AIMissionService(session_factory, initialize=False)
+        self._worker = worker_service or AIWorkerService()
+        self._registry = registry or SkillRegistry(mission_service=self._missions)
+        self._adaptive = adaptive_service or AdaptiveAgentService(session_factory, initialize=False)
+        self._autonomous = autonomous_service or AutonomousExecutionService()
+        self._capabilities = capability_registry or SkillCapabilityRegistry()
+        self._intelligence = mission_intelligence or MissionIntelligenceService(session_factory, initialize=False, capabilities=self._capabilities)
+        self._quality = quality_service or MissionQualityService()
+        self._orchestrator = ResearchOrchestrator()
+
+    def snapshot(self, mission_id: str) -> dict[str, object]:
+        mission = self._mission(mission_id)
+        contract = self._worker.contract_for_mission(mission)
+        self._sync_contract(mission, contract, "CREATED")
+        records = self._records(mission_id)
+        waiting_action = next((record["result_summary"] for record in reversed(records) if record["status"] == "WAITING_REVIEW"), None)
+        return {
+            "mission": {
+                "id": mission["id"], "title": mission.get("title"), "objective": contract.objective,
+                "status": mission.get("status"), "evidence_count": contract.context["evidence_count"],
+                "approval_requirement": contract.approval_requirement,
+            },
+            "skills": [{"id": skill_id, "name": adapter.name, "description": adapter.description, "capability": adapter.capability_metadata() if hasattr(adapter, "capability_metadata") else None} for skill_id, adapter in self._orchestrator.build_plan(self._registry, mission)],
+            "timeline": records,
+            "research_insight": self._orchestrator.research_insight(mission),
+            "mission_intelligence": self._mission_intelligence_snapshot(mission),
+            "autonomous_progress": self._autonomous.progress(mission, records),
+            "status": records[-1]["status"] if records else str(mission.get("status") or "CREATED"),
+            "waiting_action": waiting_action,
+        }
+
+    def execute(self, mission_id: str) -> dict[str, object]:
+        mission = self._mission(mission_id)
+        contract = self._worker.contract_for_mission(mission)
+        if not contract.objective:
+            raise ValueError("Mission Contract 缺少 objective。")
+
+        self._sync_contract(mission, contract, "PLANNING")
+        self._prepare_mission_intelligence(mission)
+        for index, (skill_id, adapter) in enumerate(self._orchestrator.build_plan(self._registry, mission), start=1):
+            step_id = f"{skill_id}-{index}"
+            adapter.validate(mission)
+            record_id = self._record(mission_id, step_id, adapter.name, "PLAN", "PLANNED", "Skill added to the controlled AI Worker plan.", "")
+            self._update(record_id, "RUNNING", "Skill execution started within existing service boundaries.", "")
+            self._state(mission_id, "OBSERVE", adapter.name, "Skill execution started.", "", "Evaluate current state", "")
+            self._set_mission_phase(mission, "OBSERVE")
+            try:
+                result = adapter.execute(mission)
+            except Exception as error:
+                result = SkillResult("FAILED", "A controlled Skill action failed.", self._safe_error(error), "EXECUTE")
+
+            status = "WAITING_REVIEW" if result.status in {"WAITING_REVIEW", "NEEDS_EVIDENCE"} else result.status
+            observation = adapter.observe(result)
+            summary = result.result_summary
+            if result.status in {"NEEDS_EVIDENCE", "FAILED"}:
+                decision = self._adaptive.run_once(mission_id)
+                observation = f"{observation} Adaptive decision: {decision.get('decision', 'REQUEST_REVIEW')}."
+                summary = f"{summary} {decision.get('summary', '')}".strip()
+                status = "WAITING_REVIEW" if decision.get("decision") == "REQUEST_REVIEW" else "FAILED" if result.status == "FAILED" else "WAITING_REVIEW"
+            # Mission state can change inside an adapter. It is reloaded only
+            # after the action, never synthesized from an internal trace.
+            mission = self._mission(mission_id)
+            latest_contract = self._worker.contract_for_mission(mission)
+            intelligence_state = self._complete_mission_skill(mission, skill_id, result.status)
+            quality = self._quality.evaluate_completion(mission, intelligence_state)
+            self._set_mission_phase(mission, "QUALITY_CHECK", quality_status=str(quality["quality"]), blocked_reason="" if result.status == "SUCCESS" else result.status)
+            mission_decision = self._autonomous.decide_next_step(
+                {"workspace_id": mission.get("workspace_id"), "evidence_refs": mission.get("evidence_refs") or [], "approval_state": latest_contract.approval_requirement},
+                intelligence_state,
+                {"status": result.status, "action_type": result.action_type, "summary": observation},
+                workspace_id=mission.get("workspace_id"),
+            )
+            if mission_decision["decision"] == "REPLAN":
+                self._replan_mission(mission, {"status": result.status, "summary": observation})
+                self._state(mission_id, "REPLAN", adapter.name, "Evidence gap requires a bounded replan.", str(mission_decision["reason"]), str(mission_decision["action"]), str(mission_decision["stop_reason"]))
+            autonomous = self._autonomous.evaluate_current_state(
+                {
+                    "workspace_id": mission.get("workspace_id"),
+                    "evidence_refs": mission.get("evidence_refs") or [],
+                    "approval_state": latest_contract.approval_requirement,
+                    "execution_state": "COMPLETED" if str(mission.get("status") or "").upper() == "COMPLETED" else "",
+                },
+                {"completed_steps": index, "max_steps": self._autonomous.MAX_STEPS, "current_skill": adapter.name},
+                {"status": result.status, "action_type": result.action_type, "summary": observation},
+                workspace_id=mission.get("workspace_id"),
+            )
+            self._state(mission_id, "EVALUATE", adapter.name, observation, str(autonomous["reason"]), str(autonomous["action"]), str(autonomous["stop_reason"]))
+            self._state(mission_id, "DECIDE", adapter.name, "A bounded next action was selected.", str(autonomous["decision"]), str(autonomous["action"]), str(autonomous["stop_reason"]))
+            if autonomous["decision"] in {"REQUEST_REVIEW", "STOP"} and status == "SUCCESS":
+                status = "WAITING_REVIEW" if autonomous["decision"] == "REQUEST_REVIEW" else "FAILED"
+                summary = f"{summary} {autonomous['reason']}".strip()
+            self._update(record_id, status, observation, summary, result.action_type)
+            execution_state = "WAITING_APPROVAL" if status == "WAITING_REVIEW" else "FAILED" if status == "FAILED" else "EXECUTE"
+            next_action = "Human review required" if status == "WAITING_REVIEW" else str(autonomous["action"])
+            self._state(mission_id, execution_state, adapter.name, observation, adapter.evaluate(result), next_action, str(autonomous["stop_reason"]))
+            if status != "SUCCESS" or autonomous["decision"] == "STOP":
+                self._sync_contract(mission, latest_contract, execution_state, str(autonomous["stop_reason"] or result.status))
+                break
+        else:
+            self._sync_contract(mission, self._worker.contract_for_mission(mission), "COMPLETED")
+        return self.snapshot(mission_id)
+
+    def _sync_contract(self, mission, contract, execution_state: str, stop_reason: str = "") -> None:
+        """Persist a contract only for a workspace-bound Mission; legacy data stays readable."""
+        workspace_id = mission.get("workspace_id")
+        if not workspace_id:
+            return
+        session = self._sessions()
+        try:
+            row = session.scalar(select(MissionContractRecord).where(MissionContractRecord.mission_id == mission["id"]))
+            task_type = str(mission.get("type") or "RESEARCH").upper()
+            if task_type not in {"RESEARCH", "COMPUTER", "DELIVERY", "REVIEW"}:
+                task_type = "RESEARCH"
+            data = {
+                "workspace_id": workspace_id, "goal": contract.objective,
+                "task_type": task_type,
+                "input_context": json.dumps(contract.context, ensure_ascii=False),
+                "available_skills": json.dumps([skill.model_dump() for skill in contract.available_skills], ensure_ascii=False),
+                "evidence_refs": json.dumps(mission.get("evidence_refs") or [], ensure_ascii=False),
+                "approval_state": contract.approval_requirement, "execution_state": execution_state,
+                "stop_reason": stop_reason or contract.stop_reason or "",
+            }
+            if row is None:
+                row = MissionContractRecord(mission_id=mission["id"], owner_id=None, artifact_refs="[]", **data); session.add(row)
+            else:
+                for key, value in data.items(): setattr(row, key, value)
+            session.commit()
+        finally:
+            session.close()
+
+    def _prepare_mission_intelligence(self, mission: Mapping[str, Any]) -> None:
+        workspace_id = str(mission.get("workspace_id") or "")
+        if not workspace_id:
+            return
+        understanding = self._intelligence.analyze_mission_goal(str(mission.get("goal") or mission.get("title") or ""))
+        plan = self._intelligence.build_task_plan(str(mission["id"]), understanding)
+        self._intelligence.ensure_state(str(mission["id"]), workspace_id, plan)
+        self._intelligence.set_phase(str(mission["id"]), workspace_id, "PLAN")
+        self._state(str(mission["id"]), "PLAN", "AI Worker", "Mission goal was translated into existing Skill tasks.", "User-readable task plan created.", "Execute bounded Skill", "")
+
+    def _complete_mission_skill(self, mission: Mapping[str, Any], skill_id: str, result_status: str) -> dict[str, object]:
+        workspace_id = str(mission.get("workspace_id") or "")
+        if not workspace_id:
+            return {"pending_tasks": [], "completed_tasks": [], "blocked_reason": "", "replan_count": 0, "max_replan_count": 2}
+        return self._intelligence.complete_skill_task(str(mission["id"]), workspace_id, skill_id, blocked=result_status != "SUCCESS")
+
+    def _set_mission_phase(self, mission: Mapping[str, Any], phase: str, **kwargs) -> None:
+        workspace_id = str(mission.get("workspace_id") or "")
+        if workspace_id:
+            self._intelligence.set_phase(str(mission["id"]), workspace_id, phase, **kwargs)
+
+    def _replan_mission(self, mission: Mapping[str, Any], observation: Mapping[str, object]) -> None:
+        workspace_id = str(mission.get("workspace_id") or "")
+        if workspace_id:
+            refs = mission.get("evidence_refs")
+            self._intelligence.replan_mission(str(mission["id"]), workspace_id, observation, len(refs) if isinstance(refs, list) else 0)
+
+    def _mission_intelligence_snapshot(self, mission: Mapping[str, Any]) -> dict[str, object]:
+        understanding = self._intelligence.analyze_mission_goal(str(mission.get("goal") or mission.get("title") or ""))
+        workspace_id = str(mission.get("workspace_id") or "")
+        if workspace_id:
+            plan = self._intelligence.build_task_plan(str(mission["id"]), understanding)
+            state = self._intelligence.ensure_state(str(mission["id"]), workspace_id, plan)
+        else:
+            state = {"current_phase": "CREATED", "completed_tasks": [], "pending_tasks": self._intelligence.build_task_plan(str(mission["id"]), understanding), "blocked_reason": "", "replan_count": 0, "max_replan_count": 2, "quality_status": "NOT_EVALUATED"}
+        quality = self._quality.evaluate_completion(mission, state)
+        return {"understanding": understanding, "current_phase": state["current_phase"], "completed_tasks": state["completed_tasks"], "pending_tasks": state["pending_tasks"], "blocked_reason": state["blocked_reason"], "replan_count": state["replan_count"], "max_replan_count": state["max_replan_count"], "quality": quality}
+
+    def _state(self, mission_id, current_step, current_skill, observation, evaluation, next_action, stop_reason) -> None:
+        session = self._sessions()
+        try:
+            row = session.scalar(select(RuntimeExecutionState).where(RuntimeExecutionState.mission_id == mission_id))
+            if row is None:
+                row = RuntimeExecutionState(mission_id=mission_id); session.add(row)
+            row.current_step=current_step; row.current_skill=current_skill; row.observation_summary=observation; row.evaluation_result=evaluation; row.next_action=next_action; row.stop_reason=stop_reason
+            session.commit()
+        finally:
+            session.close()
+
+    def _mission(self, mission_id: str) -> dict[str, Any]:
+        try:
+            mission = self._missions.detail(mission_id)
+        except AIMissionNotFoundError:
+            raise
+        if not mission:
+            raise AIMissionNotFoundError("AI Mission 不存在。")
+        return dict(mission)
+
+    def _record(self, mission_id: str, step_id: str, skill: str, action: str, status: str, observation: str, result: str) -> str:
+        session = self._sessions()
+        try:
+            row = RuntimeExecution(mission_id=mission_id, step_id=step_id, skill=skill, action_type=action, status=status, observation_summary=observation, result_summary=result)
+            session.add(row); session.commit(); return row.id
+        finally:
+            session.close()
+
+    def _update(self, record_id: str, status: str, observation: str, result: str, action: str | None = None) -> None:
+        session = self._sessions()
+        try:
+            row = session.get(RuntimeExecution, record_id)
+            if row is None:
+                raise ValueError("Runtime execution record 不存在。")
+            row.status = status
+            row.observation_summary = observation
+            row.result_summary = result
+            if action:
+                row.action_type = action
+            session.commit()
+        finally:
+            session.close()
+
+    def _records(self, mission_id: str) -> list[dict[str, object]]:
+        session = self._sessions()
+        try:
+            rows = session.scalars(select(RuntimeExecution).where(RuntimeExecution.mission_id == mission_id).order_by(RuntimeExecution.created_at.asc())).all()
+            return [{"id": row.id, "step_id": row.step_id, "skill": row.skill, "action_type": row.action_type, "status": row.status, "observation_summary": row.observation_summary, "result_summary": row.result_summary, "created_at": row.created_at} for row in rows]
+        finally:
+            session.close()
+
+    @staticmethod
+    def _safe_error(error: Exception) -> str:
+        # Do not expose stack traces, prompts, secrets, or raw model outputs.
+        return f"{type(error).__name__}: controlled Skill execution did not complete."

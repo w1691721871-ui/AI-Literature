@@ -7,7 +7,20 @@ from app.services.database import SessionLocal,initialize_database
 class GovernanceError(ValueError):pass
 class PermissionService:
     roles={"OWNER","ADMIN","MANAGER","MEMBER","REVIEWER","VIEWER"}
-    grants={"MISSION_CREATE":{"OWNER","ADMIN","MANAGER","MEMBER"},"MISSION_VIEW":{"OWNER","ADMIN","MANAGER","MEMBER","REVIEWER","VIEWER"},"MISSION_APPROVE":{"OWNER","ADMIN","MANAGER","REVIEWER"},"ARTIFACT_REVIEW":{"OWNER","ADMIN","MANAGER","REVIEWER"},"CONNECTOR_ACCESS":{"OWNER","ADMIN","MANAGER","MEMBER"},"KNOWLEDGE_ACCESS":{"OWNER","ADMIN","MANAGER","MEMBER","REVIEWER","VIEWER"}}
+    grants={
+        "MISSION_CREATE":{"OWNER","ADMIN","MANAGER","MEMBER"},
+        "MISSION_VIEW":{"OWNER","ADMIN","MANAGER","MEMBER","REVIEWER","VIEWER"},
+        "MISSION_EXECUTE":{"OWNER","ADMIN","MANAGER","MEMBER"},
+        "MISSION_APPROVE":{"OWNER","ADMIN","MANAGER","REVIEWER"},
+        "COMPUTER_EXECUTE":{"OWNER","ADMIN","MANAGER","MEMBER"},
+        "ARTIFACT_VIEW":{"OWNER","ADMIN","MANAGER","MEMBER","REVIEWER","VIEWER"},
+        "ARTIFACT_DOWNLOAD":{"OWNER","ADMIN","MANAGER","MEMBER","REVIEWER","VIEWER"},
+        "ARTIFACT_REVIEW":{"OWNER","ADMIN","MANAGER","REVIEWER"},
+        "CONNECTOR_ACCESS":{"OWNER","ADMIN","MANAGER","MEMBER"},
+        "KNOWLEDGE_ACCESS":{"OWNER","ADMIN","MANAGER","MEMBER","REVIEWER","VIEWER"},
+        "KNOWLEDGE_VIEW":{"OWNER","ADMIN","MANAGER","MEMBER","REVIEWER","VIEWER"},
+        "KNOWLEDGE_APPROVE":{"OWNER","ADMIN","MANAGER","REVIEWER"},
+    }
     def __init__(self,sessions=SessionLocal,*,initialize=True):
         if initialize:initialize_database()
         self.s=sessions
@@ -21,6 +34,15 @@ class PermissionService:
             if not allowed:raise GovernanceError("RBAC 拒绝该操作。")
             return {"allowed":True,"role":role.role,"permission":permission}
         finally:s.close()
+    def can_create_mission(self,workspace_id,user_id): return self._can(workspace_id,user_id,"MISSION_CREATE")
+    def can_view_mission(self,workspace_id,user_id): return self._can(workspace_id,user_id,"MISSION_VIEW")
+    def can_execute_computer(self,workspace_id,user_id): return self._can(workspace_id,user_id,"COMPUTER_EXECUTE")
+    def can_download_artifact(self,workspace_id,user_id): return self._can(workspace_id,user_id,"ARTIFACT_DOWNLOAD")
+    def can_manage_connector(self,workspace_id,user_id): return self._can(workspace_id,user_id,"CONNECTOR_ACCESS")
+    def can_approve_review(self,workspace_id,user_id): return self._can(workspace_id,user_id,"ARTIFACT_REVIEW")
+    def _can(self,workspace_id,user_id,permission):
+        try:self.check(workspace_id,user_id,permission);return True
+        except GovernanceError:return False
     @staticmethod
     def audit(s,user,workspace,action,kind,resource,summary):s.add(AuditLog(user_id=user,workspace_id=workspace,action=action,resource_type=kind,resource_id=resource,summary=summary[:500]))
 class GovernanceService:
@@ -30,7 +52,7 @@ class GovernanceService:
     def create_org(self,name,user_id):
         s=self.s()
         try:
-            org=Organization(name=name.strip());s.add(org);s.flush(); ws=GovernanceWorkspace(organization_id=org.id,name=f"{org.name} Workspace");s.add(ws);s.flush();s.add(WorkspaceUserRole(workspace_id=ws.id,user_id=user_id,role="OWNER"));s.add(AgentPolicy(workspace_id=ws.id));self.permissions.audit(s,user_id,ws.id,"CREATE_ORGANIZATION","Organization",org.id,"Organization and default workspace created.");s.commit();return {"id":org.id,"name":org.name,"status":"ACTIVE","workspace_id":ws.id}
+            org=Organization(name=name.strip());s.add(org);s.flush(); ws=GovernanceWorkspace(organization_id=org.id,name=f"{org.name} Workspace",owner_id=user_id);s.add(ws);s.flush();s.add(WorkspaceUserRole(workspace_id=ws.id,user_id=user_id,role="OWNER"));s.add(AgentPolicy(workspace_id=ws.id));self.permissions.audit(s,user_id,ws.id,"CREATE_ORGANIZATION","Organization",org.id,"Organization and default workspace created.");s.commit();return {"id":org.id,"name":org.name,"status":"ACTIVE","workspace_id":ws.id}
         finally:s.close()
     def workspaces(self,organization_id=None):
         s=self.s()

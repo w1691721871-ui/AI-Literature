@@ -21,6 +21,12 @@ from app.models.ai_mission import AIMission, AIMissionEvent
 from app.models.agent_trace import AgentTrace
 from app.models.computer_mission import ComputerMission
 from app.services.computer_use_service import ComputerUseService
+from app.services.computer_action_planner import ComputerActionPlanner
+from app.services.computer_environment_service import ComputerEnvironmentService
+from app.services.computer_feedback_service import ComputerFeedbackService
+from app.services.computer_observation_service import ComputerObservationService
+from app.services.computer_recovery_service import ComputerRecoveryService
+from app.services.computer_verification_service import ComputerVerificationService
 from app.services.database import SessionLocal, initialize_database
 from app.services.diff_generator_service import DiffGeneratorService
 from app.services.workspace_service import WorkspaceManager
@@ -36,7 +42,10 @@ class ControlledComputerMissionService:
     def __init__(self, session_factory: Callable[[], Session] = SessionLocal, *, initialize: bool = True,
                  workspace: WorkspaceManager | None = None, agent: ControlledComputerAgent | None = None,
                  diffs: DiffGeneratorService | None = None, changes: ComputerUseService | None = None,
-                 verifier: VerificationAgent | None = None) -> None:
+                 verifier: VerificationAgent | None = None, observer: ComputerObservationService | None = None,
+                 action_planner: ComputerActionPlanner | None = None, verification: ComputerVerificationService | None = None,
+                 environment: ComputerEnvironmentService | None = None, feedback: ComputerFeedbackService | None = None,
+                 recovery: ComputerRecoveryService | None = None) -> None:
         if initialize:
             initialize_database()
         self._sessions = session_factory
@@ -45,6 +54,12 @@ class ControlledComputerMissionService:
         self.diffs = diffs or DiffGeneratorService(self.workspace._actions)
         self.changes = changes or ComputerUseService(session_factory, initialize=False)
         self.verifier = verifier or VerificationAgent()
+        self.observer = observer or ComputerObservationService()
+        self.action_planner = action_planner or ComputerActionPlanner()
+        self.verification = verification or ComputerVerificationService()
+        self.environment = environment or ComputerEnvironmentService(session_factory)
+        self.feedback = feedback or ComputerFeedbackService(self.observer)
+        self.recovery = recovery or ComputerRecoveryService()
 
     def create(self, payload: dict[str, object]) -> dict[str, object]:
         task = str(payload["task"]).strip()
@@ -73,9 +88,22 @@ class ControlledComputerMissionService:
             profile = self.workspace.scan()
             row.workspace_profile_json = self._encode(profile)
             self._log(row, "Workspace Scanned", "COMPLETED", "已读取项目结构元数据；未读取 .env、密钥、数据库或 FAISS 文件。")
-            plan = self.agent.plan(row.task, profile)
+            observation = self.observer.observe_environment({"mission_id": row.id, "goal": row.task, "workspace_profile": profile})
+            self._log(row, "Environment Observed", "OBSERVED", "已完成只读环境观察；当前没有真实视觉输入。")
+            parent = session.get(AIMission, row.mission_id) if row.mission_id else None
+            workspace_id = str(parent.workspace_id) if parent and parent.workspace_id else None
+            environment = self.environment.analyze_environment(
+                observation, mission_id=row.id, workspace_id=workspace_id, goal=row.task,
+            )
+            self._log(row, "Environment Analyzed", "COMPLETED", "已生成用户可理解的环境状态与验证目标；真实视觉仍为 demo_only。")
+            controlled_action = self.action_planner.plan_next_action(observation, row.task)
+            plan = dict(self.agent.plan(row.task, profile))
+            plan["computer_observation"] = observation
+            plan["environment_understanding"] = environment
+            plan["controlled_action"] = controlled_action
             row.action_plan_json = self._encode(plan)
-            row.risk_level = str(plan["risk_level"])
+            row.risk_level = "HIGH" if controlled_action["requires_approval"] else str(plan["risk_level"])
+            self._log(row, "Action Planned", "PLAN_READY", f"已规划受控 {controlled_action['action_type']} 动作；风险等级为 {row.risk_level}。")
             target = next(iter(plan["affected_files"]), "")
             proposal: dict[str, object] = {"status": "NO_SAFE_DIFF", "diff": "", "reason": "未选择安全目标文件。"}
             if target:
@@ -145,6 +173,29 @@ class ControlledComputerMissionService:
             self._log(row, "File Modified", "COMPLETED", f"已按批准 Diff 写入 {snapshot.file_path}。")
             row.status, row.current_stage, row.progress = "VERIFYING", "VERIFYING", 90
             report = self.verifier.verify(snapshot.file_path)
+            report["controlled_verification"] = self.verification.verify_action_result(
+                {"status": "APPROVED", "file": snapshot.file_path}, report, row.task
+            )
+            action_plan = self._decode(row.action_plan_json, {})
+            if not isinstance(action_plan, dict):
+                action_plan = {}
+            before = action_plan.get("environment_understanding", {})
+            if not isinstance(before, dict):
+                before = {}
+            after = {
+                "page_state": "verification_passed" if report["status"] == "PASS" else "verification_failed",
+                "risk_level": row.risk_level,
+                "verification_status": report["status"],
+            }
+            controlled_action = action_plan.get("controlled_action", {})
+            if not isinstance(controlled_action, dict):
+                controlled_action = {}
+            feedback = self.feedback.evaluate_action_result(controlled_action, before, after)
+            report["environment_feedback"] = feedback
+            if feedback["status"] != "SUCCESS":
+                recovery = self.recovery.recover_failed_action(feedback, controlled_action, row.retry_count)
+                report["recovery"] = recovery
+                self._log(row, "Recovery Evaluated", str(recovery["action"]), str(recovery["summary"]))
             row.verification_json = self._encode(report)
             if report["status"] == "PASS":
                 self.changes.update_status(snapshot.id, "VERIFIED")

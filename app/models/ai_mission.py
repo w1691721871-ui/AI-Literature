@@ -20,6 +20,7 @@ class AIMission(Base):
     title: Mapped[str] = mapped_column(String(240), nullable=False)
     mission_type: Mapped[str] = mapped_column(String(80), nullable=False, default="RESEARCH")
     goal: Mapped[str] = mapped_column(Text, nullable=False, default="")
+    workspace_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     solution_project_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     evidence_refs_json: Mapped[str] = mapped_column(Text, nullable=False, default="[]")
     review_comment: Mapped[str] = mapped_column(Text, nullable=False, default="")

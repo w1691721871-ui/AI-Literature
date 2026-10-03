@@ -48,7 +48,7 @@ class AIMissionService:
     def create(self, payload: dict[str, str]) -> dict[str, object]:
         session = self._sessions()
         try:
-            row=AIMission(title=payload["title"].strip(), mission_type=payload.get("mission_type","RESEARCH").strip(), goal=payload.get("goal","").strip())
+            row=AIMission(title=payload["title"].strip(), mission_type=payload.get("mission_type","RESEARCH").strip(), goal=payload.get("goal","").strip(), workspace_id=payload.get("workspace_id") or None)
             session.add(row); session.flush()
             self._event(session,row,"Mission","Mission Created","CREATED",0,"任务已创建，尚未执行检索或生成科研结论。")
             row.status,row.progress,row.current_step="PLANNING",5,"Requirement Analysis"
@@ -124,9 +124,12 @@ class AIMissionService:
             pass
         return {"mission":self.detail(mission_id),"delivery_package":package}
 
-    def list(self):
+    def list(self, workspace_id=None):
         s=self._sessions()
-        try:return [self._mission(x) for x in s.scalars(select(AIMission).order_by(AIMission.updated_at.desc())).all()]
+        try:
+            query=select(AIMission).order_by(AIMission.updated_at.desc())
+            if workspace_id: query=query.where(AIMission.workspace_id==workspace_id)
+            return [self._mission(x) for x in s.scalars(query).all()]
         finally:s.close()
     def detail(self,mission_id):
         s=self._sessions()
@@ -172,10 +175,12 @@ class AIMissionService:
             if not x:raise AIMissionNotFoundError("Notification 不存在。")
             x.read=True;s.commit();return {"id":x.id,"read":True}
         finally:s.close()
-    def dashboard(self):
+    def dashboard(self, workspace_id=None):
         s=self._sessions()
         try:
-            missions=[self._mission(x) for x in s.scalars(select(AIMission).order_by(AIMission.updated_at.desc())).all()]
+            query=select(AIMission).order_by(AIMission.updated_at.desc())
+            if workspace_id: query=query.where(AIMission.workspace_id==workspace_id)
+            missions=[self._mission(x) for x in s.scalars(query).all()]
             active={"PLANNING","REQUIREMENT_ANALYSIS","EVIDENCE_RETRIEVAL","SOLUTION_GENERATION","RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION"}
             metrics={"projects":int(s.scalar(select(func.count(SolutionProject.id)))or 0),"active_missions":sum(x["status"] in active for x in missions),"pending_reviews":int(s.scalar(select(func.count(SolutionProject.id)).where(SolutionProject.review_status.in_(("PENDING","NEEDS_REVISION"))))or 0),"completed_missions":sum(x["status"]=="COMPLETED" for x in missions),"knowledge_size":int(s.scalar(select(func.count(Paper.paper_id)))or 0),"evidence_count":int(s.scalar(select(func.count(PaperChunk.id)))or 0),"deliverables":int(s.scalar(select(func.count(SolutionDeliverable.id)))or 0)}
             return {"metrics":metrics,"recent_missions":missions[:6],"team_status":self._team(None),"latest_deliverables":metrics["deliverables"],"boundary":"Dashboard 只聚合数据库中的真实任务、资料、Evidence 引用与交付记录。"}
@@ -255,7 +260,7 @@ class AIMissionService:
             decoded=json.loads(value or "")
             return decoded if isinstance(decoded, type(default)) else default
         except (json.JSONDecodeError,TypeError):return default
-    def _mission(self,x):return {"id":x.id,"title":x.title,"type":x.mission_type,"goal":x.goal,"solution_project_id":x.solution_project_id,"status":x.status,"progress":x.progress,"current_step":x.current_step,"evidence_refs":self._decode(x.evidence_refs_json),"review_comment":x.review_comment,"retry_count":x.retry_count,"created_at":x.created_at,"updated_at":x.updated_at}
+    def _mission(self,x):return {"id":x.id,"title":x.title,"type":x.mission_type,"goal":x.goal,"workspace_id":x.workspace_id,"solution_project_id":x.solution_project_id,"status":x.status,"progress":x.progress,"current_step":x.current_step,"evidence_refs":self._decode(x.evidence_refs_json),"review_comment":x.review_comment,"retry_count":x.retry_count,"created_at":x.created_at,"updated_at":x.updated_at}
     @staticmethod
     def _timeline(s,mid):return [{"id":x.id,"stage":x.stage,"action":x.action,"status":x.status,"evidence_count":x.evidence_count,"result":x.result_summary,"created_at":x.created_at} for x in s.scalars(select(AIMissionEvent).where(AIMissionEvent.mission_id==mid).order_by(AIMissionEvent.created_at.asc())).all()]
     @staticmethod

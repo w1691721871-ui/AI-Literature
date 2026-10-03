@@ -55,7 +55,16 @@ class ArtifactService:
         try:
             row=self._row(s,artifact_id)
             if row.status!="NEEDS_REVIEW":raise ArtifactError("Artifact 尚未进入人工审核。")
-            row.status=status;self._trace(s,row.mission_id,"ARTIFACT_REVIEW",row,comment or f"Human review: {status}");s.commit();return self.detail(row.id,s)
+            row.status=status
+            # Keep the delivery lifecycle distinct from generation state.  A
+            # formal download remains gated by the existing APPROVED status;
+            # this field is a compact governance projection for review queues.
+            row.release_status={
+                "APPROVED":"APPROVED",
+                "REJECTED":"REJECTED",
+                "REVISION_REQUESTED":"PENDING_REVIEW",
+            }[status]
+            self._trace(s,row.mission_id,"ARTIFACT_REVIEW",row,comment or f"Human review: {status}");s.commit();return self.detail(row.id,s)
         finally:s.close()
     def revise(self,artifact_id,reason):
         s=self.s()
@@ -74,10 +83,12 @@ class ArtifactService:
         try:return self._data(self._row(s,artifact_id),s,True)
         finally:
             if close:s.close()
-    def analytics(self):
+    def analytics(self,workspace_id=None):
         s=self.s()
         try:
-            rows=list(s.scalars(select(Artifact)).all());total=len(rows)
+            query=select(Artifact)
+            if workspace_id:query=query.join(AIMission,Artifact.mission_id==AIMission.id).where(AIMission.workspace_id==workspace_id)
+            rows=list(s.scalars(query).all());total=len(rows)
             return {"total_artifacts":total,"generated":sum(x.status=="NEEDS_REVIEW" for x in rows),"approved":sum(x.status=="APPROVED" for x in rows),"revision_requested":sum(x.status=="REVISION_REQUESTED" for x in rows),"validation_failed":sum(x.status=="FAILED" for x in rows),"average_evidence_coverage":round(sum(x.evidence_coverage for x in rows)/total,1) if total else 0,"average_revision_count":round(sum(max(x.version-1,0) for x in rows)/total,1) if total else 0}
         finally:s.close()
     def download_path(self,artifact_id):
@@ -145,7 +156,7 @@ class ArtifactService:
         if not row:raise ArtifactError("Artifact 不存在。")
         return row
     def _data(self,row,s,detail=False):
-        data={"id":row.id,"mission_id":row.mission_id,"project_id":row.project_id,"artifact_type":row.artifact_type,"title":row.title,"version":row.version,"status":row.status,"source_type":row.source_type,"content_summary":row.content_summary,"evidence_count":row.evidence_count,"evidence_coverage":row.evidence_coverage,"generation_rounds":row.generation_rounds,"created_at":row.created_at,"updated_at":row.updated_at}
+        data={"id":row.id,"mission_id":row.mission_id,"project_id":row.project_id,"artifact_type":row.artifact_type,"title":row.title,"version":row.version,"status":row.status,"release_status":row.release_status,"source_type":row.source_type,"content_summary":row.content_summary,"evidence_count":row.evidence_count,"evidence_coverage":row.evidence_coverage,"generation_rounds":row.generation_rounds,"created_at":row.created_at,"updated_at":row.updated_at}
         if detail:
             data.update({"preview":{"title":row.title,"summary":row.content_summary,"review_status":row.status},"versions":[{"version":x.version,"change_summary":x.change_summary,"created_at":x.created_at} for x in s.scalars(select(ArtifactVersion).where(ArtifactVersion.artifact_id==row.id).order_by(ArtifactVersion.version)).all()],"evidence":[{"evidence_type":x.evidence_type,"paper_id":x.paper_id,"chunk_id":x.chunk_id,"source":x.source,"section":x.section,"claim_summary":x.claim_summary} for x in s.scalars(select(ArtifactEvidence).where(ArtifactEvidence.artifact_id==row.id)).all()]})
             try:

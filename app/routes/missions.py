@@ -1,24 +1,36 @@
 """Public AI Mission Center endpoints, isolated from research execution APIs."""
 
-from fastapi import APIRouter, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status
 
 from app.schemas.mission import AIMissionCreate, AIMissionReview, AIMissionRevision
 from app.services.ai_mission_service import AIMissionNotFoundError, AIMissionService
+from app.services.identity_service import IdentityContext
+from app.services.permission_middleware import PermissionMiddleware
+from app.services.audit_service import AuditService
 
 
 router = APIRouter(prefix="/api", tags=["ai-missions"])
 service = AIMissionService()
+permissions = PermissionMiddleware()
+audit = AuditService()
 
 
 @router.post("/missions", status_code=status.HTTP_201_CREATED)
-def create_mission(payload: AIMissionCreate) -> dict[str, object]:
-    return service.create(payload.model_dump())
+def create_mission(payload: AIMissionCreate, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.require(context, "MISSION_CREATE")
+    mission=service.create({**payload.model_dump(), "workspace_id": context.workspace_id})
+    audit.record_event(context.workspace_id,context.user_id,"MISSION_CREATED","Mission",mission["id"],mission["id"],"Mission created in current Workspace.")
+    return mission
 
 
 @router.post("/missions/{mission_id}/run")
-def run_mission(mission_id: str) -> dict[str, object]:
+def run_mission(mission_id: str, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.mission(context, mission_id, "MISSION_EXECUTE")
+    audit.record_event(context.workspace_id,context.user_id,"MISSION_EXECUTED","Mission",mission_id,mission_id,"Mission execution started.")
     try:
-        return service.run(mission_id)
+        result=service.run(mission_id)
+        audit.record_event(context.workspace_id,context.user_id,"MISSION_EXECUTED","Mission",mission_id,mission_id,"Mission execution reached its controlled review boundary.")
+        return result
     except (AIMissionNotFoundError, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
     except RuntimeError as error:
@@ -26,7 +38,8 @@ def run_mission(mission_id: str) -> dict[str, object]:
 
 
 @router.post("/missions/{mission_id}/review")
-def review_mission(mission_id: str, payload: AIMissionReview) -> dict[str, object]:
+def review_mission(mission_id: str, payload: AIMissionReview, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.mission(context, mission_id, "MISSION_APPROVE")
     try:
         return service.review(mission_id, payload.status, payload.review_comment)
     except (AIMissionNotFoundError, ValueError) as error:
@@ -34,7 +47,8 @@ def review_mission(mission_id: str, payload: AIMissionReview) -> dict[str, objec
 
 
 @router.post("/missions/{mission_id}/revise")
-def revise_mission(mission_id: str, payload: AIMissionRevision) -> dict[str, object]:
+def revise_mission(mission_id: str, payload: AIMissionRevision, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.mission(context, mission_id, "MISSION_EXECUTE")
     try:
         return service.revise(mission_id, payload.change_summary)
     except (AIMissionNotFoundError, ValueError) as error:
@@ -42,7 +56,8 @@ def revise_mission(mission_id: str, payload: AIMissionRevision) -> dict[str, obj
 
 
 @router.post("/missions/{mission_id}/delivery")
-def mission_delivery(mission_id: str) -> dict[str, object]:
+def mission_delivery(mission_id: str, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.mission(context, mission_id, "MISSION_EXECUTE")
     try:
         return service.delivery(mission_id)
     except (AIMissionNotFoundError, ValueError) as error:
@@ -50,17 +65,20 @@ def mission_delivery(mission_id: str) -> dict[str, object]:
 
 
 @router.get("/missions")
-def list_missions() -> list[dict[str, object]]:
-    return service.list()
+def list_missions(context: IdentityContext = Depends(permissions.current)) -> list[dict[str, object]]:
+    permissions.require(context, "MISSION_VIEW")
+    return service.list(context.workspace_id)
 
 
 @router.get("/missions/dashboard")
-def mission_dashboard() -> dict[str, object]:
-    return service.dashboard()
+def mission_dashboard(context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.require(context, "MISSION_VIEW")
+    return service.dashboard(context.workspace_id)
 
 
 @router.get("/missions/{mission_id}")
-def mission_detail(mission_id: str) -> dict[str, object]:
+def mission_detail(mission_id: str, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.mission(context, mission_id, "MISSION_VIEW")
     try:
         return service.detail(mission_id)
     except AIMissionNotFoundError as error:
@@ -68,7 +86,8 @@ def mission_detail(mission_id: str) -> dict[str, object]:
 
 
 @router.get("/missions/{mission_id}/timeline")
-def mission_timeline(mission_id: str) -> list[dict[str, object]]:
+def mission_timeline(mission_id: str, context: IdentityContext = Depends(permissions.current)) -> list[dict[str, object]]:
+    permissions.mission(context, mission_id, "MISSION_VIEW")
     try:
         return service.timeline(mission_id)
     except AIMissionNotFoundError as error:
@@ -76,12 +95,14 @@ def mission_timeline(mission_id: str) -> list[dict[str, object]]:
 
 
 @router.get("/notifications")
-def list_notifications() -> list[dict[str, object]]:
+def list_notifications(context: IdentityContext = Depends(permissions.current)) -> list[dict[str, object]]:
+    permissions.require(context, "MISSION_VIEW")
     return service.notifications()
 
 
 @router.post("/notifications/{notification_id}/read")
-def read_notification(notification_id: str) -> dict[str, object]:
+def read_notification(notification_id: str, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.require(context, "MISSION_VIEW")
     try:
         return service.mark_notification_read(notification_id)
     except AIMissionNotFoundError as error:

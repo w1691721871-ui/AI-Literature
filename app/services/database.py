@@ -55,6 +55,11 @@ def initialize_database() -> None:
     from app.models.agent_collaboration import AgentMessage, CollaborationGraph, AgentConflict  # noqa: F401
     from app.models.governance import GovernanceWorkspace, WorkspaceUserRole, AuditLog, AgentPolicy  # noqa: F401
     from app.models.runtime_task import RuntimeTask  # noqa: F401
+    from app.models.runtime_execution import RuntimeExecution  # noqa: F401
+    from app.models.mission_contract import MissionContract, RuntimeExecutionState  # noqa: F401
+    from app.models.approval import ApprovalRequest  # noqa: F401
+    from app.models.audit import AuditEvent  # noqa: F401
+    from app.models.identity import User, UserSession  # noqa: F401
     from app.models.agent_observation import AgentObservation  # noqa: F401
     from app.models.prompt_template import PromptTemplate  # noqa: F401
     from app.models.benchmark import BenchmarkTask, BenchmarkRun, BenchmarkScore, AgentVersion  # noqa: F401
@@ -106,6 +111,8 @@ def initialize_database() -> None:
     from app.models.research_decision import ResearchDecision  # noqa: F401
     from app.models.research_outcome import ResearchOutcome  # noqa: F401
     from app.models.rag_query_record import RagQueryRecord  # noqa: F401
+    from app.models.mission_state import MissionState  # noqa: F401
+    from app.models.computer_environment import ComputerEnvironmentState  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _apply_lightweight_migrations()
@@ -169,6 +176,7 @@ def _apply_lightweight_migrations() -> None:
                 connection.execute(text(f"ALTER TABLE research_tasks ADD COLUMN {name} {definition}"))
     mission_columns = {column["name"] for column in inspect(engine).get_columns("ai_missions")}
     mission_additions = {
+        "workspace_id": "VARCHAR(36)",
         "solution_project_id": "VARCHAR(36)",
         "evidence_refs_json": "TEXT NOT NULL DEFAULT '[]'",
         "review_comment": "TEXT NOT NULL DEFAULT ''",
@@ -180,6 +188,26 @@ def _apply_lightweight_migrations() -> None:
         if name not in mission_columns:
             with engine.begin() as connection:
                 connection.execute(text(f"ALTER TABLE ai_missions ADD COLUMN {name} {definition}"))
+    workspace_columns = {column["name"] for column in inspect(engine).get_columns("governance_workspaces")}
+    if "owner_id" not in workspace_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE governance_workspaces ADD COLUMN owner_id VARCHAR(36)"))
+    connector_columns = {column["name"] for column in inspect(engine).get_columns("connectors")}
+    if "workspace_id" not in connector_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE connectors ADD COLUMN workspace_id VARCHAR(36)"))
+    asset_columns = {column["name"] for column in inspect(engine).get_columns("knowledge_assets")}
+    if "workspace_id" not in asset_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE knowledge_assets ADD COLUMN workspace_id VARCHAR(36)"))
+    decision_columns = {column["name"] for column in inspect(engine).get_columns("decision_records")}
+    if "workspace_id" not in decision_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE decision_records ADD COLUMN workspace_id VARCHAR(36)"))
+    artifact_columns = {column["name"] for column in inspect(engine).get_columns("artifacts")}
+    if "release_status" not in artifact_columns:
+        with engine.begin() as connection:
+            connection.execute(text("ALTER TABLE artifacts ADD COLUMN release_status VARCHAR(30) NOT NULL DEFAULT 'DRAFT'"))
     version_columns = {column["name"] for column in inspect(engine).get_columns("solution_versions")}
     if "created_by" not in version_columns:
         with engine.begin() as connection:

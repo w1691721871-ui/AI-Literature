@@ -64,16 +64,19 @@ class ConnectorManager:
             config["backend"] = "SQLITE"
         session = self.sessions()
         try:
-            row = Connector(name=name, connector_type=kind, status=state, permission=permission, config_summary=json.dumps(config, ensure_ascii=False))
+            row = Connector(name=name, connector_type=kind, status=state, permission=permission, workspace_id=payload.get("workspace_id") or None, config_summary=json.dumps(config, ensure_ascii=False))
             session.add(row); session.flush()
             if kind == "DATABASE":
                 session.add(DataSource(connector_id=row.id, name=f"{name} data source", source_type="SQLITE" if config.get("backend") == "SQLITE" else backend or "UNCONFIGURED", description="Registered read-only enterprise data source."))
             session.commit(); return self._connector(row, session, detail=True)
         finally: session.close()
 
-    def list(self) -> list[dict]:
+    def list(self, workspace_id=None) -> list[dict]:
         session = self.sessions()
-        try: return [self._connector(item, session) for item in session.scalars(select(Connector).order_by(Connector.created_at.desc())).all()]
+        try:
+            query=select(Connector).order_by(Connector.created_at.desc())
+            if workspace_id: query=query.where(Connector.workspace_id==workspace_id)
+            return [self._connector(item, session) for item in session.scalars(query).all()]
         finally: session.close()
 
     @staticmethod

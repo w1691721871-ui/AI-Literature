@@ -3,12 +3,12 @@
   --bg-primary: #090b12;
   --bg-secondary: #0d1019;
   --bg-elevated: #121725;
-  --surface: rgba(255, 255, 255, .045);
-  --surface-strong: rgba(255, 255, 255, .075);
+  --surface: rgba(255, 255, 255, .038);
+  --surface-strong: rgba(255, 255, 255, .068);
   --surface-highlight: rgba(255, 255, 255, .085);
   --surface-hover: rgba(126, 142, 255, .12);
-  --border: rgba(225, 231, 255, .10);
-  --border-strong: rgba(168, 181, 255, .22);
+  --border: rgba(220, 229, 255, .09);
+  --border-strong: rgba(176, 191, 255, .25);
   --text-primary: rgba(248, 250, 255, .94);
   --text-secondary: rgba(222, 228, 247, .62);
   --text-muted: rgba(207, 216, 242, .42);
@@ -26,9 +26,16 @@
   --space-3: 24px;
   --space-4: 32px;
   --page-width: 1360px;
-  --shadow: 0 20px 50px rgba(0, 0, 0, .28);
+  --shadow: 0 22px 58px rgba(0, 0, 0, .27);
   --glow: 0 0 0 1px rgba(141, 157, 255, .04), 0 18px 46px rgba(25, 35, 84, .22);
   --transition: 250ms cubic-bezier(.2, .8, .2, 1);
+  --product-surface: rgba(255,255,255,.04);
+  --product-border: rgba(255,255,255,.08);
+  --product-radius: 20px;
+  --dark-card: linear-gradient(155deg, rgba(255,255,255,.058), rgba(255,255,255,.025) 48%, rgba(7,10,18,.28));
+  --dark-card-muted: rgba(255,255,255,.032);
+  --dark-card-border: rgba(225,231,255,.09);
+  --product-gap: 20px;
 }
 
 * { box-sizing: border-box; }
@@ -101,6 +108,51 @@ a { color: var(--accent-cyan); }
 .top-navigation-status { display: none; }
 .top-navigation-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 9px var(--success); }
 .user-avatar { display: grid; width: 26px; height: 26px; place-items: center; padding: 0; border: 1px solid rgba(160,178,255,.3); border-radius: 9px; color: var(--accent-cyan); background: rgba(123,156,255,.12); font-size: 10px; font-weight: 800; }
+.identity-menu { position: relative; }
+.identity-profile-menu { position: absolute; z-index: 30; top: 34px; right: 0; display: grid; gap: 8px; width: 260px; padding: 14px; border: 1px solid var(--border); border-radius: 14px; background: rgba(8, 13, 24, .96); box-shadow: 0 18px 48px rgba(0,0,0,.36); }
+.identity-profile-menu b { font-size: 13px; color: var(--text-primary); }
+.identity-profile-menu small { color: var(--text-secondary); line-height: 1.45; }
+.identity-profile-menu label { display: grid; gap: 5px; color: var(--text-secondary); font-size: 11px; }
+.identity-profile-menu select { width: 100%; border: 1px solid var(--border); border-radius: 9px; padding: 7px; color: var(--text-primary); background: var(--bg-secondary); }
+.workspace-context-panel { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; margin: 0 0 18px; }
+.workspace-context-panel article { display: grid; gap: 5px; min-width: 0; padding: 14px 16px; border: 1px solid var(--border); border-radius: 14px; background: linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.02)); }
+.workspace-context-panel span { color: var(--text-muted); font-size: 10px; font-weight: 750; letter-spacing: .09em; text-transform: uppercase; }
+.workspace-context-panel b { overflow: hidden; color: var(--text-primary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
+.workspace-context-panel small { overflow: hidden; color: var(--text-secondary); font-size: 11px; line-height: 1.45; text-overflow: ellipsis; white-space: nowrap; }
+.admin-console-sections { display: flex; flex-wrap: wrap; gap: 8px; margin: 0 0 18px; }
+.admin-console-sections button { border: 1px solid var(--border); border-radius: 999px; padding: 7px 11px; color: var(--text-secondary); background: rgba(255,255,255,.025); font-size: 11px; font-weight: 700; transition: color var(--transition), border-color var(--transition), background var(--transition); }
+.admin-console-sections button:hover, .admin-console-sections button.active { border-color: rgba(133,155,255,.3); color: var(--text-primary); background: rgba(120,145,255,.12); }
+.research-insight-panel { display: grid; gap: 16px; margin: 24px auto 0; max-width: var(--page-width); padding: 20px; border: 1px solid var(--border); border-radius: 18px; background: linear-gradient(145deg, rgba(113, 142, 255, .09), rgba(255,255,255,.025)); box-shadow: 0 16px 48px rgba(0,0,0,.18); }
+.research-insight-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.research-insight-panel h3 { margin: 2px 0 4px; font-size: 18px; }
+.research-insight-panel header p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.45; }
+.research-insight-panel > header > span { flex: 0 0 auto; border: 1px solid rgba(143, 169, 255, .24); border-radius: 999px; padding: 6px 9px; color: var(--accent-cyan); background: rgba(100, 147, 255, .1); font-size: 10px; font-weight: 750; letter-spacing: .05em; }
+.research-insight-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.research-insight-grid article { min-width: 0; padding: 14px; border: 1px solid rgba(255,255,255,.07); border-radius: 13px; background: rgba(5, 8, 17, .34); }
+.research-insight-grid b { display: block; margin-bottom: 8px; color: var(--text-primary); font-size: 12px; }
+.research-insight-grid p, .research-insight-grid li, .research-insight-grid small { color: var(--text-secondary); font-size: 11px; line-height: 1.52; }
+.research-insight-grid p { margin: 0 0 7px; }.research-insight-grid ul { margin: 0; padding-left: 17px; }.research-insight-grid li + li { margin-top: 5px; }
+@media (max-width: 960px) { .research-insight-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 760px) { .workspace-context-panel { grid-template-columns: 1fr; } }
+@media (max-width: 760px) { .research-insight-panel > header { display: grid; }.research-insight-grid { grid-template-columns: 1fr; } }
+.login-shell { position: relative; display: grid; min-height: 100vh; place-items: center; overflow: hidden; padding: 24px; color: var(--text-primary); }
+.login-ambient { position: fixed; inset: 0; pointer-events: none; background: radial-gradient(500px 400px at 50% 34%, rgba(119, 145, 255, .18), transparent 70%), radial-gradient(520px 420px at 70% 80%, rgba(175, 112, 255, .12), transparent 70%); }
+.login-card { position: relative; z-index: 1; display: grid; gap: 14px; width: min(420px, 100%); padding: 32px; border: 1px solid var(--border-strong); border-radius: 24px; background: linear-gradient(150deg, rgba(30, 37, 61, .78), rgba(9, 12, 22, .92)); box-shadow: 0 28px 80px rgba(0, 0, 0, .42), inset 0 1px rgba(255,255,255,.08); backdrop-filter: blur(20px); }
+.login-brand { display: flex; align-items: center; gap: 10px; margin-bottom: 4px; }
+.login-brand .brand-orb { display: grid; width: 30px; height: 30px; place-items: center; border: 1px solid rgba(154,176,255,.34); border-radius: 10px; color: var(--accent-cyan); background: linear-gradient(145deg, rgba(123,156,255,.26), rgba(174,124,255,.12)); font-size: 12px; font-weight: 800; }
+.login-brand b, .login-brand small { display: block; }
+.login-brand b { font-size: 13px; }
+.login-brand small, .login-boundary { color: var(--text-muted); font-size: 11px; }
+.login-card h1 { margin: 0; font-size: clamp(28px, 4vw, 38px); line-height: 1.05; letter-spacing: -.035em; }
+.login-card > p:not(.section-kicker):not(.login-error) { margin: -4px 0 4px; color: var(--text-secondary); }
+.login-card label { display: grid; gap: 6px; color: var(--text-secondary); font-size: 12px; font-weight: 650; }
+.login-card .primary-card-action { width: 100%; margin-top: 4px; }
+.auth-entry-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.auth-entry-actions .outline-button { min-height: 36px; padding: 7px 12px; }
+.demo-workspace-banner { position: fixed; z-index: 20; top: 76px; left: 50%; display: flex; align-items: center; gap: 10px; width: min(720px, calc(100% - 32px)); padding: 9px 12px; border: 1px solid rgba(123, 228, 255, .22); border-radius: 14px; color: var(--text-secondary); background: rgba(10, 20, 35, .82); box-shadow: 0 12px 36px rgba(0,0,0,.22); backdrop-filter: blur(16px); transform: translateX(-50%); }
+.demo-workspace-banner > span { display: grid; min-width: 38px; min-height: 22px; place-items: center; border: 1px solid rgba(123, 228, 255, .36); border-radius: 999px; color: var(--accent-cyan); background: rgba(123, 228, 255, .08); font-size: 9px; font-weight: 800; letter-spacing: .08em; }
+.demo-workspace-banner b { display: block; color: var(--text-primary); font-size: 11px; }.demo-workspace-banner small { display: block; margin-top: 2px; color: var(--text-muted); font-size: 10px; }
+.login-error { margin: 0; padding: 9px 10px; border: 1px solid rgba(255,155,155,.24); border-radius: 10px; color: var(--danger); background: rgba(255,155,155,.07); font-size: 12px; }
 .connection-status { position: fixed; z-index: 19; top: 88px; right: max(24px, calc((100vw - var(--page-width)) / 2)); display: inline-flex; align-items: center; gap: 7px; min-height: 28px; padding: 6px 9px; border: 1px solid rgba(121,215,181,.18); border-radius: 999px; color: var(--text-muted); background: rgba(13,16,28,.78); box-shadow: 0 10px 26px rgba(0,0,0,.16); backdrop-filter: blur(14px); font-size: 10px; transition: all var(--transition); }
 .connection-status i { width: 6px; height: 6px; border-radius: 50%; background: var(--success); box-shadow: 0 0 9px var(--success); }
 .connection-status.connecting { border-color: rgba(123,156,255,.28); color: var(--accent-blue); }
@@ -276,6 +328,23 @@ a { color: var(--accent-cyan); }
 .operator-artifact-surface article strong { color: var(--text-secondary); font-size: 11px; }
 .operator-artifact-surface article p, .operator-artifact-surface article small { display: block; margin: 2px 0 0; color: var(--text-muted); font-size: 10px; line-height: 1.5; }
 .operator-approval-bar { grid-column: 1 / -1; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 12px 16px; border: 1px solid rgba(255,201,120,.18); border-radius: var(--radius-md); color: var(--text-secondary); background: rgba(255,201,120,.045); }
+.approval-queue { margin-top: 14px; }
+.approval-queue > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 12px; }
+.approval-queue > header h3 { margin: 2px 0 4px; }
+.approval-queue > header p { margin: 0; max-width: 650px; color: var(--text-secondary); }
+.approval-queue > article { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 0; border-top: 1px solid var(--border-soft); }
+.approval-queue article b { display: block; font-size: 13px; color: var(--text-primary); }
+.approval-queue article small, .approval-queue article p { display: block; margin: 4px 0 0; color: var(--text-secondary); }
+.approval-queue article p { font-size: 13px; }
+.approval-queue footer { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+
+/* P60 — compact, human-readable controlled Computer Skill stages. */
+.computer-control-timeline { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 7px; margin: 13px 0; padding: 0; list-style: none; }
+.computer-control-timeline li { display: grid; grid-template-columns: 18px minmax(0, 1fr); gap: 5px; align-items: center; min-width: 0; padding: 8px; border: 1px solid rgba(255,255,255,.06); border-radius: 10px; background: rgba(255,255,255,.018); }
+.computer-control-timeline span { display: grid; width: 17px; height: 17px; place-items: center; border: 1px solid rgba(255,255,255,.16); border-radius: 50%; color: var(--text-muted); font-size: 8px; }
+.computer-control-timeline b { overflow: hidden; color: var(--text-secondary); font-size: 10px; text-overflow: ellipsis; white-space: nowrap; }
+.computer-control-timeline small { grid-column: 2; overflow: hidden; color: var(--text-muted); font-size: 9px; text-overflow: ellipsis; white-space: nowrap; }
+.computer-control-timeline li.complete { border-color: rgba(92,214,191,.22); }.computer-control-timeline li.complete span { border-color: rgba(92,214,191,.72); color: rgba(92,214,191,.94); background: rgba(92,214,191,.12); }.computer-control-timeline li.active { border-color: rgba(123,156,255,.42); background: rgba(123,156,255,.09); }.computer-control-timeline li.active span { border-color: var(--accent-cyan); color: var(--accent-cyan); box-shadow: 0 0 10px rgba(123,228,255,.45); animation: pulse 1.8s ease-in-out infinite; }
 
 /* Delivery, knowledge, AI team, demo */
 .product-experience-center { padding-top: 6px; }
@@ -338,9 +407,107 @@ a { color: var(--accent-cyan); }
 .workspace-collaboration-board article p, .workspace-review-board p { margin: 4px 0 0; color: var(--text-muted); font-size: 10px; }
 .error-alert { display: grid; grid-template-columns: 22px minmax(0,1fr); gap: 9px; align-items: start; padding: 13px; border: 1px solid rgba(255,155,155,.26); border-radius: var(--radius-md); color: var(--text-secondary); background: linear-gradient(145deg, rgba(255,155,155,.10), rgba(255,155,155,.035)); box-shadow: inset 0 1px rgba(255,255,255,.04); font-size: 12px; line-height: 1.55; }
 .error-alert > span { display: grid; width: 22px; height: 22px; place-items: center; border: 1px solid rgba(255,155,155,.35); border-radius: 8px; color: var(--danger); background: rgba(255,155,155,.10); font-weight: 800; }
+
+/* P64 — product-facing workspace polish. These rules reuse the P48 tokens
+   and deliberately avoid introducing new product state or backend data. */
+.home-workspace .workspace-home-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(34px, 5vw, 68px) clamp(20px, 4vw, 54px);
+  border: 1px solid rgba(146, 167, 255, .15);
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(109, 136, 255, .14), rgba(15, 19, 34, .72) 44%, rgba(172, 113, 255, .10));
+  box-shadow: inset 0 1px rgba(255,255,255,.08), 0 28px 80px rgba(4, 7, 20, .34);
+}
+.home-workspace .workspace-home-hero::after {
+  position: absolute; inset: auto -9% -64% auto; width: min(440px, 52vw); aspect-ratio: 1;
+  border-radius: 50%; background: radial-gradient(circle, rgba(113, 225, 255, .16), rgba(132, 112, 255, .08) 38%, transparent 68%);
+  content: ""; filter: blur(2px); pointer-events: none;
+}
+.home-workspace .workspace-home-hero > * { position: relative; z-index: 1; }
+.home-workspace .home-research-input { max-width: 780px; margin-top: 28px; padding: 7px 8px 7px 18px; border: 1px solid rgba(172, 190, 255, .2); border-radius: 20px; background: rgba(5, 8, 19, .55); box-shadow: inset 0 1px rgba(255,255,255,.06); }
+.home-workspace .home-research-input textarea { min-height: 58px; padding: 11px 2px; border: 0; background: transparent; box-shadow: none; }
+.home-workspace .home-quick-grid { max-width: none; margin-top: 16px; padding: 5px; border: 1px solid var(--border); border-radius: 18px; background: rgba(5, 8, 18, .42); }
+.home-workspace .home-quick-grid button { min-height: 76px; padding: 16px; border-color: transparent; border-radius: 13px; background: transparent; }
+.home-workspace .home-quick-grid button:hover { border-color: rgba(142, 164, 255, .2); background: rgba(123,156,255,.08); }
+.home-focus-grid { margin-top: 18px; }
+.home-focus-grid > article { min-height: 158px; padding: 22px; }
+
+.workspace-context-panel { margin-top: 6px; }
+.workspace-context-panel article { min-height: 88px; padding: 16px; border-color: rgba(227, 233, 255, .09); }
+.workspace-context-panel article:first-child { background: linear-gradient(145deg, rgba(110, 139, 255, .12), rgba(255,255,255,.025)); }
+
+.mission-center .dashboard-heading { align-items: flex-start; padding: 6px 2px 8px; }
+.mission-stream-surface > header { padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.mission-requirements { margin: 14px 0; padding: 14px; border: 1px solid rgba(123, 156, 255, .16); border-radius: 14px; background: rgba(98, 122, 255, .055); }
+.mission-timeline { position: relative; gap: 0; margin: 16px 0; padding: 0; }
+.mission-timeline::before { position: absolute; top: 22px; bottom: 22px; left: 17px; width: 1px; background: linear-gradient(var(--accent-cyan), rgba(123,156,255,.08)); content: ""; }
+.mission-timeline li { position: relative; padding: 11px 0 11px 48px; border: 0; background: transparent; }
+.mission-timeline li > b { position: absolute; z-index: 1; top: 12px; left: 0; display: grid; width: 34px; height: 34px; place-items: center; border: 1px solid rgba(123,156,255,.36); border-radius: 50%; color: var(--accent-cyan); background: var(--bg-secondary); font-size: 10px; }
+.mission-evidence-list > div { margin-top: 8px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.07); border-radius: 12px; background: rgba(255,255,255,.025); }
+.mission-intelligence-surface article { padding: 12px 0; border-bottom: 1px solid rgba(255,255,255,.065); }
+.mission-intelligence-surface article:last-of-type { border-bottom: 0; }
+
+.computer-studio .operator-studio-heading { margin-bottom: 18px; }
+.computer-studio .computer-studio-grid { align-items: stretch; }
+.computer-studio .operator-task-surface, .computer-studio .operator-timeline-surface, .computer-studio .operator-artifact-surface { min-height: 100%; }
+.computer-environment-timeline { margin-top: 16px; }
+.computer-environment-timeline > header { display: flex; align-items: center; justify-content: space-between; gap: 14px; }
+.computer-control-timeline li { min-height: 72px; background: linear-gradient(150deg, rgba(255,255,255,.04), rgba(255,255,255,.016)); }
+.computer-control-timeline li:first-child { border-color: rgba(123,228,255,.2); }
+.computer-control-timeline li:last-child { border-style: dashed; }
+
+.approval-queue { padding: 18px 20px; border: 1px solid var(--border); border-radius: var(--radius-lg); background: linear-gradient(150deg, rgba(255,201,120,.055), rgba(255,255,255,.02)); box-shadow: inset 0 1px rgba(255,255,255,.04); }
+.approval-queue > article { padding: 14px 0; }
+.approval-queue > article > div { min-width: 0; }
+.approval-queue article b { color: var(--warning); font-size: 11px; letter-spacing: .06em; text-transform: uppercase; }
+.approval-queue article p { max-width: 720px; }
+
+@media (max-width: 1100px) {
+  .home-workspace .workspace-home-hero { padding: 38px 30px; }
+  .home-workspace .home-quick-grid { grid-template-columns: 1fr; }
+  .home-workspace .home-quick-grid button:nth-child(4) { display: none; }
+  .computer-control-timeline { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .app-shell { width: min(100% - 24px, var(--page-width)); padding-top: 88px; }
+  .top-navigation { top: 10px; width: calc(100% - 24px); min-height: 54px; padding: 7px 9px; border-radius: 16px; }
+  .brand-button { min-width: 34px; max-width: 34px; }
+  .brand-button > span:last-child, .nav-utilities .demo-mode-button, .nav-utilities .system-link { display: none !important; }
+  .top-navigation-links { gap: 0; }
+  .top-navigation-links button { padding: 7px 8px; font-size: 11px; }
+  .home-workspace .workspace-home-hero { padding: 30px 18px; border-radius: 22px; }
+  .home-workspace .home-research-input { display: grid; padding: 10px; border-radius: 16px; }
+  .home-workspace .home-research-input textarea { min-height: 72px; }
+  .home-workspace .home-research-input button { width: 100%; }
+  .connection-status { top: 72px; right: 14px; }
+  .computer-control-timeline { grid-template-columns: 1fr; }
+  .mission-timeline li { padding-left: 45px; }
+}
 .loading-state, .loading-skeleton, .workflow-loading, .loading-workflow, .rag-loading { min-height: 120px; border-radius: var(--radius-md); color: transparent !important; background: linear-gradient(100deg, rgba(255,255,255,.025) 25%, rgba(255,255,255,.08) 45%, rgba(255,255,255,.025) 65%); background-size: 300% 100%; animation: shimmer 1.4s infinite; }
 .loading-state *, .loading-skeleton *, .workflow-loading *, .loading-workflow *, .rag-loading * { visibility: hidden; }
 .spinner, .small-spinner { display: none !important; }
+
+/* P59 — user-readable, finite AI Worker stages. */
+.ai-progress-panel { margin-top: 14px; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-md); background: linear-gradient(145deg, rgba(123,156,255,.075), rgba(255,255,255,.02)); box-shadow: inset 0 1px rgba(255,255,255,.06); }
+.ai-progress-panel header h3 { margin: 3px 0 5px; color: var(--text-primary); font-size: 16px; }
+.ai-progress-panel header p { margin: 0; color: var(--text-muted); font-size: 11px; }
+.ai-progress-panel ol { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 8px; margin: 18px 0 0; padding: 0; list-style: none; }
+.ai-progress-panel li { position: relative; display: grid; grid-template-columns: 10px minmax(0, 1fr); gap: 7px; align-items: center; padding: 10px; border: 1px solid rgba(255,255,255,.06); border-radius: 12px; color: var(--text-muted); background: rgba(255,255,255,.018); }
+.ai-progress-panel li span { width: 7px; height: 7px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; background: rgba(255,255,255,.08); }
+.ai-progress-panel li b { color: var(--text-secondary); font-size: 10px; line-height: 1.35; }
+.ai-progress-panel li small { grid-column: 2; color: var(--text-muted); font-size: 9px; }
+.ai-progress-panel li.complete { border-color: rgba(92,214,191,.22); }
+.ai-progress-panel li.complete span { border-color: rgba(92,214,191,.78); background: rgba(92,214,191,.7); box-shadow: 0 0 12px rgba(92,214,191,.35); }
+.ai-progress-panel li.active { border-color: rgba(123,156,255,.4); background: rgba(123,156,255,.09); }
+.ai-progress-panel li.active span { border-color: var(--accent-cyan); background: var(--accent-cyan); box-shadow: 0 0 13px rgba(123,228,255,.68); animation: pulse 1.8s ease-in-out infinite; }
+@media (max-width: 760px) { .ai-progress-panel ol { grid-template-columns: 1fr; } }
+
+/* P61 — product-safe Mission Intelligence summary, never an internal plan trace. */
+.mission-intelligence-panel { display: grid; gap: 16px; margin-top: 14px; padding: 20px; border: 1px solid var(--border); border-radius: var(--radius-md); background: linear-gradient(145deg, rgba(141,111,255,.085), rgba(255,255,255,.02)); box-shadow: inset 0 1px rgba(255,255,255,.055); }
+.mission-intelligence-panel > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 12px; }.mission-intelligence-panel h3 { margin: 3px 0 5px; color: var(--text-primary); font-size: 16px; }.mission-intelligence-panel header p { margin: 0; color: var(--text-muted); font-size: 11px; line-height: 1.5; }.mission-intelligence-panel > header > span { border: 1px solid rgba(155,127,255,.32); border-radius: 999px; padding: 5px 8px; color: #c6b8ff; background: rgba(155,127,255,.1); font-size: 9px; font-weight: 750; letter-spacing: .045em; }
+.mission-intelligence-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }.mission-intelligence-grid article { min-width: 0; padding: 12px; border: 1px solid rgba(255,255,255,.06); border-radius: 12px; background: rgba(255,255,255,.018); }.mission-intelligence-grid b { display: block; margin-bottom: 7px; color: var(--text-muted); font-size: 9px; letter-spacing: .055em; text-transform: uppercase; }.mission-intelligence-grid strong { display: block; overflow: hidden; color: var(--text-primary); font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }.mission-intelligence-grid small, .mission-intelligence-grid li { color: var(--text-secondary); font-size: 10px; line-height: 1.5; }.mission-intelligence-grid ul { margin: 0; padding-left: 14px; }
+@media (max-width: 760px) { .mission-intelligence-panel > header { display: grid; }.mission-intelligence-grid { grid-template-columns: 1fr; } }
 
 /* Keep legacy/advanced views dark without elevating them to primary navigation. */
 .researchos-dashboard, .workspace-section, .panel, .card, .table-container, .report-panel, .modal-content, pre, code, table { color: var(--text-secondary); background-color: transparent; }
@@ -381,8 +548,929 @@ th { color: var(--text-muted); font-size: 10px; font-weight: 700; text-transform
   .dashboard-heading-actions, .workspace-heading-actions, .library-header-actions { margin-top: 14px; justify-content: flex-start; }
   .mission-center-layout, .computer-studio-grid { display: block; }
   .mission-center-layout > *, .computer-studio-grid > * { margin-bottom: 12px; }
+  .approval-queue > header, .approval-queue > article { display: block; }
+  .approval-queue footer { justify-content: flex-start; margin-top: 12px; }
+  .computer-control-timeline { grid-template-columns: 1fr; }
   .operator-task-surface { position: static; }
   .operator-artifact-surface, .workspace-collaboration-board { grid-template-columns: 1fr; }
   .operator-timeline-surface::before { height: 112px; }
   .computer-plan-surface > header { margin-top: -127px; }
+}
+
+/* P65 — final product polish. Presentation-only overrides; no product state is created here. */
+button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-visible {
+  outline: 2px solid rgba(123, 228, 255, .75);
+  outline-offset: 2px;
+}
+.primary-card-action, .analyze-button, .computer-start-button {
+  min-height: 42px;
+  border-radius: 12px;
+  background: linear-gradient(120deg, #7195ff, #986fe8) !important;
+  box-shadow: 0 10px 24px rgba(102, 127, 255, .20);
+  transition: transform var(--transition), box-shadow var(--transition), filter var(--transition);
+}
+.primary-card-action:hover:not(:disabled), .analyze-button:hover:not(:disabled), .computer-start-button:hover:not(:disabled) {
+  box-shadow: 0 14px 30px rgba(102, 127, 255, .32);
+  filter: brightness(1.07);
+  transform: translateY(-1px);
+}
+.outline-button, .secondary-card-action {
+  border-color: rgba(189, 203, 255, .16);
+  background: rgba(255,255,255,.025);
+  transition: transform var(--transition), border-color var(--transition), background var(--transition);
+}
+.outline-button:hover:not(:disabled), .secondary-card-action:hover:not(:disabled) {
+  border-color: rgba(151, 176, 255, .38);
+  background: rgba(123, 156, 255, .09);
+  transform: translateY(-1px);
+}
+
+/* Identity is a product gateway, not a bare form. */
+.login-shell { padding: 32px 18px; }
+.login-card { gap: 15px; width: min(440px, 100%); padding: clamp(26px, 5vw, 38px); border-radius: 28px; }
+.login-card::before { position: absolute; inset: 0; border-radius: inherit; background: linear-gradient(145deg, rgba(149,175,255,.10), transparent 28%); content: ""; pointer-events: none; }
+.login-card > * { position: relative; z-index: 1; }
+.login-card label input { min-height: 44px; background: rgba(3, 6, 15, .30); }
+.register-card { width: min(470px, 100%); }
+.auth-entry-actions { padding-top: 4px; border-top: 1px solid rgba(255,255,255,.06); }
+.demo-workspace-banner { top: 82px; border-color: rgba(123, 228, 255, .18); background: rgba(10, 18, 32, .88); }
+
+/* Product-led Home: one mission surface, then a compact workspace overview. */
+.home-workspace { max-width: 1120px; padding-top: 34px; }
+.home-workspace .workspace-home-hero { border-radius: 30px; }
+.home-workspace .workspace-home-hero h1 { max-width: 680px; font-size: clamp(38px, 5vw, 62px); line-height: .98; letter-spacing: -.055em; }
+.home-workspace .workspace-home-hero > p:not(.section-kicker):not(.quiet-note):not(.error-alert) { max-width: 540px; color: var(--text-secondary); font-size: 15px; }
+.home-workspace .home-research-input { max-width: 860px; border-color: rgba(160, 181, 255, .22); }
+.home-workspace .home-quick-grid { gap: 4px; }
+.home-workspace .home-quick-grid button { text-align: left; }
+.home-workspace .home-quick-grid button b { display: block; margin-bottom: 5px; font-size: 13px; letter-spacing: -.015em; }
+.home-workspace .home-quick-grid button small { color: var(--text-muted); font-size: 11px; }
+.home-focus-grid { border-radius: 18px; }
+.home-focus-grid > article { min-height: 152px; padding: 22px 20px; }
+.home-focus-card .focus-item { padding: 9px 0; border-top: 1px solid rgba(255,255,255,.055); }
+
+/* Workspace and Mission retain real data while reducing dashboard density. */
+.workspace-context-panel { gap: 10px; margin-bottom: 14px; }
+.workspace-context-panel article { min-height: 88px; padding: 16px; border-radius: 16px; }
+.mission-center-layout { gap: 12px; }
+.mission-create-surface, .mission-stream-surface, .mission-intelligence-surface { border-radius: 18px; }
+.mission-create-surface { background: linear-gradient(160deg, rgba(134, 154, 255, .09), rgba(255,255,255,.022) 44%); }
+.mission-stream-surface { background: linear-gradient(160deg, rgba(255,255,255,.058), rgba(8,12,24,.24)); }
+.mission-stream-surface > header { padding-bottom: 18px; }
+.mission-timeline li { transition: background var(--transition), border-color var(--transition); }
+.mission-timeline li:hover { background: rgba(123,156,255,.045); }
+.mission-evidence-list > div { background: linear-gradient(145deg, rgba(123,228,255,.045), rgba(255,255,255,.018)); }
+.mission-intelligence-surface { background: linear-gradient(160deg, rgba(155,124,255,.075), rgba(255,255,255,.02)); }
+
+/* Controlled Computer Workspace: subtle browser-canvas framing, no autonomy claims. */
+.computer-studio .operator-studio-heading { padding: 4px 2px 4px; }
+.computer-studio .operator-task-surface { background: linear-gradient(160deg, rgba(123,156,255,.09), rgba(255,255,255,.02)); }
+.computer-studio .operator-timeline-surface { border-color: rgba(123, 228, 255, .16); background: linear-gradient(160deg, rgba(16,30,48,.72), rgba(255,255,255,.025)); }
+.computer-studio .operator-timeline-surface::before { opacity: .84; }
+.computer-studio .operator-artifact-surface { background: linear-gradient(160deg, rgba(155,124,255,.075), rgba(255,255,255,.02)); }
+.computer-control-timeline li { border-radius: 14px; }
+.computer-control-timeline li:hover { border-color: rgba(123, 228, 255, .25); transform: translateY(-1px); }
+
+/* Review is a first-class human decision, not an administrative row. */
+.approval-queue { margin-top: 18px; padding: 20px 22px; border-radius: 18px; }
+.approval-queue > header { padding-bottom: 10px; border-bottom: 1px solid rgba(255,255,255,.065); }
+.approval-queue > article { align-items: flex-start; gap: 18px; padding: 16px 0; }
+.approval-queue article b { color: var(--text-primary); font-size: 13px; letter-spacing: -.01em; text-transform: none; }
+.approval-queue article p { color: var(--text-secondary); font-size: 12px; }
+.approval-queue footer button { min-height: 34px; border-radius: 10px; }
+
+/* One clear state language for existing loading, empty and recoverable error states. */
+.loading-state, .loading-skeleton, .workflow-loading, .loading-workflow, .rag-loading {
+  position: relative;
+  overflow: hidden;
+  min-height: 132px;
+  border: 1px solid rgba(255,255,255,.07);
+  background: linear-gradient(100deg, rgba(255,255,255,.022) 20%, rgba(139,164,255,.095) 47%, rgba(255,255,255,.022) 74%);
+  background-size: 260% 100%;
+  animation-duration: 1.8s;
+}
+.operator-empty-state, .product-empty-state, .library-empty-state, .workspace-intelligence-empty, .empty-state, .home-empty-action, .home-offline-state {
+  border: 1px dashed rgba(190, 204, 255, .14);
+  border-radius: 15px;
+  background: linear-gradient(145deg, rgba(123,156,255,.045), rgba(255,255,255,.016));
+}
+.error-alert, .login-error { border-color: rgba(255, 177, 154, .24); background: linear-gradient(145deg, rgba(255,155,155,.10), rgba(255,155,155,.035)); }
+
+@media (max-width: 960px) {
+  .app-shell { width: min(var(--page-width), calc(100% - 32px)); }
+  .mission-center-layout, .computer-studio-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+  .mission-intelligence-surface, .operator-artifact-surface { grid-column: 1 / -1; }
+  .workspace-context-panel { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .app-shell { width: min(100% - 20px, var(--page-width)); padding-top: 82px; }
+  .login-card { border-radius: 22px; }
+  .auth-entry-actions { align-items: stretch; flex-direction: column; }
+  .auth-entry-actions button { width: 100%; }
+  .demo-workspace-banner { top: 66px; align-items: flex-start; width: calc(100% - 20px); }
+  .demo-workspace-banner small { line-height: 1.35; }
+  .home-workspace { padding-top: 22px; }
+  .home-workspace .workspace-home-hero { padding: 30px 20px; border-radius: 22px; }
+  .home-workspace .workspace-home-hero h1 { font-size: clamp(36px, 12vw, 48px); }
+  .workspace-context-panel, .mission-center-layout, .computer-studio-grid { display: grid; grid-template-columns: 1fr; }
+  .operator-task-surface { position: static; }
+  .approval-queue { padding: 16px; }
+  .approval-queue footer { display: grid; grid-template-columns: 1fr; }
+  .approval-queue footer button { width: 100%; }
+}
+
+/* P66 — Evidence-driven Enterprise AI Workspace. Presentation only. */
+.workspace-context-selector {
+  display: grid;
+  min-width: 185px;
+  gap: 1px;
+  padding: 5px 10px;
+  border: 1px solid rgba(182, 201, 255, .13);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, .028);
+  color: var(--text-muted);
+  line-height: 1.1;
+}
+.navigation-contract-marker { display: none; }
+.workspace-context-selector > span { font-size: 8px; font-weight: 750; letter-spacing: .08em; text-transform: uppercase; }
+.workspace-context-selector select { width: 100%; min-width: 0; height: 19px; padding: 0 14px 0 0; border: 0; background: transparent; color: var(--text-primary); font-size: 11px; font-weight: 700; }
+.workspace-context-selector small { overflow: hidden; color: var(--text-muted); font-size: 8px; text-overflow: ellipsis; white-space: nowrap; }
+
+.home-missions-panel { display: block; margin-top: 18px; }
+.home-recent-workspaces { display: none; }
+.home-missions-panel .home-focus-card { min-height: 0; }
+.home-missions-panel .focus-item { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: center; gap: 12px; }
+.home-missions-panel .focus-item small { justify-self: end; color: var(--accent-cyan); }
+.capability-mark { display: inline-flex; align-items: center; justify-content: center; width: 24px; height: 24px; margin-bottom: 9px; border: 1px solid rgba(132, 170, 255, .24); border-radius: 8px; background: rgba(103, 128, 255, .09); color: #aac5ff; font-size: 9px; font-weight: 750; }
+
+.mission-stage-strip { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; margin: 18px 0 14px; padding: 0; list-style: none; }
+.mission-stage-strip li { position: relative; display: grid; grid-template-columns: 28px 1fr; gap: 0 9px; align-items: center; min-height: 58px; padding: 10px; border: 1px solid var(--border); border-radius: 14px; background: rgba(255,255,255,.018); color: var(--text-muted); }
+.mission-stage-strip li::after { position: absolute; top: 50%; right: -8px; z-index: 1; width: 8px; height: 1px; background: rgba(177, 195, 255, .18); content: ""; }
+.mission-stage-strip li:last-child::after { display: none; }
+.mission-stage-strip li span { grid-row: span 2; display: grid; place-items: center; width: 28px; height: 28px; border: 1px solid rgba(255,255,255,.11); border-radius: 50%; font-size: 9px; font-weight: 750; }
+.mission-stage-strip li b { color: var(--text-secondary); font-size: 11px; }
+.mission-stage-strip li small { color: var(--text-muted); font-size: 9px; }
+.mission-stage-strip li.active { border-color: rgba(118, 158, 255, .34); background: linear-gradient(135deg, rgba(100,139,255,.13), rgba(255,255,255,.025)); }
+.mission-stage-strip li.active span { border-color: rgba(125, 228, 255, .55); background: rgba(112, 196, 255, .16); color: #d1f6ff; box-shadow: 0 0 18px rgba(98, 192, 255, .12); }
+.mission-stage-strip li.active b { color: var(--text-primary); }
+
+/* Keep advanced implementation traces in the codebase but out of the user workflow. */
+.mission-collaboration-workspace ~ .collaboration-panel,
+.mission-collaboration-workspace ~ .mission-tool-trace:not(.approval-queue),
+.mission-graph,
+.mission-evaluation-card,
+.computer-mission-center { display: none; }
+
+.mission-stream-surface .mission-requirements > span,
+.mission-evidence-list > span,
+.mission-review-panel > span,
+.mission-delivery-package > span { color: #b8cbff; letter-spacing: .08em; }
+.mission-review-panel { background: linear-gradient(145deg, rgba(112, 201, 182, .07), rgba(255,255,255,.018)); }
+.mission-delivery-package { border-color: rgba(140, 124, 255, .26); background: linear-gradient(145deg, rgba(137, 111, 255, .10), rgba(255,255,255,.02)); }
+
+.computer-studio .operator-task-surface > h3 { max-width: 240px; }
+.computer-studio .operator-artifact-surface > p:first-child { color: #a9c7ff; }
+.computer-studio .operator-evidence pre { max-height: 180px; overflow: auto; border-radius: 10px; background: rgba(1, 4, 11, .38); }
+.computer-studio .operator-tools { display: none; }
+
+.library-workspace .library-header { align-items: end; }
+.library-workspace .library-header h2 { font-size: clamp(28px, 3vw, 38px); letter-spacing: -.035em; }
+.library-workspace .library-toolbar { border-radius: 14px; background: rgba(255,255,255,.022); }
+.library-workspace .knowledge-asset-card { min-height: 240px; border-radius: 16px; background: linear-gradient(145deg, rgba(131, 156, 255, .065), rgba(255,255,255,.022)); }
+
+.product-experience-center .dashboard-heading h2 { font-size: clamp(30px, 3.2vw, 42px); letter-spacing: -.04em; }
+.product-artifact-grid article { min-height: 200px; border-radius: 18px; background: linear-gradient(145deg, rgba(142, 119, 255, .075), rgba(255,255,255,.022)); }
+.product-demo-grid::before { grid-column: 1 / -1; padding: 11px 14px; border: 1px solid rgba(123,228,255,.15); border-radius: 12px; background: rgba(123,228,255,.045); color: var(--text-secondary); content: "Guided Demo · Research Demo, Computer Demo and Delivery Demo open existing, bounded product workflows without creating new data."; font-size: 11px; line-height: 1.45; }
+
+@media (max-width: 1120px) {
+  .workspace-context-selector { min-width: 150px; }
+}
+@media (max-width: 700px) {
+  .workspace-context-selector { display: none; }
+  .mission-stage-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mission-stage-strip li::after { display: none; }
+  .home-missions-panel .focus-item { grid-template-columns: 1fr; gap: 3px; }
+  .home-missions-panel .focus-item small { justify-self: start; }
+}
+
+/* P67 — product-focused intelligence, operator, knowledge and admin surfaces. */
+.rag-workspace, .computer-studio, .library-workspace, .connector-center, .product-experience-center, .mission-center { max-width: 1200px; }
+.rag-workspace > .library-header { margin-bottom: 18px; padding: 4px 0; }
+.rag-workspace > .library-header h2 { font-size: 0; }
+.rag-workspace > .library-header h2::after { color: var(--text-primary); content: "Research Intelligence"; font-size: clamp(30px, 4vw, 44px); letter-spacing: -.045em; }
+.rag-workspace > .library-header p { max-width: 500px; color: transparent; font-size: 0; }
+.rag-workspace > .library-header p::after { color: var(--text-secondary); content: "Evidence-driven research analysis"; font-size: 14px; }
+.rag-content { display: grid; grid-template-columns: minmax(0, 1fr) 310px; gap: 18px; align-items: start; }
+.rag-content > .knowledge-status-strip { grid-column: 1 / -1; min-height: 128px; padding: 24px; border: 1px solid rgba(132,163,255,.18); border-radius: var(--product-radius); background: linear-gradient(135deg, rgba(109,140,255,.13), rgba(255,255,255,.028)); box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.rag-content > .knowledge-status-strip::before { grid-column: 1 / -1; color: #c6d6ff; content: "INSIGHT SUMMARY · Available research direction, evidence coverage and readiness are calculated only from indexed knowledge."; font-size: 10px; font-weight: 750; letter-spacing: .06em; }
+.rag-content > .research-task-center { grid-column: 1; grid-row: span 3; padding: 22px; border: 1px solid var(--product-border); border-radius: var(--product-radius); background: var(--product-surface); box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.rag-content > .research-task-center > div:first-child h3 { font-size: 21px; }
+.rag-content > .report-task-options { display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 8px; }
+.rag-content > .report-task-options button { min-height: 110px; border-radius: 15px; background: rgba(255,255,255,.025); }
+.rag-content > .rag-question-form { grid-column: 2; padding: 18px; border: 1px solid var(--product-border); border-radius: var(--product-radius); background: var(--product-surface); }
+.rag-content > .rag-question-form textarea { min-height: 150px; }
+.rag-content > .rag-answer-card, .rag-content > .rag-report-card { grid-column: 1 / -1; padding: 24px; border: 1px solid rgba(121,195,255,.17); border-radius: var(--product-radius); background: linear-gradient(145deg, rgba(92,175,255,.08), rgba(255,255,255,.025)); box-shadow: 0 20px 50px rgba(0,0,0,.25); }
+.rag-content > .rag-sources { grid-column: 1 / -1; padding: 20px; border: 1px solid var(--product-border); border-radius: var(--product-radius); background: var(--product-surface); }
+.rag-source-card { border-radius: 15px; background: rgba(255,255,255,.024); }
+.rag-content > .rag-history, .rag-content > .rag-plan, .rag-content > .rag-trace, .rag-content > .rag-evaluation { display: none; }
+
+.computer-studio .computer-studio-grid { gap: 18px; }
+.computer-studio .operator-timeline-surface { min-height: 420px; }
+.computer-studio .operator-artifact-surface { position: relative; min-height: 255px; padding-top: 82px; border-color: rgba(114,216,186,.19); }
+.computer-studio .operator-artifact-surface::before { position: absolute; top: 22px; left: 22px; right: 22px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,.08); color: #baf3df; content: "SAFETY CENTER\A Approval Required · Rollback Available · Verification Enabled"; white-space: pre-line; font-size: 11px; font-weight: 700; line-height: 1.75; letter-spacing: .035em; }
+.computer-studio .operator-artifact-surface .computer-patch-review,
+.computer-studio .operator-artifact-surface .operator-tools,
+.computer-studio .operator-artifact-surface .operator-evidence { display: none; }
+.computer-control-timeline { grid-template-columns: repeat(5, minmax(0,1fr)); }
+.computer-control-timeline li:last-child { display: none; }
+.computer-environment-timeline > header h3 { font-size: 0; }
+.computer-environment-timeline > header h3::after { color: var(--text-primary); content: "Execution Journey"; font-size: 18px; }
+
+.ai-team-roster { grid-template-columns: repeat(3, minmax(0,1fr)); }
+.ai-team-roster article { min-height: 190px; border-radius: var(--product-radius); background: linear-gradient(145deg, rgba(119,144,255,.075), rgba(255,255,255,.024)); }
+.ai-team-roster article:nth-child(n+4) { display: none; }
+.ai-team-roster article:nth-child(1) .team-profile h3 { font-size: 0; }.ai-team-roster article:nth-child(1) .team-profile h3::after { content: "Research Skill"; font-size: 16px; }
+.ai-team-roster article:nth-child(2) .team-profile h3 { font-size: 0; }.ai-team-roster article:nth-child(2) .team-profile h3::after { content: "Computer Skill"; font-size: 16px; }
+.ai-team-roster article:nth-child(3) .team-profile h3 { font-size: 0; }.ai-team-roster article:nth-child(3) .team-profile h3::after { content: "Delivery Skill"; font-size: 16px; }
+
+.library-workspace > .library-header h2 { font-size: 0; }.library-workspace > .library-header h2::after { color: var(--text-primary); content: "Research Knowledge Base"; font-size: clamp(30px,4vw,42px); letter-spacing: -.045em; }
+.library-workspace > .library-header > div > p:not(.section-kicker) { color: transparent; font-size: 0; }.library-workspace > .library-header > div > p:not(.section-kicker)::after { color: var(--text-secondary); content: "Search research knowledge, trusted Evidence and approved organizational memory."; font-size: 14px; }
+.library-workspace .library-toolbar::before { margin-right: auto; color: var(--text-muted); content: "Evidence Library · Research Papers · Knowledge Memory"; font-size: 10px; font-weight: 750; letter-spacing: .055em; }
+
+.connector-center .admin-console-sections { gap: 8px; }.connector-center .admin-console-sections button { min-width: 128px; min-height: 38px; }
+.connector-center .admin-console-sections button:nth-child(2) { font-size: 0; }.connector-center .admin-console-sections button:nth-child(2)::after { content: "System Health"; font-size: 11px; }
+.connector-center .admin-console-sections button:nth-child(3) { display: none; }
+.connector-center .admin-console-sections::after { display: inline-flex; align-items: center; min-height: 38px; padding: 0 13px; border: 1px solid var(--border); border-radius: 999px; color: var(--text-secondary); background: rgba(255,255,255,.025); content: "Audit Trail"; font-size: 11px; font-weight: 700; }
+
+.product-demo-grid > article { display: flex; flex-direction: column; min-height: 280px; }.product-demo-grid > article button { margin-top: auto; align-self: flex-start; }
+.product-demo-grid > article ol { margin-bottom: 12px; }
+
+@media (max-width: 900px) {
+  .rag-content { grid-template-columns: 1fr; }
+  .rag-content > .research-task-center, .rag-content > .rag-question-form { grid-column: 1; grid-row: auto; }
+  .rag-content > .report-task-options { grid-template-columns: 1fr; }
+  .computer-control-timeline { grid-template-columns: repeat(2, minmax(0,1fr)); }
+}
+@media (max-width: 700px) {
+  .rag-content > .knowledge-status-strip { min-height: 0; padding: 18px; }
+  .ai-team-roster { grid-template-columns: 1fr; }
+  .product-demo-grid > article { min-height: 230px; }
+}
+
+/* P68 — prioritize the customer goal, trusted evidence, and controlled outcomes. */
+.rag-workspace, .computer-studio, .library-workspace, .connector-center,
+.product-experience-center, .mission-center { padding-bottom: 32px; }
+.rag-workspace .library-header, .computer-studio .operator-studio-heading,
+.library-workspace .library-header, .connector-center > .dashboard-heading,
+.product-experience-center > .dashboard-heading, .mission-center > .dashboard-heading { margin-bottom: var(--product-gap); }
+
+/* Research Intelligence — clear mission, compact insight views, then traceable sources. */
+.rag-workspace > .library-header > div > .section-kicker { font-size: 0; }
+.rag-workspace > .library-header > div > .section-kicker::after { color: var(--accent-cyan); content: "EVIDENCE-DRIVEN RESEARCH WORKSPACE"; font-size: 10px; font-weight: 750; letter-spacing: .13em; }
+.rag-content { display: grid; grid-template-columns: minmax(0, 1.05fr) minmax(330px, .95fr); gap: var(--product-gap); }
+.rag-content > .knowledge-status-strip { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0,1fr)); gap: 10px; min-height: 0; margin: 0; padding: 0; border: 0; background: transparent; box-shadow: none; }
+.rag-content > .knowledge-status-strip::before { display: none; }
+.rag-content > .knowledge-status-strip > div { min-height: 78px; padding: 15px 16px; border: 1px solid var(--dark-card-border); border-radius: 15px; background: var(--dark-card-muted); box-shadow: inset 0 1px rgba(255,255,255,.035); }
+.rag-content > .knowledge-status-strip > div span { font-size: 0; }
+.rag-content > .knowledge-status-strip > div:nth-child(1) span::after { content: "Research papers"; }
+.rag-content > .knowledge-status-strip > div:nth-child(2) span::after { content: "Evidence items"; }
+.rag-content > .knowledge-status-strip > div:nth-child(3) span::after { content: "Knowledge assets"; }
+.rag-content > .knowledge-status-strip > div span::after { color: var(--text-muted); font-size: 10px; font-weight: 750; letter-spacing: .06em; text-transform: uppercase; }
+.rag-content > .knowledge-status-strip > div small { font-size: 0; }
+.rag-content > .knowledge-status-strip > div small::after { color: var(--text-secondary); content: "Available in this workspace"; font-size: 10px; }
+.rag-content > .compact-details { grid-column: 1 / -1; margin: -8px 0 0; }
+.rag-content > .research-task-center, .rag-content > .rag-question-form, .rag-content > .rag-sources,
+.rag-content > .rag-answer-card, .rag-content > .rag-report-card { border: 1px solid var(--dark-card-border); border-radius: 20px; background: var(--dark-card); box-shadow: 0 20px 50px rgba(0,0,0,.20), inset 0 1px rgba(255,255,255,.045); }
+.rag-content > .research-task-center { grid-column: 1; grid-row: span 2; min-height: 0; padding: 22px; }
+.rag-content > .research-task-center > div:first-child h3 { font-size: 0; }
+.rag-content > .research-task-center > div:first-child h3::after { color: var(--text-primary); content: "Research Mission"; font-size: 20px; letter-spacing: -.025em; }
+.rag-content > .research-task-center > div:first-child p { max-width: 470px; color: transparent; font-size: 0; }
+.rag-content > .research-task-center > div:first-child p::after { color: var(--text-secondary); content: "Frame a research question and generate evidence-backed insight from indexed materials."; font-size: 12px; line-height: 1.55; }
+.rag-content > .research-task-center .report-task-options { grid-template-columns: 1fr; gap: 8px; margin-top: 18px; }
+.rag-content > .research-task-center .report-task-options button { min-height: 54px; padding: 11px 12px; border-radius: 13px; background: rgba(255,255,255,.025); }
+.rag-content > .research-task-center .report-task-options button:nth-child(n+4) { display: none; }
+.rag-content > .rag-question-form { grid-column: 2; align-self: start; padding: 20px; position: relative; }
+.rag-content > .rag-question-form > label { display: block; margin-bottom: 10px; color: transparent; font-size: 0; }
+.rag-content > .rag-question-form > label::after { color: var(--text-primary); content: "Research Question"; font-size: 15px; font-weight: 700; letter-spacing: -.015em; }
+.rag-content > .rag-question-form:has(textarea:placeholder-shown)::after { position: absolute; top: 65px; left: 33px; pointer-events: none; color: var(--text-muted); content: "What would you like to explore?"; font-size: 13px; }
+.rag-content > .rag-question-form textarea:placeholder-shown { color: transparent; }
+.rag-content > .rag-question-form .analyze-button { width: 100%; margin-top: 10px; }
+.rag-content > .rag-sources { grid-column: 1 / -1; padding: 20px; }
+.rag-content > .rag-sources .result-section-heading h3 { font-size: 0; }
+.rag-content > .rag-sources .result-section-heading h3::after { color: var(--text-primary); content: "Evidence Foundation"; font-size: 18px; letter-spacing: -.02em; }
+.rag-source-card { border-color: rgba(255,255,255,.07); background: rgba(255,255,255,.018); }
+.rag-source-card > div > strong { display: none; }
+.rag-source-card blockquote { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; margin-bottom: 0; color: var(--text-secondary); }
+
+/* Computer — expose a controlled journey rather than implementation detail. */
+.computer-studio .computer-operator-heading > div > .section-kicker { font-size: 0; }
+.computer-studio .computer-operator-heading > div > .section-kicker::after { color: var(--accent-cyan); content: "CONTROLLED AI OPERATOR CONSOLE"; font-size: 10px; font-weight: 750; letter-spacing: .13em; }
+.computer-studio .computer-operator-heading > div > p:not(.section-kicker) { max-width: 570px; color: transparent; font-size: 0; }
+.computer-studio .computer-operator-heading > div > p:not(.section-kicker)::after { color: var(--text-secondary); content: "A secure workspace for approved computer tasks with verification and rollback."; font-size: 13px; line-height: 1.6; }
+.computer-studio .operator-status { color: var(--warning); border-color: rgba(255,201,120,.24); background: rgba(255,201,120,.07); }
+.computer-studio .operator-status::before { background: var(--warning); box-shadow: 0 0 9px var(--warning); }
+.computer-studio .computer-studio-grid { grid-template-columns: minmax(240px,.72fr) minmax(410px,1.36fr) minmax(230px,.72fr); gap: var(--product-gap); }
+.computer-studio .operator-task-surface, .computer-studio .operator-timeline-surface, .computer-studio .operator-artifact-surface { padding: 20px; border-color: var(--dark-card-border); border-radius: 20px; background: var(--dark-card); }
+.computer-studio .computer-command-surface { position: relative; }
+.computer-studio .computer-command-surface > h3 { font-size: 0; }
+.computer-studio .computer-command-surface > h3::after { color: var(--text-primary); content: "Set a controlled task"; font-size: 17px; }
+.computer-studio .computer-command-surface:has(textarea:placeholder-shown)::after { position: absolute; top: 111px; left: 33px; pointer-events: none; color: var(--text-muted); content: "Describe the task you want completed"; font-size: 12px; }
+.computer-studio .computer-command-surface textarea:placeholder-shown { color: transparent; }
+.computer-studio .computer-command-surface .computer-mode-label, .computer-studio .computer-command-surface .operator-template-list { display: none; }
+.computer-studio .computer-command-surface .analyze-button, .computer-studio .computer-command-surface .computer-start-button { width: 100%; margin-top: 12px; }
+.computer-studio .operator-timeline-surface > header h3 { max-width: 470px; font-size: 18px; line-height: 1.32; }
+.computer-studio .operator-plan-list { gap: 0; margin-top: 14px; }
+.computer-studio .operator-plan-list li { min-height: 62px; padding: 10px 0; border: 0; border-bottom: 1px solid rgba(255,255,255,.07); border-radius: 0; background: transparent; }
+.computer-studio .operator-plan-list li p, .computer-studio .operator-plan-list li small { display: none; }
+.computer-studio .operator-plan-list li span { width: 26px; height: 26px; border-radius: 50%; }
+.computer-studio .operator-empty-state b { font-size: 0; }
+.computer-studio .operator-empty-state b::after { color: var(--text-primary); content: "Observe · Plan · Approval · Execute · Verify"; font-size: 13px; }
+.computer-studio .operator-empty-state p { color: transparent; font-size: 0; }
+.computer-studio .operator-empty-state p::after { color: var(--text-secondary); content: "Sensitive actions remain blocked until an authorized human approves them."; font-size: 11px; line-height: 1.55; }
+.computer-studio .operator-artifact-surface { min-height: 0; padding-top: 104px; }
+.computer-studio .operator-artifact-surface > .section-kicker, .computer-studio .operator-artifact-surface > h3,
+.computer-studio .operator-artifact-surface .operator-artifact-list, .computer-studio .operator-artifact-surface .operator-evidence,
+.computer-studio .operator-artifact-surface .computer-memory { display: none; }
+.computer-studio .operator-artifact-surface .operator-artifact-empty { margin: 0; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
+.computer-studio .operator-artifact-surface .operator-artifact-empty::before { display: block; margin-bottom: 7px; color: var(--accent-cyan); content: "CURRENT ACTION"; font-size: 10px; font-weight: 750; letter-spacing: .10em; }
+.computer-studio .operator-artifact-surface .operator-artifact-empty p { margin: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.55; }
+.computer-studio .computer-environment-timeline { margin-top: var(--product-gap); padding: 18px 20px; border-radius: 20px; background: var(--dark-card); }
+.computer-studio .computer-control-timeline { grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
+.computer-studio .computer-control-timeline li:nth-child(n+6) { display: none; }
+.computer-studio .computer-control-timeline li { min-height: 58px; padding: 8px; border-radius: 12px; background: rgba(255,255,255,.018); }
+.computer-studio .computer-control-timeline small { font-size: 0; }
+.computer-studio .computer-control-timeline li:nth-child(1) small::after { content: "Environment detected"; }
+.computer-studio .computer-control-timeline li:nth-child(2) small::after { content: "Task prepared"; }
+.computer-studio .computer-control-timeline li:nth-child(3) small::after { content: "Human confirmation"; }
+.computer-studio .computer-control-timeline li:nth-child(4) small::after { content: "Controlled action"; }
+.computer-studio .computer-control-timeline li:nth-child(5) small::after { content: "Result checked"; }
+.computer-studio .computer-control-timeline small::after { color: var(--text-muted); font-size: 9px; }
+.computer-studio > .computer-intelligence-panel:not(.computer-environment-timeline), .computer-studio > .operator-approval-bar { display: none; }
+
+/* Knowledge — dense evidence assets, never a file-management screen. */
+.library-workspace > .library-header > div > .section-kicker { font-size: 0; }
+.library-workspace > .library-header > div > .section-kicker::after { color: var(--accent-cyan); content: "ENTERPRISE RESEARCH KNOWLEDGE BASE"; font-size: 10px; font-weight: 750; letter-spacing: .13em; }
+.library-workspace .library-header-actions select { display: none; }
+.library-workspace .library-toolbar { display: grid; grid-template-columns: minmax(0,1fr) auto auto; gap: 10px; padding: 10px; border: 1px solid var(--dark-card-border); background: var(--dark-card-muted); }
+.library-workspace .library-toolbar small { padding: 0 8px; color: var(--text-secondary); }
+.library-workspace .library-toolbar::before { grid-column: 1 / -1; margin: 0; }
+.library-workspace .paper-card-list { grid-template-columns: repeat(3, minmax(0,1fr)); gap: 14px; }
+.library-workspace .knowledge-asset-card { min-height: 218px; padding: 17px; background: var(--dark-card); }
+.library-workspace .knowledge-asset-card .knowledge-summary { display: -webkit-box; min-height: 42px; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 2; white-space: normal; }
+.library-workspace .knowledge-asset-card .knowledge-summary > span { color: var(--accent-cyan); }
+.library-workspace .knowledge-asset-card .knowledge-tags span { max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.library-workspace .library-empty-state { min-height: 240px; padding: 46px 20px; border: 1px solid var(--dark-card-border); border-radius: 20px; background: var(--dark-card); }
+.library-workspace .library-empty-state h3 { font-size: 0; }
+.library-workspace .library-empty-state h3::after { color: var(--text-primary); content: "Build your evidence foundation"; font-size: 18px; }
+.library-workspace .library-empty-state p { color: transparent; font-size: 0; }
+.library-workspace .library-empty-state p::after { color: var(--text-secondary); content: "Upload a research paper to make it available for trusted evidence retrieval."; font-size: 12px; }
+
+/* Mission: preserve the user-readable lifecycle and reduce implementation surfaces. */
+.mission-center .mission-stage-strip { margin: 0 0 var(--product-gap); }
+.mission-center .mission-stage-strip li { min-height: 54px; padding: 9px; }
+.mission-center .mission-center-layout { gap: var(--product-gap); }
+.mission-center .mission-create-surface, .mission-center .mission-stream-surface, .mission-center .mission-intelligence-surface { padding: 20px; }
+.mission-center .mission-stream-surface .mission-requirements { padding: 12px; border-radius: 13px; background: rgba(255,255,255,.024); }
+.mission-center .mission-stream-surface .mission-requirements small { font-size: 0; }
+.mission-center .mission-stream-surface .mission-requirements small::after { color: var(--text-muted); content: "Traceable evidence and human review are required."; font-size: 10px; }
+.mission-center .mission-evidence-list > div small { font-size: 0; }
+.mission-center .mission-evidence-list > div small::after { color: var(--text-muted); content: "Evidence reference"; font-size: 10px; }
+.mission-center .mission-intelligence-surface > article:nth-child(n+5), .mission-center .mission-version-history { display: none; }
+
+/* Administration and Demo: three human-oriented entry points, without runtime or evaluation noise. */
+.connector-center > .dashboard-heading > div > p:not(.section-kicker) { color: transparent; font-size: 0; }
+.connector-center > .dashboard-heading > div > p:not(.section-kicker)::after { color: var(--text-secondary); content: "Manage workspace access, review accountable activity, and monitor service health."; font-size: 13px; }
+.connector-center .admin-console-sections { display: grid; grid-template-columns: repeat(3,minmax(0,1fr)); gap: 12px; }
+.connector-center .admin-console-sections button, .connector-center .admin-console-sections::after { display: flex; min-height: 90px; align-items: flex-end; justify-content: flex-start; padding: 16px; border-radius: 16px; background: var(--dark-card); font-size: 12px; }
+.connector-center .admin-console-sections button:first-child { font-size: 0; }
+.connector-center .admin-console-sections button:first-child::after { color: var(--text-primary); content: "Governance\A Manage access and workspace roles"; white-space: pre-line; font-size: 12px; line-height: 1.55; }
+.connector-center .admin-console-sections button:nth-child(2)::after { color: var(--text-primary); content: "System Health\A Review current service readiness"; white-space: pre-line; font-size: 12px; line-height: 1.55; }
+.connector-center .admin-console-sections::after { color: var(--text-primary); content: "Audit Trail\A Review accountable workspace activity"; white-space: pre-line; }
+.connector-center .connector-metrics { grid-template-columns: repeat(3,minmax(0,1fr)); }
+.connector-center .connector-metrics > article:nth-child(4) { display: none; }
+.connector-center .connector-grid > article > small { display: none; }
+.product-experience-center > .dashboard-heading > div > .section-kicker { font-size: 0; }
+.product-experience-center > .dashboard-heading > div > .section-kicker::after { color: var(--accent-cyan); content: "GUIDED DEMO"; font-size: 10px; font-weight: 750; letter-spacing: .13em; }
+.product-experience-center > .dashboard-heading > div > p:not(.section-kicker) { color: transparent; font-size: 0; }
+.product-experience-center > .dashboard-heading > div > p:not(.section-kicker)::after { color: var(--text-secondary); content: "Showcase ResearchOS from evidence-backed research to a reviewable delivery."; font-size: 13px; }
+.product-demo-grid { align-items: stretch; }
+.product-demo-grid > article { min-height: 248px; padding: 20px; background: var(--dark-card); }
+.product-demo-grid > article ol { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+
+/* Product paths are English-first; compatibility views stay out of primary navigation. */
+.navigation-contract-marker, .home-recent-workspaces,
+.mission-center .mission-collaboration-workspace ~ .collaboration-panel,
+.mission-center .mission-tool-trace:not(.approval-queue),
+.mission-center .mission-graph, .mission-center .mission-evaluation-card,
+.computer-studio .operator-tools { display: none !important; }
+
+@media (max-width: 900px) {
+  .rag-content, .computer-studio .computer-studio-grid { grid-template-columns: 1fr; }
+  .rag-content > .research-task-center, .rag-content > .rag-question-form { grid-column: 1; grid-row: auto; }
+  .computer-studio .computer-studio-grid > * { min-height: auto; }
+  .computer-studio .computer-control-timeline { grid-template-columns: repeat(5,minmax(100px,1fr)); overflow-x: auto; padding-bottom: 5px; }
+  .library-workspace .paper-card-list { grid-template-columns: repeat(2,minmax(0,1fr)); }
+}
+@media (max-width: 600px) {
+  .rag-content > .knowledge-status-strip, .connector-center .admin-console-sections, .connector-center .connector-metrics { grid-template-columns: 1fr; }
+  .rag-content > .knowledge-status-strip > div { min-height: 66px; }
+  .library-workspace .library-toolbar { grid-template-columns: 1fr; }
+  .library-workspace .paper-card-list { grid-template-columns: 1fr; }
+}
+
+/* P69 — unified enterprise product surfaces. This is presentation-only. */
+.app-shell { padding-bottom: 48px; }
+.dashboard-heading, .operator-studio-heading, .library-header { gap: 16px; }
+.dashboard-heading h2, .operator-studio-heading h2, .library-header h2 {
+  max-width: 720px; font-size: clamp(30px, 3.4vw, 44px); line-height: 1.05;
+}
+.dashboard-heading p:not(.section-kicker), .operator-studio-heading p, .library-header p:not(.section-kicker) {
+  max-width: 580px; margin-top: 8px; font-size: 13px; line-height: 1.58;
+}
+
+/* A small, repeatable set of enterprise surfaces replaces one-off card treatments. */
+.mission-create-surface, .mission-stream-surface, .mission-intelligence-surface,
+.operator-task-surface, .operator-timeline-surface, .operator-artifact-surface,
+.rag-content > .research-task-center, .rag-content > .rag-question-form,
+.rag-content > .rag-sources, .library-workspace, .paper-library-card,
+.product-artifact-grid > article, .product-demo-grid > article,
+.connector-center .admin-console-sections button, .connector-center .admin-console-sections::after {
+  border-color: var(--dark-card-border);
+  background: var(--dark-card);
+}
+.product-empty-state, .library-empty-state, .operator-empty-state {
+  min-height: 180px; padding: 28px; border: 1px dashed rgba(154,176,255,.20); border-radius: var(--product-radius);
+  background: linear-gradient(145deg, rgba(123,156,255,.055), rgba(255,255,255,.014));
+}
+.product-empty-state b, .library-empty-state h3, .operator-empty-state b { color: var(--text-primary); }
+.product-empty-state p, .library-empty-state p, .operator-empty-state p { max-width: 440px; color: var(--text-secondary); }
+
+/* Home is a command surface, not a dashboard. */
+.home-workspace { max-width: 1120px; padding-top: 32px; }
+.home-workspace .workspace-home-hero { padding-bottom: 34px; }
+.home-workspace .enterprise-upload-strip { margin-top: 10px; }
+.home-workspace .home-quick-grid { grid-template-columns: repeat(3,minmax(0,1fr)); gap: 6px; }
+.home-workspace .home-quick-grid button { text-align: left; }
+.home-workspace .home-quick-grid button small { max-width: 210px; }
+.home-missions-panel { margin-top: 14px; }
+.home-missions-panel .home-focus-card { min-height: 132px; }
+
+/* Research Intelligence becomes an advisor: question, concise insight, evidence. */
+.rag-workspace > .library-header { align-items: flex-start; }
+.rag-workspace > .library-header .library-header-actions { padding-top: 5px; }
+.rag-content > .research-task-center { display: flex; flex-direction: column; gap: 14px; }
+.rag-content > .research-task-center > .report-task-options { margin: 0; }
+.rag-content > .research-task-center > .outline-button { margin-top: auto; }
+.rag-content > .rag-question-form { display: flex; flex-direction: column; min-height: 272px; }
+.rag-content > .rag-question-form textarea { min-height: 146px; }
+.rag-content > .rag-question-form .analyze-button { margin-top: auto; }
+.rag-content > .rag-answer-card, .rag-content > .rag-report-card { padding: 20px; }
+.rag-content > .rag-answer-card > p { max-width: 880px; font-size: 14px; line-height: 1.75; }
+.rag-content > .rag-sources { margin-top: 0; }
+.rag-content > .rag-sources > .result-section-heading { margin-bottom: 12px; }
+.rag-content > .rag-sources .rag-source-card { padding: 13px 14px; }
+.rag-content > .rag-sources .rag-source-card:hover { border-color: rgba(123,228,255,.24); transform: translateY(-1px); }
+
+/* Computer is an AI Operator: mission, journey, approval, outcome. */
+.computer-studio .computer-operator-heading { align-items: flex-start; }
+.computer-studio .computer-studio-grid { align-items: stretch; }
+.computer-studio .operator-task-surface { display: flex; flex-direction: column; }
+.computer-studio .operator-task-surface .analyze-button { margin-top: auto; }
+.computer-studio .operator-timeline-surface { display: flex; flex-direction: column; }
+.computer-studio .operator-plan-list { flex: 1 1 auto; }
+.computer-studio .operator-artifact-surface::before { content: "SAFETY GUARANTEE\A Approval Required · Rollback Available · Verification Enabled"; }
+.computer-studio > .operator-approval-bar {
+  display: flex; margin-top: var(--product-gap); padding: 16px 18px; border-color: rgba(255,201,120,.20);
+  border-radius: var(--product-radius); background: linear-gradient(145deg, rgba(255,201,120,.065), rgba(255,255,255,.018));
+}
+.computer-studio > .operator-approval-bar > div:first-child { max-width: 650px; }
+.computer-studio > .operator-approval-bar .section-kicker { color: var(--warning); }
+.computer-studio > .computer-intelligence-panel:not(.computer-environment-timeline) { display: none; }
+.computer-studio .computer-environment-timeline { box-shadow: inset 0 1px rgba(255,255,255,.045); }
+.computer-studio .computer-environment-timeline > header { margin-bottom: 12px; }
+
+/* Knowledge is a compact brain of real papers and evidence, never a file table. */
+.library-workspace { padding: 24px; }
+.library-workspace .library-header { align-items: flex-start; }
+.library-workspace .library-toolbar { position: sticky; top: 78px; z-index: 4; box-shadow: 0 12px 26px rgba(0,0,0,.16); backdrop-filter: blur(16px); }
+.library-workspace .paper-card-list { align-items: stretch; }
+.library-workspace .knowledge-asset-card { display: flex; flex-direction: column; min-height: 226px; }
+.library-workspace .knowledge-asset-card h3 { margin: 12px 0 5px; font-size: 15px; line-height: 1.35; }
+.library-workspace .knowledge-asset-card .paper-card-actions { margin-top: auto; }
+.library-workspace .library-detail-panel { position: sticky; top: 150px; }
+
+/* Mission makes the business lifecycle visible, while technical execution remains secondary. */
+.mission-center > .dashboard-heading { margin-bottom: 14px; }
+.mission-center .mission-stage-strip li { min-height: 62px; }
+.mission-center .mission-stage-strip li b { font-size: 12px; }
+.mission-center .mission-create-surface label { gap: 6px; color: var(--text-secondary); font-size: 11px; }
+.mission-center .mission-stream-surface > header { align-items: flex-start; }
+.mission-center .mission-stream-surface > header h3 { font-size: 19px; }
+.mission-center .mission-timeline li { min-height: 58px; }
+.mission-center .mission-evidence-list { margin-top: 16px; }
+.mission-center .mission-review-panel { margin-top: 16px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.07); }
+.mission-center .approval-queue { margin-top: 20px; }
+
+/* Admin and Demo are purposeful entry points rather than secondary dashboards. */
+.connector-center > .dashboard-heading, .product-experience-center > .dashboard-heading { align-items: flex-start; }
+.connector-center .connector-metrics { margin: 4px 0 0; }
+.connector-center .connector-metrics > article { min-height: 88px; border-radius: 16px; background: var(--dark-card-muted); }
+.connector-center .connector-grid { gap: 12px; }
+.connector-center .connector-grid > article { min-height: 136px; padding: 16px; border-radius: 16px; background: var(--dark-card-muted); }
+.product-experience-center { padding-top: 20px; }
+.product-demo-grid > article { min-height: 258px; }
+.product-demo-grid > article > span { color: var(--accent-cyan); font-size: 9px; font-weight: 750; letter-spacing: .10em; }
+.product-demo-grid > article h3 { font-size: 17px; }
+.product-demo-grid > article p { min-height: 36px; }
+
+/* The primary user experience excludes internal implementation views. */
+.mission-center .mission-tool-trace:not(.approval-queue),
+.mission-center .mission-graph, .mission-center .mission-version-history,
+.computer-studio .operator-tools, .computer-studio .computer-patch-review,
+.computer-studio .computer-intelligence-meta, .computer-studio .computer-diff-summary {
+  display: none !important;
+}
+
+@media (max-width: 900px) {
+  .home-workspace .home-quick-grid { grid-template-columns: 1fr; }
+  .library-workspace .library-toolbar { position: static; }
+  .computer-studio > .operator-approval-bar { display: grid; }
+}
+@media (max-width: 600px) {
+  .home-workspace { padding-top: 22px; }
+  .library-workspace { padding: 16px; }
+  .dashboard-heading h2, .operator-studio-heading h2, .library-header h2 { font-size: 29px; }
+  .mission-center .mission-stage-strip li { min-height: 58px; }
+}
+
+/* P70 — a single product journey: understand, act safely, review, deliver. */
+.home-workspace .workspace-home-hero {
+  position: relative;
+  isolation: isolate;
+  padding-bottom: 26px;
+}
+.home-workspace .workspace-home-hero::after {
+  position: absolute;
+  z-index: -1;
+  top: -100px;
+  right: 8%;
+  width: min(48vw, 520px);
+  height: 250px;
+  border-radius: 50%;
+  background: radial-gradient(ellipse, rgba(107,103,255,.13), rgba(0,212,255,.045) 42%, transparent 72%);
+  content: "";
+  filter: blur(8px);
+  pointer-events: none;
+}
+
+/* Insight follows the advisor path: question, insight, evidence, next step. */
+.rag-workspace .library-header h2 { max-width: 640px; }
+.rag-content > .rag-answer-card,
+.rag-content > .rag-report-card {
+  position: relative;
+  overflow: hidden;
+}
+.rag-content > .rag-answer-card::before,
+.rag-content > .rag-report-card::before {
+  display: block;
+  margin-bottom: 11px;
+  color: var(--accent-cyan);
+  content: "INSIGHT SUMMARY";
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .11em;
+}
+.rag-content > .rag-sources::after {
+  display: block;
+  margin-top: 15px;
+  padding: 12px 13px;
+  border: 1px solid rgba(123,156,255,.15);
+  border-radius: 13px;
+  background: rgba(123,156,255,.045);
+  color: var(--text-secondary);
+  content: "NEXT STEP · Review this evidence foundation, then create a Mission when the research question is ready.";
+  font-size: 11px;
+  line-height: 1.55;
+}
+
+/* A Controlled AI Operator never exposes implementation terms as its primary story. */
+.computer-studio .operator-status {
+  min-width: 132px;
+  justify-content: center;
+  text-align: center;
+  text-transform: capitalize;
+}
+.computer-studio .operator-task-surface,
+.computer-studio .operator-timeline-surface,
+.computer-studio .operator-artifact-surface {
+  min-height: 390px;
+}
+.computer-studio .operator-timeline-surface > header .section-kicker {
+  font-size: 0;
+}
+.computer-studio .operator-timeline-surface > header .section-kicker::after {
+  color: var(--accent-cyan);
+  content: "MISSION PROGRESS";
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .11em;
+}
+.computer-studio .operator-plan-list li {
+  position: relative;
+  padding-left: 2px;
+}
+.computer-studio .operator-plan-list li::after {
+  position: absolute;
+  bottom: -1px;
+  left: 12px;
+  width: 1px;
+  height: 13px;
+  background: rgba(123,156,255,.28);
+  content: "";
+}
+.computer-studio .operator-plan-list li:last-child::after { display: none; }
+.computer-studio .operator-plan-list li span {
+  color: var(--accent-cyan);
+  border: 1px solid rgba(123,156,255,.22);
+  background: rgba(123,156,255,.09);
+  box-shadow: 0 0 18px rgba(91,140,255,.10);
+}
+.computer-studio .operator-artifact-surface {
+  background:
+    radial-gradient(circle at 20% 0, rgba(0,212,255,.075), transparent 42%),
+    var(--dark-card);
+}
+.computer-studio .operator-artifact-surface::before {
+  display: block;
+  margin-bottom: 18px;
+  padding-bottom: 14px;
+  border-bottom: 1px solid rgba(255,255,255,.08);
+  color: var(--text-secondary);
+  white-space: pre-line;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.7;
+  letter-spacing: .015em;
+}
+.computer-studio .operator-tool-trace {
+  margin-top: 15px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255,255,255,.07);
+}
+.computer-studio .operator-tool-trace h4 {
+  margin: 0 0 10px;
+  color: transparent;
+  font-size: 0;
+}
+.computer-studio .operator-tool-trace h4::after {
+  color: var(--text-secondary);
+  content: "ACTIVITY UPDATES";
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .1em;
+}
+.computer-studio .operator-tool-trace article {
+  padding: 10px 0;
+  border-bottom: 1px solid rgba(255,255,255,.055);
+  background: transparent;
+}
+.computer-studio .operator-tool-trace article:last-child { border-bottom: 0; }
+.computer-studio .operator-tool-trace article > span { color: var(--accent-cyan); font-size: 10px; }
+.computer-studio .operator-tool-trace article > strong { color: var(--text-primary); font-size: 12px; }
+.computer-studio .operator-tool-trace article p { color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.computer-studio > .operator-approval-bar .section-kicker { font-size: 0; }
+.computer-studio > .operator-approval-bar .section-kicker::after {
+  color: var(--warning);
+  content: "RELEASE APPROVAL";
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .11em;
+}
+.computer-studio > .operator-approval-bar strong {
+  display: block;
+  margin: 4px 0;
+  color: var(--text-primary);
+  font-size: 15px;
+}
+.computer-studio > .operator-approval-bar span { color: var(--text-secondary); font-size: 11px; }
+.computer-studio .computer-control-timeline li b { font-size: 11px; }
+.computer-studio .computer-control-timeline li.complete span,
+.computer-studio .computer-control-timeline li.active span {
+  color: var(--accent-cyan);
+  text-shadow: 0 0 14px rgba(0,212,255,.32);
+}
+
+/* Deliveries read as reviewed outcomes, not a storage browser. */
+.product-experience-center .product-artifact-grid > article {
+  position: relative;
+  min-height: 230px;
+  overflow: hidden;
+}
+.product-experience-center .product-artifact-grid > article::after {
+  position: absolute;
+  top: 18px;
+  right: 18px;
+  color: var(--text-muted);
+  content: "REVIEWABLE OUTPUT";
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .09em;
+}
+.product-experience-center .product-artifact-grid > article small {
+  display: inline-block;
+  margin-top: 8px;
+  color: var(--text-secondary);
+  font-size: 10px;
+}
+
+/* Demo cards form one five-minute narrative rather than disconnected cards. */
+.product-demo-grid { position: relative; }
+.product-demo-grid::after {
+  grid-column: 1 / -1;
+  margin-top: 2px;
+  color: var(--text-muted);
+  content: "Demo path · Sign in → Create a research mission → Review insight → Confirm a controlled action → Release a delivery.";
+  font-size: 11px;
+  line-height: 1.5;
+}
+.product-demo-grid > article { min-height: 270px; }
+.product-demo-grid > article ol { margin: 13px 0; padding-left: 19px; }
+.product-demo-grid > article li { margin: 4px 0; color: var(--text-secondary); font-size: 11px; }
+
+@media (max-width: 900px) {
+  .computer-studio .operator-task-surface,
+  .computer-studio .operator-timeline-surface,
+  .computer-studio .operator-artifact-surface { min-height: auto; }
+}
+
+/* P71 — Controlled Computer as a product execution workspace, not a debug console. */
+.computer-studio .computer-operator-heading h2 {
+  font-size: 0;
+}
+.computer-studio .computer-operator-heading h2::after {
+  color: var(--text-primary);
+  content: "AI Execution Workspace";
+  font-size: clamp(30px, 3.4vw, 44px);
+  letter-spacing: -.035em;
+}
+.computer-studio .computer-operator-heading > div > p:not(.section-kicker)::after {
+  content: "AI-assisted execution with human approval and verification.";
+}
+.computer-studio .computer-command-surface > h3::after { content: "Current Mission"; }
+.computer-studio .computer-command-surface::before {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--text-secondary);
+  content: "Describe the outcome you want AI to prepare. Important changes always wait for you.";
+  font-size: 11px;
+  line-height: 1.55;
+}
+.computer-studio .operator-task-surface .analyze-button {
+  min-height: 44px;
+}
+.computer-studio .operator-timeline-surface > header h3 {
+  min-height: 48px;
+}
+.computer-studio .operator-empty-state b::after {
+  content: "Understand · Plan · Approval · Execution · Verification";
+}
+
+/* Use a fixed, comprehensible five-stage journey. Dynamic implementation metadata stays out of view. */
+.computer-studio .computer-environment-timeline > header > div > .section-kicker {
+  font-size: 0;
+}
+.computer-studio .computer-environment-timeline > header > div > .section-kicker::after {
+  color: var(--accent-cyan);
+  content: "EXECUTION JOURNEY";
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .11em;
+}
+.computer-studio .computer-environment-timeline > header > span {
+  font-size: 0;
+}
+.computer-studio .computer-environment-timeline > header > span::after {
+  color: var(--text-secondary);
+  content: "Human-controlled";
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: .05em;
+}
+.computer-studio .computer-control-timeline li b,
+.computer-studio .computer-control-timeline li small {
+  font-size: 0;
+}
+.computer-studio .computer-control-timeline li b::after,
+.computer-studio .computer-control-timeline li small::after {
+  display: block;
+}
+.computer-studio .computer-control-timeline li:nth-child(1) b::after { content: "Understand"; }
+.computer-studio .computer-control-timeline li:nth-child(2) b::after { content: "Plan"; }
+.computer-studio .computer-control-timeline li:nth-child(3) b::after { content: "Approval"; }
+.computer-studio .computer-control-timeline li:nth-child(4) b::after { content: "Execution"; }
+.computer-studio .computer-control-timeline li:nth-child(5) b::after { content: "Verification"; }
+.computer-studio .computer-control-timeline li b::after {
+  color: var(--text-primary);
+  font-size: 11px;
+  font-weight: 700;
+}
+.computer-studio .computer-control-timeline li:nth-child(1) small::after { content: "AI understands the requested task."; }
+.computer-studio .computer-control-timeline li:nth-child(2) small::after { content: "Execution steps are prepared for review."; }
+.computer-studio .computer-control-timeline li:nth-child(3) small::after { content: "Human confirmation is required before changes."; }
+.computer-studio .computer-control-timeline li:nth-child(4) small::after { content: "Controlled action runs only after approval."; }
+.computer-studio .computer-control-timeline li:nth-child(5) small::after { content: "The result is checked before release."; }
+.computer-studio .computer-control-timeline li small::after {
+  margin-top: 4px;
+  color: var(--text-muted);
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.4;
+}
+
+/* Keep an actual change proposal reviewable without exposing paths, diffs, or logs. */
+.computer-studio .operator-artifact-surface .computer-patch-review {
+  display: block !important;
+  margin-top: 12px;
+  padding: 14px;
+  border: 1px solid rgba(123,156,255,.18);
+  border-radius: 14px;
+  background: linear-gradient(145deg, rgba(123,156,255,.075), rgba(255,255,255,.018));
+}
+.computer-studio .computer-patch-review h4 {
+  margin: 0;
+  color: transparent;
+  font-size: 0;
+}
+.computer-studio .computer-patch-review h4::after {
+  color: var(--text-primary);
+  content: "Change Review";
+  font-size: 14px;
+  font-weight: 700;
+}
+.computer-studio .computer-patch-review article,
+.computer-studio .computer-patch-review pre { display: none; }
+.computer-studio .computer-patch-review::after {
+  display: block;
+  margin-top: 7px;
+  color: var(--text-secondary);
+  content: "Before change · Original state detected\A After change · Updated state requires confirmation\A Review actions are available in Release Approval.";
+  white-space: pre-line;
+  font-size: 11px;
+  line-height: 1.65;
+}
+.computer-studio .operator-tool-trace,
+.computer-studio > .computer-intelligence-panel:not(.computer-environment-timeline) {
+  display: none !important;
+}
+.computer-studio .operator-artifact-surface .operator-artifact-empty p {
+  color: transparent;
+  font-size: 0;
+}
+.computer-studio .operator-artifact-surface .operator-artifact-empty p::after {
+  color: var(--text-secondary);
+  content: "Expected outcome · A reviewable result will be prepared. Human approval remains required before delivery.";
+  font-size: 11px;
+  line-height: 1.55;
+}
+.computer-studio > .operator-approval-bar {
+  position: relative;
+  border-color: rgba(123,156,255,.22);
+  background: linear-gradient(145deg, rgba(123,156,255,.085), rgba(255,255,255,.018));
+}
+.computer-studio > .operator-approval-bar::before {
+  position: absolute;
+  top: 15px;
+  right: 18px;
+  color: var(--accent-cyan);
+  content: "PLAN → EXECUTION → REVIEW → DELIVERY";
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: .08em;
+}
+.computer-studio > .operator-approval-bar span {
+  font-size: 0;
+}
+.computer-studio > .operator-approval-bar span::after {
+  color: var(--text-secondary);
+  content: "Important actions always require human confirmation.";
+  font-size: 11px;
+}
+.computer-studio > .operator-approval-bar .primary-card-action {
+  font-size: 0;
+}
+.computer-studio > .operator-approval-bar .primary-card-action::after {
+  content: "Confirm Change";
+  font-size: 12px;
+}
+.computer-studio > .operator-approval-bar .outline-button {
+  font-size: 0;
+}
+.computer-studio > .operator-approval-bar .outline-button::after {
+  content: "Discard";
+  font-size: 12px;
+}
+
+@media (max-width: 700px) {
+  .computer-studio > .operator-approval-bar::before { position: static; display: block; margin-bottom: 8px; }
+  .computer-studio .computer-control-timeline { grid-template-columns: repeat(5, minmax(130px, 1fr)); }
 }

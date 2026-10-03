@@ -9,6 +9,7 @@ class GovernanceWorkspace(Base):
     __tablename__="governance_workspaces"
     id: Mapped[str]=mapped_column(String(36),primary_key=True,default=lambda:str(uuid4()))
     organization_id: Mapped[str]=mapped_column(String(36),nullable=False,index=True)
+    owner_id: Mapped[str | None]=mapped_column(String(36),nullable=True,index=True)
     name: Mapped[str]=mapped_column(String(160),nullable=False)
     created_at: Mapped[datetime]=mapped_column(DateTime(timezone=True),nullable=False,default=now)
 class WorkspaceUserRole(Base):

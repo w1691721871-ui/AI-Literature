@@ -2,7 +2,7 @@
 
 import os
 
-from fastapi import APIRouter, HTTPException, Response, status
+from fastapi import APIRouter, Depends, HTTPException, Response, status
 from dotenv import load_dotenv
 from sqlalchemy import func, select
 
@@ -82,6 +82,10 @@ from app.services.research_copilot_service import ResearchCopilotService
 from app.services.research_goal_memory_service import ResearchGoalMemoryService
 from app.services.research_copilot_action_service import ResearchCopilotActionService, CopilotActionNotFoundError
 from app.services.document_collaboration_service import DocumentCollaborationService, DocumentRevisionNotFoundError
+from app.services.ai_worker_service import AIWorkerService
+from app.services.ai_mission_service import AIMissionNotFoundError, AIMissionService
+from app.services.identity_service import IdentityContext
+from app.services.permission_middleware import PermissionMiddleware
 from app.schemas.copilot import CopilotActionCreate, CopilotActionReview, DocumentCommentCreate
 from app.schemas.enterprise import (KnowledgeScopeUpdate, MeetingCreate, OrganizationCreate, OrganizationMemberCreate,
                                     OrganizationProjectCreate, PermissionRequest, ProjectStatusUpdate)
@@ -123,6 +127,9 @@ goal_memory_service = ResearchGoalMemoryService()
 copilot_action_service = ResearchCopilotActionService()
 document_collaboration_service = DocumentCollaborationService()
 enterprise_collaboration_service = EnterpriseCollaborationService()
+ai_worker_service = AIWorkerService()
+ai_mission_service = AIMissionService()
+permission_middleware = PermissionMiddleware()
 
 
 def _project_response(project: ResearchProject) -> ResearchProjectResponse:
@@ -145,6 +152,22 @@ def _project_response(project: ResearchProject) -> ResearchProjectResponse:
 def list_researchos_agents() -> dict[str, object]:
     """Expose the orchestrator's available specialist roles to the UI."""
     return {"agents": master_agent.catalog()}
+
+
+@router.get("/ai-worker/capabilities")
+def ai_worker_capabilities(context: IdentityContext = Depends(permission_middleware.current)) -> dict[str, object]:
+    """Expose the single product-facing Worker capability layer."""
+    return ai_worker_service.capabilities()
+
+
+@router.get("/ai-worker/missions/{mission_id}/contract")
+def ai_worker_mission_contract(mission_id: str, context: IdentityContext = Depends(permission_middleware.current)) -> dict[str, object]:
+    """Adapt an existing Mission into the public Worker contract without mutation."""
+    try:
+        permission_middleware.mission(context, mission_id, "MISSION_VIEW")
+        return ai_worker_service.contract_for_mission(ai_mission_service.detail(mission_id)).model_dump()
+    except AIMissionNotFoundError as error:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(error)) from error
 
 
 @router.post("/organizations")

@@ -1,8 +1,11 @@
 const { computed, createApp, ref } = Vue;
 
+const configuredApiUrl = typeof window.RESEARCHOS_API_URL === "string"
+  ? window.RESEARCHOS_API_URL.trim().replace(/\/$/, "")
+  : "";
 const API_BASE_URL = ["localhost", "127.0.0.1"].includes(window.location.hostname)
   ? "http://127.0.0.1:8000"
-  : "https://ai-literature.onrender.com";
+  : configuredApiUrl;
 const REQUEST_TIMEOUT_MS = 90_000;
 const DEFAULT_TASK = "请说明我要完成的业务目标，并结合这份资料识别重点、风险与下一步行动。";
 const ROLE_OPTIONS = [
@@ -130,6 +133,20 @@ createApp({
     const activeWorkspaceView = ref("dashboard");
     const connectionState = ref("CONNECTING");
     const connectionMessage = ref("Connecting workspace");
+    const sessionToken = ref(window.localStorage.getItem("researchos_session_token") || "");
+    const identityProfile = ref(null);
+    const identityMenuOpen = ref(false);
+    const identityRestoreError = ref("");
+    const authMode = ref("login");
+    const loginForm = ref({ email: "", password: "" });
+    const registrationForm = ref({ name: "", email: "", password: "", workspace_name: "" });
+    const loginLoading = ref(false);
+    const demoLoading = ref(false);
+    const loginError = ref("");
+    const currentUser = computed(() => identityProfile.value?.user || null);
+    const currentWorkspace = computed(() => identityProfile.value?.workspace || null);
+    const currentRole = computed(() => identityProfile.value?.workspace?.role || null);
+    const aiWorkerCapabilities = ref(null);
     const assistantPanelOpen = ref(false);
     const assistantDraft = ref("");
     const libraryPapers = ref([]);
@@ -294,6 +311,11 @@ createApp({
     const connectorForm = ref({ name: "", sqlite_path: "" });
     const collaborationAnalytics = ref(null);
     const governance = ref({ organizations: [], workspaces: [], logs: [] });
+    // P56 records are resolved by the active identity Session. The browser
+    // never supplies a user or Workspace id as an authorization signal.
+    const approvalRequests = ref([]);
+    const approvalLoading = ref(false);
+    const approvalError = ref("");
     const computerMissionTask = ref("");
     const computerMissionLoading = ref(false);
     const onboardingState = ref(null);
@@ -439,6 +461,7 @@ createApp({
     const scenarioRunResult = ref(null);
     const scenarioLoading = ref(false);
     const workspaceExperience = ref(null);
+    const workspaceExperienceError = ref("");
     const knowledgeMemory = ref({ assets: [], decisions: [], dashboard: null });
     const productShowcase = ref({ overview: null, workflow: null, capabilities: null, releases: null, business: null });
     const workflowDiagnostics = ref(null);
@@ -556,11 +579,10 @@ createApp({
       const hasAdoptedAction = researchDecisions.value.some((item) => item.decision === "已采纳" || item.decision === "已修改");
       const hasAction = researchActions.value.length > 0;
       return [
-        { agent: "Research Master", action: "理解企业需求与研究目标", status, label },
-        { agent: "Knowledge Agent", action: "检索实验室科研资料", status, label },
-        { agent: "Innovation Agent", action: "分析创新机会与验证方向", status, label },
-        { agent: "Project Agent", action: "组织项目方案与成果路径", status, label },
-        { agent: "决策闭环", action: hasAdoptedAction ? "建议已确认，进入项目执行" : hasAction ? "AI 建议已生成，等待负责人确认" : "等待形成有依据的行动建议", status: hasAdoptedAction ? "completed" : hasAction ? "working" : "ready", label: hasAdoptedAction ? "已确认" : hasAction ? "待确认" : "待生成" },
+        { agent: "AI Worker · Research Skill", action: "理解需求并检索可追溯资料", status, label },
+        { agent: "AI Worker · Review Skill", action: "核验 Evidence 与研究边界", status, label },
+        { agent: "AI Worker · Delivery Skill", action: "准备待人工复核的交付草稿", status, label },
+        { agent: "Human Review", action: hasAdoptedAction ? "建议已确认，进入项目执行" : hasAction ? "AI 建议已生成，等待负责人确认" : "等待形成有依据的行动建议", status: hasAdoptedAction ? "completed" : hasAction ? "working" : "ready", label: hasAdoptedAction ? "已确认" : hasAction ? "待确认" : "待生成" },
       ];
     });
     const agentTeamCards = computed(() => [
@@ -576,6 +598,7 @@ createApp({
         name_cn: AGENT_ROLE_LABELS[agent.id] || agent.name_cn,
       })),
     ]);
+    const aiWorkerSkills = computed(() => aiWorkerCapabilities.value?.skills || []);
     const evidenceCenterItems = computed(() => {
       const currentItems = [];
       const addSources = (sources, relatedAgent, basis) => {
@@ -792,6 +815,11 @@ createApp({
     }
 
     async function openWorkspaceView(view) {
+      if (currentWorkspace.value?.is_demo && ["governance", "system", "benchmarks"].includes(view)) {
+        activeWorkspaceView.value = "dashboard";
+        errorMessage.value = "Admin Console is not available in the Demo Workspace.";
+        return;
+      }
       activeWorkspaceView.value = view;
       libraryError.value = "";
       reportsError.value = "";
@@ -837,7 +865,7 @@ createApp({
       if (["showcase","architecture","capabilities","business-dashboard","release-center"].includes(view)) await loadProductShowcase();
       if (view === "solution-delivery") await loadSolutionDelivery();
       if (view === "fde-solution-studio") await loadFdeSolutions();
-      if (view === "mission-center" || view === "team-workspace") await loadAIMissions();
+      if (view === "mission-center" || view === "team-workspace") await Promise.all([loadAIMissions(), loadApprovalQueue()]);
       if (view === "enterprise-hub") await loadEnterpriseHub();
       void loadResearchOverview();
     }
@@ -1085,6 +1113,7 @@ createApp({
     }
 
     async function loadAIMissions() {
+      if (!identityProfile.value?.workspace?.id) return;
       if (aiMissionLoading.value) return;
       aiMissionLoading.value = true; aiMissionError.value = "";
       try {
@@ -1105,6 +1134,16 @@ createApp({
       if (!missionId) return;
       const response = await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}`);
       selectedAIMission.value = await readResponse(response);
+      try {
+        selectedAIMission.value.worker_contract = await readResponse(
+          await fetchWithTimeout(`${API_BASE_URL}/researchos/ai-worker/missions/${missionId}/contract`),
+        );
+      } catch (_) { selectedAIMission.value.worker_contract = null; }
+      try {
+        selectedAIMission.value.worker_runtime = await readResponse(
+          await fetchWithTimeout(`${API_BASE_URL}/api/runtime/missions/${missionId}`),
+        );
+      } catch (_) { selectedAIMission.value.worker_runtime = null; }
       try { selectedAIMission.value.evaluation = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/evaluations/${missionId}`)); } catch (_) { selectedAIMission.value.evaluation = null; }
       try { selectedAIMission.value.agent_traces = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent-traces/${missionId}`)); } catch (_) { selectedAIMission.value.agent_traces = []; }
       try { selectedAIMission.value.planner_plan = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/plan`)); } catch (_) { selectedAIMission.value.planner_plan = null; }
@@ -1118,6 +1157,28 @@ createApp({
         missionArtifacts.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/artifacts`));
         artifactAnalytics.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/artifacts/analytics`));
       } catch (error) { artifactError.value = error.message || "Artifact 暂时无法读取。"; }
+    }
+
+    async function loadApprovalQueue() {
+      approvalLoading.value = true; approvalError.value = "";
+      try {
+        approvalRequests.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/approvals`));
+      } catch (error) {
+        approvalRequests.value = [];
+        approvalError.value = error.message || "Review Queue 暂时无法读取。";
+      } finally { approvalLoading.value = false; }
+    }
+
+    async function resolveApproval(request, action) {
+      if (!request?.id) return;
+      approvalLoading.value = true; approvalError.value = "";
+      try {
+        await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/approvals/${request.id}/${action}`, {
+          method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ comment: "Reviewed in Workspace Review Queue." }),
+        }));
+        await loadApprovalQueue();
+      } catch (error) { approvalError.value = error.message || "Review decision 暂时无法提交。"; }
+      finally { approvalLoading.value = false; }
     }
 
     async function loadConnectorCenter() {
@@ -1148,7 +1209,7 @@ createApp({
     }
 
     async function loadGovernance() {
-      try { const [organizations, workspaces, logs] = await Promise.all([readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/organizations`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/workspaces`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/audit/logs`))]); governance.value = { organizations, workspaces, logs }; }
+      try { const [organizations, workspaces, logs] = await Promise.all([readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/organizations`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/workspaces`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/audit/events`))]); governance.value = { organizations, workspaces, logs }; }
       catch (_) { governance.value = { organizations: [], workspaces: [], logs: [] }; }
     }
 
@@ -1180,8 +1241,14 @@ createApp({
       finally { scenarioLoading.value = false; }
     }
     async function loadWorkspaceExperience() {
-      try { workspaceExperience.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/workspace/dashboard`)); }
-      catch (_) { workspaceExperience.value = null; }
+      if (!identityProfile.value?.workspace?.id) return;
+      try {
+        workspaceExperienceError.value = "";
+        workspaceExperience.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/workspace/dashboard`));
+      } catch (error) {
+        workspaceExperience.value = null;
+        workspaceExperienceError.value = error.message || "Workspace temporarily unavailable.";
+      }
     }
     async function loadKnowledgeMemory() {
       try { const [assets, decisions, dashboard] = await Promise.all([readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/knowledge/assets`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/knowledge/decisions`)), readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/knowledge/dashboard`))]); knowledgeMemory.value = { assets, decisions, dashboard }; }
@@ -1227,8 +1294,16 @@ createApp({
       finally { artifactLoading.value = false; }
     }
 
-    function downloadArtifact() {
-      if (selectedArtifact.value?.id && selectedArtifact.value.status === "APPROVED") window.open(`${API_BASE_URL}/api/artifacts/${selectedArtifact.value.id}/download`, "_blank", "noopener");
+    async function downloadArtifact() {
+      if (!selectedArtifact.value?.id || selectedArtifact.value.status !== "APPROVED") return;
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/artifacts/${selectedArtifact.value.id}/download`);
+        if (!response.ok) await readResponse(response);
+        const blob = await response.blob();
+        const filename = response.headers.get("content-disposition")?.match(/filename="?([^";]+)"?/i)?.[1] || "researchos-artifact";
+        const link = document.createElement("a");
+        link.href = URL.createObjectURL(blob); link.download = filename; link.click(); URL.revokeObjectURL(link.href);
+      } catch (error) { artifactError.value = error.message || "Artifact download is temporarily unavailable."; }
     }
 
     async function runAdaptiveMission() {
@@ -1321,6 +1396,17 @@ createApp({
       finally { aiMissionLoading.value = false; }
     }
 
+    async function executeAIWorkerRuntime(missionId) {
+      if (!missionId) return;
+      aiMissionLoading.value = true; aiMissionError.value = ""; aiMissionDelivery.value = null;
+      try {
+        await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/runtime/missions/${missionId}/execute`, { method: "POST" }));
+        await loadAIMissionDetail(missionId);
+        await loadAIMissions();
+      } catch (error) { aiMissionError.value = error.message || "AI Worker 当前无法执行该受控步骤。"; }
+      finally { aiMissionLoading.value = false; }
+    }
+
     async function reviewAIMission(status) {
       const missionId = selectedAIMission.value?.id;
       if (!missionId) return;
@@ -1379,7 +1465,7 @@ createApp({
 
     async function createComputerMission() {
       const missionId = selectedAIMission.value?.id;
-      if (!missionId || !computerMissionTask.value.trim()) { aiMissionError.value = "请先说明需要 Computer Agent 执行的受控任务。"; return; }
+      if (!missionId || !computerMissionTask.value.trim()) { aiMissionError.value = "请先说明需要 Computer Skill 执行的受控任务。"; return; }
       computerMissionLoading.value = true; aiMissionError.value = "";
       try {
         const response = await fetchWithTimeout(`${API_BASE_URL}/api/computer-missions`, {
@@ -1514,7 +1600,7 @@ createApp({
       const goal = (template || researchOsGoal.value || "").trim();
       if (goal) researchOsGoal.value = goal;
       assistantPanelOpen.value = false;
-      activeWorkspaceView.value = "tasks";
+      activeWorkspaceView.value = "insights";
       void loadResearchOsData();
     }
 
@@ -1530,6 +1616,7 @@ createApp({
     }
 
     async function loadResearchOsData() {
+      if (!identityProfile.value?.workspace?.id) return;
       try {
         const [overviewResponse, agentsResponse] = await Promise.all([
           fetchWithTimeout(`${API_BASE_URL}/researchos/overview`, { method: "GET" }),
@@ -1538,6 +1625,11 @@ createApp({
         researchOsOverview.value = await readResponse(overviewResponse);
         const agentData = await readResponse(agentsResponse);
         researchOsAgents.value = Array.isArray(agentData.agents) ? agentData.agents : [];
+        try {
+          aiWorkerCapabilities.value = await readResponse(
+            await fetchWithTimeout(`${API_BASE_URL}/researchos/ai-worker/capabilities`, { method: "GET" }),
+          );
+        } catch (_) { aiWorkerCapabilities.value = null; }
         // Keep Home's recent-workspace area data-backed from the same live session.
         void loadResearchWorkspaces();
       } catch (error) {
@@ -1913,8 +2005,8 @@ createApp({
         // controlled task, show the persisted execution event stream instead.
         computerPlanPreview.value = null;
         computerTasks.value = [computerTask.value, ...computerTasks.value.filter((item) => item.id !== computerTask.value.id)];
-        recordActivity("Research Computer Agent 任务创建", goal);
-      } catch (error) { computerError.value = error.message || "Computer Agent 任务创建失败。"; }
+        recordActivity("Computer Skill 任务创建", goal);
+      } catch (error) { computerError.value = error.message || "Computer Skill 任务创建失败。"; }
       finally { computerLoading.value = false; }
     }
 
@@ -1959,7 +2051,7 @@ createApp({
           computerTask.value = await readResponse(response);
         }
         computerTasks.value = [computerTask.value, ...computerTasks.value.filter((item) => item.id !== computerTask.value.id)];
-        recordActivity("Computer Agent 人工审核", decision === "approve" ? "已批准受控操作。" : "已拒绝受控操作。");
+        recordActivity("Computer Skill 人工审核", decision === "approve" ? "已批准受控操作。" : "已拒绝受控操作。");
       } catch (error) { computerError.value = error.message || "Computer Action 审核失败。"; }
       finally { computerLoading.value = false; }
     }
@@ -2802,6 +2894,7 @@ createApp({
     }
 
     async function loadLibraryPapers() {
+      if (!identityProfile.value?.workspace?.id) return;
       if (libraryLoading.value) return;
       libraryLoading.value = true;
       libraryError.value = "";
@@ -2940,10 +3033,16 @@ createApp({
         throw new Error("服务器返回异常，请稍后重试。");
       }
       if (!response.ok) {
-        if (typeof data.detail === "string") throw new Error(data.detail);
+        if (response.status === 401) {
+          clearIdentitySession();
+          throw new Error("Session expired. Please sign in again.");
+        }
+        if (response.status === 403) throw new Error("Permission denied. You do not have access to this Workspace resource.");
+        if (response.status === 404) throw new Error("Page or Workspace resource not found.");
+        if (response.status === 429) throw new Error("This Workspace is temporarily busy. Please try again shortly.");
         if (response.status === 503) throw new Error("后端服务暂时不可用，请稍后重试。");
         if (response.status >= 500) throw new Error("服务处理失败，请稍后重试。");
-        throw new Error("请求参数不正确，请检查输入后重试。");
+        throw new Error("The request could not be completed. Check your input and try again.");
       }
       return data;
     }
@@ -2957,9 +3056,25 @@ createApp({
       }, REQUEST_TIMEOUT_MS);
 
       try {
-        const response = await fetch(url, { ...options, signal: controller.signal });
-        connectionState.value = "CONNECTED";
-        connectionMessage.value = "Workspace connected";
+        const headers = new Headers(options?.headers || {});
+        if (sessionToken.value) headers.set("Authorization", `Bearer ${sessionToken.value}`);
+        const response = await fetch(url, { ...options, headers, signal: controller.signal });
+        if (response.ok) {
+          connectionState.value = "CONNECTED";
+          connectionMessage.value = "Workspace connected";
+        } else if (response.status === 401) {
+          connectionState.value = "OFFLINE";
+          connectionMessage.value = "Session expired";
+        } else if (response.status === 403) {
+          connectionState.value = "OFFLINE";
+          connectionMessage.value = "Workspace permission denied";
+        } else if (response.status === 404) {
+          connectionState.value = "OFFLINE";
+          connectionMessage.value = "Resource unavailable";
+        } else if (response.status >= 500) {
+          connectionState.value = "OFFLINE";
+          connectionMessage.value = "Service temporarily unavailable";
+        }
         return response;
       } catch (error) {
         connectionState.value = "OFFLINE";
@@ -2972,6 +3087,108 @@ createApp({
       } finally {
         window.clearTimeout(timeout);
       }
+    }
+
+    async function loadIdentityProfile() {
+      if (!sessionToken.value) { identityProfile.value = null; return false; }
+      try {
+        identityRestoreError.value = "";
+        identityProfile.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/identity/me`));
+        return true;
+      } catch (error) {
+        identityRestoreError.value = error.message || "Session expired. Please sign in again.";
+        clearIdentitySession();
+        return false;
+      }
+    }
+
+    function clearIdentitySession() {
+      sessionToken.value = "";
+      identityProfile.value = null;
+      identityMenuOpen.value = false;
+      window.localStorage.removeItem("researchos_session_token");
+    }
+
+    async function initializeAuthorizedWorkspace() {
+      if (!identityProfile.value?.workspace?.id) return;
+      await loadWorkspaceExperience();
+      await loadAIMissions();
+      await loadLibraryPapers();
+      await loadProductExperience();
+      await loadResearchOsData();
+      await loadResearchWorkspaces();
+      await loadResearchOverview();
+    }
+
+    async function initializeApplication() {
+      const identityRestored = await loadIdentityProfile();
+      if (!identityRestored) return;
+      await initializeAuthorizedWorkspace();
+    }
+
+    async function loginToWorkspace() {
+      if (!loginForm.value.email.trim() || !loginForm.value.password) {
+        loginError.value = "Enter your email and password.";
+        return;
+      }
+      loginLoading.value = true; loginError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/identity/sessions`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email: loginForm.value.email.trim(), password: loginForm.value.password }),
+        });
+        const session = await readResponse(response);
+        await establishIdentitySession(session);
+        loginForm.value.password = "";
+      } catch (error) {
+        loginError.value = error.message || "Sign-in failed. Please verify your credentials.";
+      } finally { loginLoading.value = false; }
+    }
+
+    async function establishIdentitySession(session, destination = "dashboard") {
+      sessionToken.value = session.session_token;
+      window.localStorage.setItem("researchos_session_token", session.session_token);
+      const identityRestored = await loadIdentityProfile();
+      if (!identityRestored) throw new Error(identityRestoreError.value || "Session could not be restored. Please sign in again.");
+      activeWorkspaceView.value = destination;
+      await initializeAuthorizedWorkspace();
+    }
+
+    async function registerWorkspace() {
+      const form = registrationForm.value;
+      if (!form.name.trim() || !form.email.trim() || !form.password || !form.workspace_name.trim()) {
+        loginError.value = "Complete your name, email, password and Workspace name.";
+        return;
+      }
+      loginLoading.value = true; loginError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/identity/register`, {
+          method: "POST", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: form.name.trim(), email: form.email.trim(), password: form.password, workspace_name: form.workspace_name.trim() }),
+        });
+        await establishIdentitySession(await readResponse(response), "ai-workspace");
+        registrationForm.value = { name: "", email: "", password: "", workspace_name: "" };
+      } catch (error) {
+        loginError.value = error.message || "Workspace creation failed. Please try again.";
+      } finally { loginLoading.value = false; }
+    }
+
+    async function startDemoSession() {
+      demoLoading.value = true; loginError.value = "";
+      try {
+        const response = await fetchWithTimeout(`${API_BASE_URL}/api/identity/demo-session`, { method: "POST" });
+        await establishIdentitySession(await readResponse(response), "dashboard");
+      } catch (error) {
+        loginError.value = error.message || "Demo Workspace could not be started.";
+      } finally { demoLoading.value = false; }
+    }
+
+    async function switchIdentityWorkspace(workspaceId) {
+      if (!workspaceId || !identityProfile.value) return;
+      try {
+        await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/identity/sessions/switch`, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ workspace_id: workspaceId }) }));
+        await loadIdentityProfile(); await loadAIMissions();
+      } catch (error) { aiMissionError.value = error.message || "Workspace switch was not permitted."; }
     }
 
     async function analyzeDocument() {
@@ -3066,13 +3283,149 @@ createApp({
       if (fileInput.value) fileInput.value.value = "";
     }
 
-    void loadResearchOverview();
-    void loadResearchOsData();
-    void loadLibraryPapers();
-    void loadResearchWorkspaces();
-    void loadProductExperience();
-    window.setTimeout(() => { void loadResearchWorkspaces(); }, 250);
-    void loadResearchBi();
+    // Product UI copy is deliberately resolved at the presentation boundary.
+    // It never translates user content, API data, prompts, or evidence; only
+    // exact legacy interface labels in the primary English product paths.
+    const productCopy = new Map([
+      ["主导航", "Primary navigation"],
+      ["科研洞察", "Research Intelligence"],
+      ["研究任务中心", "Research Mission"],
+      ["开始知识问答", "Generate Insight"],
+      ["生成结构化报告", "Generate Insight"],
+      ["正在生成研究报告…", "Generating insight…"],
+      ["刷新论文范围", "Refresh sources"],
+      ["刷新中", "Refreshing…"],
+      ["刷新列表", "Refresh library"],
+      ["＋ 上传 PDF 资料", "Upload PDF"],
+      ["正在保存资料…", "Saving material…"],
+      ["没有匹配的科研资料", "No matching research material"],
+      ["关闭", "Close"],
+      ["进入分析", "Open analysis"],
+      ["分析中…", "Analyzing…"],
+      ["全部状态", "All statuses"],
+      ["论文", "Research paper"],
+      ["专利", "Patent"],
+      ["实验报告", "Experiment report"],
+      ["项目资料", "Project material"],
+      ["开始协作", "Start mission"],
+      ["企业需求分析", "Enterprise solution"],
+      ["研究方向探索", "Research discovery"],
+      ["实验室知识管理", "Knowledge management"],
+      ["分析项目代码", "Analyze project"],
+      ["整理论文资料", "Organize research materials"],
+      ["优化首页 UI", "Refine home experience"],
+      ["只分析", "Analysis only"],
+      ["低风险受控执行", "Low-risk controlled execution"],
+      ["Evidence 绑定交付", "Evidence-bound delivery"],
+      ["尚无可验证资料；不会生成科研结论。", "No verified evidence is available. No research conclusion will be generated."],
+      ["尚未检索到可引用 Evidence；不会产生科研结论。", "No traceable evidence has been retrieved. No research conclusion will be generated."],
+      ["暂无待确认建议。", "No reviewable suggestions yet."],
+      ["尚无 Agent Message。消息仅在实际协作请求、结果、反馈或风险告警发生时记录。", "No collaboration activity has been recorded yet."],
+      ["查看全部", "View all"],
+      ["继续研究 →", "Continue research →"],
+      ["所有入口均标记为 Demo；不会生成假 Evidence、研究结论或未经批准的源码修改。", "Every flow is clearly marked as a demo. It does not create fabricated evidence, research conclusions, or unapproved source changes."],
+      ["创建 Organization、设置角色或更新 Policy 后，系统会保存不含 Prompt、CoT 和 Secret 的审计摘要。", "Create an organization, assign a role, or update a policy to record an accountable activity summary."],
+      ["不作为 RAG Evidence", "Not used as Knowledge Evidence"],
+      ["未识别", "Not identified"],
+      ["等待受控执行和人工审核；系统不会自动生成正式交付。", "This mission is waiting for controlled execution and human review. It will not auto-release a deliverable."],
+      ["方案已由人工批准。交付包仍会保留 AI Generated Draft 与 NEEDS_CONFIRMATION 标识。", "The plan is approved. Its delivery remains a reviewable AI-generated draft."],
+      ["Mission 已完成。所有内容仍为可追溯的 AI 辅助交付草稿。", "This mission is complete. Every output remains a traceable AI-assisted draft."],
+      ["暂无待确认建议。", "No reviewable suggestion is waiting."],
+      ["暂无持续研究 Workspace", "No active research workspace"],
+      ["暂无待确认行动", "No decision is waiting"],
+      ["FAILED", "Execution needs attention"],
+      ["Failed", "Execution needs attention"],
+      ["ERROR", "Execution needs attention"],
+      ["Error", "Execution needs attention"],
+      ["PENDING", "Preparing"],
+      ["PLANNING", "Preparing"],
+      ["RUNNING", "Running"],
+      ["WAITING_APPROVAL", "Waiting for approval"],
+      ["WAITING_REVIEW", "Needs review"],
+      ["NEEDS_REVIEW", "Needs review"],
+      ["COMPLETED", "Completed"],
+      ["STOPPED", "Stopped"],
+      ["failed", "Execution needs attention"],
+      ["error", "Execution needs attention"],
+      ["waiting_approval", "Waiting for approval"],
+      ["waiting_review", "Needs review"],
+      ["needs_review", "Needs review"],
+      ["completed", "Completed"],
+      ["executing", "Running"],
+      ["planning", "Preparing"],
+      ["HUMAN APPROVAL", "RELEASE APPROVAL"],
+      ["Patch review", "Change Review"],
+      ["Delivery confirmation", "Release approval"],
+      ["Execution checkpoint", "Execution progress"],
+      ["Live execution events", "Activity updates"],
+      ["Auditable action timeline", "Activity updates"],
+      ["Environment-aware execution", "Mission progress"],
+      ["Computer status", "Current action"],
+      ["Plan ready", "Ready to review"],
+      ["Generate skill plan", "Prepare execution"],
+      ["Start controlled execution", "Begin controlled action"],
+      ["Building task plan…", "Preparing action…"],
+      ["Executing…", "Working…"],
+      ["Environment", "Workspace context"],
+      ["Evidence references", "Evidence foundation"],
+      ["Controlled tools", "Safety boundaries"],
+      ["Code review", "Change review"],
+      ["File changed", "Changed material"],
+      ["files changed", "materials updated"],
+      ["changed lines", "reviewable updates"],
+      ["No source change proposed.", "No change is ready for review."],
+      ["Retry", "Try again"],
+      ["Reject", "Decline"],
+      ["输入并探索研究目标", "Frame a research goal"],
+      ["创建可审阅研究流程", "Build a reviewable workflow"],
+      ["分析项目和受控改动", "Review a project safely"],
+      ["刷新中", "Refreshing"],
+      ["刷新论文范围", "Refresh research scope"],
+      ["暂无可检索论文", "No research papers available"],
+      ["暂无持续研究 Workspace", "No active research workspace"],
+      ["查看全部", "View all"],
+      ["继续研究 →", "Continue research →"],
+      ["创建研究任务", "Create research mission"],
+      ["推荐研究策略", "Recommend research strategy"],
+      ["打开 Workspace", "Open workspace"],
+      ["进入 Research", "Open research"],
+    ]);
+    const productPlaceholders = new Map([
+      ["例如：总结这些论文在研究方法上的差异，并说明各自的适用边界。", "What would you like to explore?"],
+      ["例如：分析当前 ResearchOS 项目代码，找出前端优化点并生成报告", "Describe the task you want completed"],
+      ["例如：RAG 技术路线分析", "For example: RAG technology landscape"],
+      ["描述客户需求或研究目标；系统仅基于检索到的真实资料形成 Evidence 引用。", "Describe the customer need or research goal. Only retrieved evidence can be cited."],
+    ]);
+    let productCopyScheduled = false;
+    function applyProductCopy() {
+      productCopyScheduled = false;
+      const scope = document.querySelector(".app-shell, .login-shell");
+      if (!scope) return;
+      const walker = document.createTreeWalker(scope, NodeFilter.SHOW_TEXT);
+      const replacements = [];
+      while (walker.nextNode()) {
+        const node = walker.currentNode;
+        const value = node.nodeValue.trim();
+        if (productCopy.has(value)) replacements.push([node, productCopy.get(value), node.nodeValue]);
+      }
+      replacements.forEach(([node, replacement, original]) => {
+        node.nodeValue = original.replace(original.trim(), replacement);
+      });
+      scope.querySelectorAll("input[placeholder], textarea[placeholder]").forEach((element) => {
+        const replacement = productPlaceholders.get(element.placeholder);
+        if (replacement) element.placeholder = replacement;
+      });
+    }
+    const productCopyObserver = new MutationObserver(() => {
+      if (!productCopyScheduled) {
+        productCopyScheduled = true;
+        queueMicrotask(applyProductCopy);
+      }
+    });
+    productCopyObserver.observe(document.body, { childList: true, subtree: true });
+    queueMicrotask(applyProductCopy);
+
+    void initializeApplication();
 
     return {
       agentDecision,
@@ -3081,6 +3434,23 @@ createApp({
       activeWorkspaceView,
       connectionState,
       connectionMessage,
+      identityProfile,
+      identityMenuOpen,
+      identityRestoreError,
+      authMode,
+      loginForm,
+      registrationForm,
+      loginLoading,
+      demoLoading,
+      loginError,
+      currentUser,
+      currentWorkspace,
+      currentRole,
+      loginToWorkspace,
+      registerWorkspace,
+      startDemoSession,
+      clearIdentitySession,
+      switchIdentityWorkspace,
       assistantPanelOpen,
       assistantDraft,
       analysisFromLibrary,
@@ -3165,6 +3535,8 @@ createApp({
       agentTimeline,
       aiActivityStream,
       agentTeamCards,
+      aiWorkerCapabilities,
+      aiWorkerSkills,
       evidenceCenterItems,
       evidenceError,
       evidenceLoading,
@@ -3180,6 +3552,7 @@ createApp({
       scenarioRunResult,
       scenarioLoading,
       workspaceExperience,
+      workspaceExperienceError,
       knowledgeMemory,
       productShowcase,
       workflowDiagnostics,
@@ -3282,6 +3655,9 @@ createApp({
       connectorForm,
       collaborationAnalytics,
       governance,
+      approvalRequests,
+      approvalLoading,
+      approvalError,
       entryCopilotSession,
       entryCopilotResult,
       entryCopilotLoading,
@@ -3305,6 +3681,8 @@ createApp({
       loadAIMissions,
       loadAIMissionDetail,
       loadMissionArtifacts,
+      loadApprovalQueue,
+      resolveApproval,
       generateMissionArtifact,
       openArtifact,
       reviewArtifact,
@@ -3332,6 +3710,7 @@ createApp({
       runAdaptiveMission,
       reviewAdaptiveMission,
       runAIMission,
+      executeAIWorkerRuntime,
       reviewAIMission,
       reviseAIMission,
       generateAIMissionDelivery,
@@ -3542,36 +3921,19 @@ createApp({
     };
   },
   template: `
-    <main class="app-shell">
+    <main v-if="identityProfile" class="app-shell">
       <header class="workspace-header">
         <nav class="top-navigation" aria-label="主导航">
            <button class="brand-button" type="button" @click="openWorkspaceView('dashboard')"><span class="brand-orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2.8 14.4 9.6 21.2 12l-6.8 2.4L12 21.2l-2.4-6.8L2.8 12l6.8-2.4L12 2.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><span><b>ResearchOS</b><small>AI Research Workspace</small></span></button>
-           <div class="top-navigation-links product-navigation">
-             <button type="button" :class="{ active: activeWorkspaceView === 'dashboard' }" @click="openWorkspaceView('dashboard')">Home</button>
+          <div class="top-navigation-links product-navigation">
+            <button type="button" :class="{ active: activeWorkspaceView === 'dashboard' }" @click="openWorkspaceView('dashboard')">Home</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'mission-center' || activeWorkspaceView === 'team-workspace' }" @click="openWorkspaceView('mission-center')">Missions</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'ai-workspace' }" @click="openWorkspaceView('ai-workspace')">Workspace</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'agents' }" @click="openWorkspaceView('agents')">AI Team</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'artifact-center' }" @click="openWorkspaceView('artifact-center')">Artifacts</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'computer' }" @click="openWorkspaceView('computer')">Computer Lab</button>
             <button type="button" :class="{ active: activeWorkspaceView === 'knowledge' || activeWorkspaceView === 'insights' || activeWorkspaceView === 'evidence' }" @click="openWorkspaceView('knowledge')">Knowledge</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'business-dashboard' }" @click="openWorkspaceView('business-dashboard')">Business Dashboard</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'release-center' }" @click="openWorkspaceView('release-center')">Release</button>
-             <button type="button" :class="{ active: activeWorkspaceView === 'tasks' || activeWorkspaceView === 'workflow-studio' || activeWorkspaceView === 'assistant' || activeWorkspaceView === 'worker' || activeWorkspaceView === 'agents' || activeWorkspaceView === 'timeline' }" @click="openWorkspaceView('tasks')">Research Engine</button>
-             <button type="button" :class="{ active: activeWorkspaceView === 'operator' }" @click="openWorkspaceView('operator')">Operator Studio</button>
-             <button type="button" :class="{ active: activeWorkspaceView === 'computer' }" @click="openWorkspaceView('computer')">Computer Lab</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'copilot' }" @click="openWorkspaceView('copilot')">Action Center</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'document-intelligence' }" @click="openWorkspaceView('document-intelligence')">Document Intelligence</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'connector-center' }" @click="openWorkspaceView('connector-center')">Connector Center</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'governance' }" @click="openWorkspaceView('governance')">Governance Center</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'benchmarks' }" @click="openWorkspaceView('benchmarks')">Benchmark Center</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'scenario-center' }" @click="openWorkspaceView('scenario-center')">Scenario Center</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'enterprise-hub' }" @click="openWorkspaceView('enterprise-hub')">Enterprise Hub</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'research-workspace' || activeWorkspaceView === 'workspace' || activeWorkspaceView === 'task-center' }" @click="openWorkspaceView('research-workspace')">Research Workspace</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'knowledge' || activeWorkspaceView === 'insights' || activeWorkspaceView === 'evidence' }" @click="openWorkspaceView('knowledge')">Knowledge Intelligence</button>
-            <button type="button" :class="{ active: activeWorkspaceView === 'outcome-center' || activeWorkspaceView === 'outcomes' || activeWorkspaceView === 'projects' || activeWorkspaceView === 'delivery' }" @click="openWorkspaceView('outcome-center')">Insight Studio</button>
-            <button type="button" :class="{ active: ['fde-solution-studio','solution-delivery','fde-config','fde-delivery','fde-mapping','fde-risks','fde-delivery-report','fde-report','fde-demo'].includes(activeWorkspaceView) }" @click="openWorkspaceView('fde-solution-studio')">Solution Studio</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'artifact-center' }" @click="openWorkspaceView('artifact-center')">Deliveries</button>
+            <button type="button" :class="{ active: activeWorkspaceView === 'computer' }" @click="openWorkspaceView('computer')">Computer</button>
+            <span class="navigation-contract-marker" aria-hidden="true">Workspace</span>
           </div>
-         <div class="nav-utilities"><button class="system-link" type="button" :class="{ active: activeWorkspaceView === 'system' }" @click="openWorkspaceView('system')">System Console</button><button class="demo-mode-button" type="button" @click="openWorkspaceView('demo-center')">Demo Center</button><span class="top-navigation-status"><i></i> Ready</span><button class="user-avatar" type="button" aria-label="当前工作空间用户">R</button></div>
+         <div class="nav-utilities"><label v-if="identityProfile?.workspaces?.length" class="workspace-context-selector"><span>Workspace</span><select :value="identityProfile.workspace.id" aria-label="Switch workspace" @change="switchIdentityWorkspace($event.target.value)"><option v-for="workspace in identityProfile.workspaces" :key="workspace.id" :value="workspace.id">{{ workspace.name }}</option></select><small>{{ identityProfile.workspace.role }} · {{ workspaceExperience?.missions?.[0]?.title || 'No active mission' }}</small></label><button v-if="['OWNER','ADMIN'].includes(identityProfile?.workspace?.role)" class="system-link" type="button" :class="{ active: ['governance','system','benchmarks'].includes(activeWorkspaceView) }" @click="openWorkspaceView('governance')">Admin Console</button><button class="demo-mode-button" type="button" @click="openWorkspaceView('demo-center')">Demo</button><span class="top-navigation-status"><i></i> Ready</span><div class="identity-menu"><button class="user-avatar" type="button" aria-label="当前工作空间用户" @click="identityMenuOpen = !identityMenuOpen">{{ identityProfile?.user?.display_name?.slice(0, 1) || '•' }}</button><section v-if="identityMenuOpen" class="identity-profile-menu"><b>{{ identityProfile?.user?.display_name || 'No active user' }}</b><small>{{ identityProfile ? (identityProfile.workspace.name + ' · ' + identityProfile.workspace.role) : 'Sign in to an authorized Workspace to access enterprise resources.' }}</small><button v-if="identityProfile?.workspace?.role === 'OWNER' || identityProfile?.workspace?.role === 'ADMIN'" class="text-button" type="button" @click="openWorkspaceView('governance')">Open Admin Console</button></section></div></div>
         </nav>
       </header>
 
@@ -3579,30 +3941,20 @@ createApp({
         <i></i><span>{{ connectionMessage }}</span>
       </button>
 
+      <section v-if="currentWorkspace?.is_demo" class="demo-workspace-banner" aria-label="Demo Workspace notice">
+        <span>DEMO</span><div><b>ResearchOS Demo Environment</b><small>This Workspace is for demonstration only. Customer data and Admin Console are unavailable.</small></div>
+      </section>
+
       <section v-if="activeWorkspaceView === 'dashboard'" class="home-workspace" aria-label="ResearchOS Home">
-          <div class="home-hero workspace-home-hero"><p class="section-kicker">RESEARCHOS · ENTERPRISE INTELLIGENCE</p><h1>Your AI team<br />is ready to work.</h1><p>Research, planning and delivery — coordinated in one reviewable workspace.</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="What would you like your AI team to accomplish?"></textarea><button type="button" class="primary-card-action" :disabled="entryCopilotLoading" @click="startCopilotMission">{{ entryCopilotLoading ? 'Planning mission…' : 'Start Mission' }}</button></div><div class="enterprise-upload-strip"><button class="outline-button" type="button" @click="openWorkspaceView('showcase')">Try Demo</button><label class="outline-button"><input type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt" @change="uploadEnterpriseFile" hidden />{{ enterpriseFileLoading ? 'Analyzing material…' : 'Add material' }}</label><button class="text-button" type="button" @click="openWorkspaceView('ai-workspace')">Open Workspace →</button></div><small>AI drafts remain reviewable. Customer material never becomes Knowledge Evidence automatically.</small><p v-if="entryCopilotResult" class="quiet-note">{{ entryCopilotResult.summary }} · Mission 已创建。</p><p v-if="enterpriseFileError" class="error-alert"><span>!</span>{{ enterpriseFileError }}</p></div>
-          <div class="home-quick-grid product-capability-grid"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><b>Research Agent</b><small>Explore research, Evidence and deliverables</small></button><button type="button" @click="openWorkspaceView('mission-center')"><b>AI Mission Center</b><small>Track planned work, review and delivery states</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Review my project code'; computerPlanPreview = null"><b>Computer Agent</b><small>Analyze a workspace and prepare reviewable changes</small></button><button type="button" @click="openWorkspaceView('enterprise-hub')"><b>Enterprise Workspace</b><small>Connect research collaboration and delivery</small></button></div>
-          <section class="home-focus-grid" :class="'connection-' + connectionState.toLowerCase()" aria-label="AI workspace overview">
+          <div class="home-hero workspace-home-hero"><p class="section-kicker">RESEARCHOS · EVIDENCE-DRIVEN AI WORKSPACE</p><h1>Your AI Worker<br />is ready to work.</h1><p>Transform research goals into evidence-backed decisions and enterprise deliverables.</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="Describe your research or business goal..."></textarea><button type="button" class="primary-card-action" :disabled="entryCopilotLoading" @click="startCopilotMission">{{ entryCopilotLoading ? 'Planning mission…' : 'Start Mission' }}</button></div><div class="enterprise-upload-strip"><button class="outline-button" type="button" @click="openWorkspaceView('demo-center')">Try Demo</button><label class="outline-button"><input type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt" @change="uploadEnterpriseFile" hidden />{{ enterpriseFileLoading ? 'Analyzing material…' : 'Add material' }}</label></div><small>AI drafts remain reviewable. Customer material never becomes Knowledge Evidence automatically.</small><p v-if="entryCopilotResult" class="quiet-note">{{ entryCopilotResult.summary }} · Mission 已创建。</p><p v-if="enterpriseFileError" class="error-alert"><span>!</span>{{ enterpriseFileError }}</p></div>
+          <div class="home-quick-grid product-capability-grid" aria-label="AI Worker capabilities"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><span class="capability-mark">01</span><b>Research Intelligence</b><small>Discover insights from trusted evidence.</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Review my project code'; computerPlanPreview = null"><span class="capability-mark">02</span><b>Controlled Computer</b><small>Execute approved digital workflows safely.</small></button><button type="button" @click="openWorkspaceView('artifact-center')"><span class="capability-mark">03</span><b>Enterprise Delivery</b><small>Generate reviewed business artifacts.</small></button></div>
+          <section class="home-focus-grid home-missions-panel" :class="'connection-' + connectionState.toLowerCase()" aria-label="Active missions">
             <article class="home-focus-card">
               <header><span class="focus-dot mission-dot"></span><p class="section-kicker">ACTIVE MISSIONS</p></header>
               <template v-if="connectionState === 'CONNECTING'"><div class="home-card-skeleton"><i></i><i></i><i></i></div></template>
               <template v-else-if="connectionState === 'OFFLINE'"><div class="home-offline-state"><span>✦</span><h3>No live missions yet</h3><p>Workspace connection is required to load your AI workflows.</p><button class="secondary-card-action" type="button" @click="openWorkspaceView(activeWorkspaceView)">Retry connection</button></div></template>
               <template v-else-if="workspaceExperience?.missions?.length"><div v-for="item in workspaceExperience.missions.slice(0,2)" :key="item.id" class="focus-item"><b>{{ item.title }}</b><small>{{ item.current_step || item.status }}</small></div><button class="text-button" type="button" @click="openWorkspaceView('mission-center')">Open missions →</button></template>
-              <template v-else><div class="home-empty-action"><h3>Start a focused mission</h3><p>Describe an outcome above and your AI team will prepare a reviewable workflow.</p><button class="text-button" type="button" @click="researchOsGoal = 'Analyze the indexed research materials and prepare an evidence-backed workflow.'">Use an example →</button></div></template>
-            </article>
-            <article class="home-focus-card">
-              <header><span class="focus-dot team-dot"></span><p class="section-kicker">AI TEAM STATUS</p></header>
-              <template v-if="connectionState === 'CONNECTING'"><div class="home-card-skeleton"><i></i><i></i><i></i></div></template>
-              <template v-else-if="connectionState === 'OFFLINE'"><div class="home-offline-state"><span>✦</span><h3>AI Team unavailable</h3><p>Reconnect your workspace to load active research agents.</p><button class="secondary-card-action" type="button" @click="openWorkspaceView(activeWorkspaceView)">Retry connection</button></div></template>
-              <template v-else-if="workspaceExperience?.agents?.length"><div v-for="agent in workspaceExperience.agents.slice(0,3)" :key="agent.name" class="team-status-row"><i></i><div><b>{{ agent.name }}</b><small>{{ agent.role || agent.status }}</small></div><span>{{ agent.status }}</span></div></template>
-              <template v-else><div class="home-empty-action"><h3>Your AI team is ready</h3><p>Planner, Researcher, Reviewer and Writer activate when a mission starts.</p><button class="text-button" type="button" @click="openWorkspaceView('agents')">Meet the team →</button></div></template>
-            </article>
-            <article class="home-focus-card">
-              <header><span class="focus-dot delivery-dot"></span><p class="section-kicker">RECENT DELIVERIES</p></header>
-              <template v-if="connectionState === 'CONNECTING'"><div class="home-card-skeleton"><i></i><i></i><i></i></div></template>
-              <template v-else-if="connectionState === 'OFFLINE'"><div class="home-offline-state"><span>✦</span><h3>No delivery data available</h3><p>Artifacts will appear after a connected mission reaches delivery.</p><button class="secondary-card-action" type="button" @click="openWorkspaceView(activeWorkspaceView)">Retry connection</button></div></template>
-              <template v-else-if="workspaceExperience?.artifacts?.length"><div v-for="item in workspaceExperience.artifacts.slice(0,2)" :key="item.id" class="focus-item"><b>{{ item.title }}</b><small>{{ item.artifact_type }} · {{ item.status }}</small></div><button class="text-button" type="button" @click="openWorkspaceView('artifact-center')">Open delivery room →</button></template>
-              <template v-else><div class="home-empty-action"><h3>Deliverables appear here</h3><p>Evidence-backed drafts remain reviewable before they are shared.</p><button class="text-button" type="button" @click="openWorkspaceView('artifact-center')">Open delivery room →</button></div></template>
+              <template v-else><div class="home-empty-action"><h3>Start a focused mission</h3><p>Describe an outcome above and your AI Worker will prepare a reviewable workflow.</p><button class="text-button" type="button" @click="researchOsGoal = 'Analyze the indexed research materials and prepare an evidence-backed workflow.'">Use an example →</button></div></template>
             </article>
           </section>
         <section class="home-recent-workspaces"><header><div><p class="section-kicker">RECENT WORKSPACES</p><h3>继续正在进行的研究</h3></div><button class="text-button" type="button" @click="openWorkspaceView('research-workspace')">查看全部</button></header><div v-if="researchWorkspaces.length" class="recent-workspace-grid"><article v-for="item in researchWorkspaces.slice(0,3)" :key="item.workspace_id"><span>{{ item.strategy_type || 'research' }}</span><h4>{{ item.title }}</h4><p><b>{{ item.status || 'created' }}</b> · {{ item.human_review_required ? 'Review Pending' : 'Review not required' }}</p><small>Evidence：{{ item.evidence_count || 0 }}</small><button type="button" @click="resumeResearchWorkspace(item)">继续研究 →</button></article></div><div v-else class="home-empty-state"><b>暂无持续研究 Workspace</b><span>提交一项有依据的研究任务后，系统会保存策略、Evidence 和审核状态。</span></div></section>
@@ -3614,18 +3966,20 @@ createApp({
         <div class="document-intelligence-layout"><aside><p class="section-kicker">CUSTOMER MATERIAL</p><button v-for="file in enterpriseFiles" :key="file.id" type="button" :class="{ active: selectedEnterpriseFile?.id === file.id }" @click="openEnterpriseFile(file.id)"><b>{{ file.filename }}</b><small>{{ file.file_type }} · {{ file.status }}</small></button><p v-if="!enterpriseFiles.length" class="quiet-note">尚无客户资料。上传后才会出现解析结果。</p></aside><main v-if="selectedEnterpriseFile"><section class="document-summary-card"><span>{{ selectedEnterpriseFile.classification }}</span><h3>{{ selectedEnterpriseFile.filename }}</h3><p>{{ selectedEnterpriseFile.summary?.summary }}</p><small>{{ selectedEnterpriseFile.summary?.limitations }}</small></section><section class="document-analysis-card"><p class="section-kicker">EXTRACTED REQUIREMENTS</p><h3>所有识别项均待客户确认</h3><article v-for="item in selectedEnterpriseFile.requirements || []" :key="item.id"><b>{{ item.category }}</b><p>{{ item.description }}</p><small>{{ item.status }}</small></article><p v-if="!(selectedEnterpriseFile.requirements || []).length" class="quiet-note">资料不足以生成需求草稿；请补充可解析内容。</p></section><footer class="document-mission-action"><div><b>Human confirmation required</b><p>确认后将通过 Copilot 创建现有 Mission 与 Planner Graph，并关联此客户材料。</p></div><button class="primary-card-action" type="button" :disabled="enterpriseFileLoading || selectedEnterpriseFile.status !== 'COMPLETED'" @click="createMissionFromDocument">Confirm requirements & create Mission</button></footer></main><main v-else class="document-empty-state"><b>Upload a customer document</b><p>支持 PDF、DOCX、XLSX、PPTX、图片、文本和安全代码文件。</p></main></div>
       </section>
 
-      <section v-if="activeWorkspaceView === 'mission-center'" class="mission-center mission-collaboration-workspace" aria-label="AI Mission Center">
-        <header class="dashboard-heading"><div><p class="section-kicker">FDE MISSION CENTER</p><h2>Customer Need → Evidence → Review → Delivery.</h2><p>真实 RAG Evidence、需求确认与人工审核共同驱动交付；不展示内部推理，也不自动批准。</p></div><div class="mission-header-actions"><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="startFdeMissionDemo">Start FDE Demo</button><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="loadAIMissions">Refresh</button></div></header>
+      <section v-if="activeWorkspaceView === 'mission-center'" class="mission-center mission-collaboration-workspace" aria-label="AI Worker Workflow">
+        <header class="dashboard-heading"><div><p class="section-kicker">MISSION WORKSPACE</p><h2>{{ selectedAIMission?.title || 'Create an evidence-driven mission.' }}</h2><p>{{ selectedAIMission ? ((selectedAIMission.status || 'PLANNING') + ' · ' + (selectedAIMission.owner || 'Workspace owner') + ' · ' + (selectedAIMission.created_at || 'Created in this Workspace')) : 'Create a mission to turn a customer need into a reviewable deliverable.' }}</p></div><div class="mission-header-actions"><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="startFdeMissionDemo">Start FDE Demo</button><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="loadAIMissions">Refresh</button></div></header>
+        <ol class="mission-stage-strip" aria-label="Mission stages"><li :class="{ active: !!selectedAIMission }"><span>01</span><b>Understand</b><small>Goal confirmed</small></li><li :class="{ active: ['RUNNING','WAITING_REVIEW','APPROVED','COMPLETED'].includes(selectedAIMission?.status) }"><span>02</span><b>Research</b><small>Evidence gathered</small></li><li :class="{ active: ['WAITING_REVIEW','APPROVED','COMPLETED'].includes(selectedAIMission?.status) }"><span>03</span><b>Review</b><small>Human decision</small></li><li :class="{ active: ['COMPLETED'].includes(selectedAIMission?.status) }"><span>04</span><b>Deliver</b><small>Output ready</small></li></ol>
         <p v-if="aiMissionError" class="error-alert"><span>!</span>{{ aiMissionError }}</p>
         <div class="mission-center-layout"><section class="mission-create-surface"><p class="section-kicker">CREATE MISSION</p><label>Mission title<input v-model="aiMissionForm.title" placeholder="例如：RAG 技术路线分析" /></label><label>Mission type<select v-model="aiMissionForm.mission_type"><option>RESEARCH</option><option>SOLUTION</option><option>DELIVERY</option></select></label><label>Customer need / Goal<textarea v-model="aiMissionForm.goal" rows="5" placeholder="描述客户需求或研究目标；系统仅基于检索到的真实资料形成 Evidence 引用。"></textarea></label><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="createAIMission">Create AI Mission</button></section>
-          <section class="mission-stream-surface"><template v-if="selectedAIMission"><header><div><p class="section-kicker">MISSION RUNTIME</p><h3>{{ selectedAIMission.title }}</h3><small>{{ selectedAIMission.status }} · {{ selectedAIMission.progress }}% · {{ selectedAIMission.current_step }}</small></div><button v-if="['PLANNING','NEEDS_REVISION'].includes(selectedAIMission.status)" class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="runAIMission(selectedAIMission.id)">Run Mission</button></header><section class="mission-requirements"><span>REQUIREMENTS · NEEDS_CONFIRMATION</span><div v-if="selectedAIMission.requirements?.length"><small v-for="item in selectedAIMission.requirements" :key="item.id">{{ item.type }} · {{ item.status }}</small></div><p v-else>执行后将生成 Business、Data、AI、System、Delivery、Security 六类待确认需求。</p></section><ol class="mission-timeline"><li v-for="item in selectedAIMission.timeline || []" :key="item.id"><b>{{ item.stage }}</b><div><strong>{{ item.action }}</strong><p>{{ item.result }}</p><small>Evidence: {{ item.evidence_count }} · {{ item.status }} · {{ item.created_at }}</small></div></li></ol><section class="mission-evidence-list"><span>REAL EVIDENCE REFERENCES</span><div v-for="item in selectedAIMission.evidence_refs || []" :key="item.chunk_id"><b>{{ item.source }}</b><small>{{ item.paper_id }} / {{ item.chunk_id }} · {{ item.section }}</small></div><p v-if="!(selectedAIMission.evidence_refs || []).length">尚未检索到可引用 Evidence；不会产生科研结论。</p></section><section class="mission-graph"><span>EVIDENCE GRAPH</span><div v-for="node in selectedAIMission.evidence_graph?.nodes || []" :key="node.id"><b>{{ node.type }}</b><small>{{ node.label }}</small></div><p>{{ selectedAIMission.evidence_graph?.boundary }}</p></section><section class="mission-review-panel"><span>HUMAN REVIEW</span><template v-if="selectedAIMission.status === 'WAITING_REVIEW'"><textarea v-model="aiMissionReviewComment" rows="3" placeholder="记录审核意见（可选）"></textarea><div><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="reviewAIMission('APPROVED')">Approve</button><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="reviewAIMission('NEEDS_REVISION')">Needs revision</button><button class="text-button" type="button" :disabled="aiMissionLoading" @click="reviewAIMission('REJECTED')">Reject</button></div></template><template v-else-if="selectedAIMission.status === 'NEEDS_REVISION'"><textarea v-model="aiMissionRevisionSummary" rows="3" placeholder="说明版本修订要求"></textarea><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="reviseAIMission">Create revised draft</button></template><template v-else-if="selectedAIMission.status === 'APPROVED'"><p>方案已由人工批准。交付包仍会保留 AI Generated Draft 与 NEEDS_CONFIRMATION 标识。</p><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="generateAIMissionDelivery">Generate Delivery Package</button></template><template v-else-if="selectedAIMission.status === 'COMPLETED'"><p>Mission 已完成。所有内容仍为可追溯的 AI 辅助交付草稿。</p></template><p v-else>等待受控执行和人工审核；系统不会自动生成正式交付。</p></section><section v-if="aiMissionDelivery" class="mission-delivery-package"><span>DELIVERY PACKAGE</span><b>{{ aiMissionDelivery.label }}</b><p>{{ aiMissionDelivery.executive_summary }}</p><small>Evidence references: {{ aiMissionDelivery.evidence_references?.length || 0 }}</small></section></template><div v-else class="product-empty-state"><b>No mission selected</b><p>Create or choose an AI Mission to inspect its auditable timeline.</p></div></section>
-          <aside class="mission-intelligence-surface"><p class="section-kicker">AI TEAM</p><article v-for="item in selectedAIMission?.team || aiMissionDashboard?.team_status || []" :key="item.name"><b>{{ item.name }}</b><span>{{ item.role }}</span><small>{{ item.status }} · {{ item.last_action }}</small></article><p class="section-kicker">NOTIFICATIONS</p><button v-for="item in aiNotifications" :key="item.id" class="mission-notification" :class="{ read: item.read }" type="button" @click="markAINotificationRead(item.id)"><b>{{ item.type }}</b><small>{{ item.message }}</small></button><p v-if="!aiNotifications.length" class="quiet-note">No persisted notifications.</p></aside>
+          <section class="mission-stream-surface"><template v-if="selectedAIMission"><header><div><p class="section-kicker">AI WORKER WORKFLOW</p><h3>{{ selectedAIMission.title }}</h3><small>{{ selectedAIMission.worker_contract?.status || selectedAIMission.status }} · {{ selectedAIMission.progress }}% · {{ selectedAIMission.current_step }}</small></div><button v-if="['PLANNING','NEEDS_REVISION'].includes(selectedAIMission.status)" class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="runAIMission(selectedAIMission.id)">Run AI Worker</button></header><section class="mission-requirements"><span>MISSION CONTRACT</span><p>{{ selectedAIMission.worker_contract?.objective || selectedAIMission.goal }}</p><small>Evidence · {{ selectedAIMission.worker_contract?.evidence_requirement || 'TRACEABLE_EVIDENCE_REQUIRED' }} · Approval · {{ selectedAIMission.worker_contract?.approval_requirement || 'HUMAN_REVIEW_REQUIRED' }}</small></section><ol class="mission-timeline"><li v-for="item in selectedAIMission.timeline || []" :key="item.id"><b>AI Worker</b><div><strong>{{ item.action }}</strong><p>{{ item.result }}</p><small>Evidence: {{ item.evidence_count }} · {{ item.status }} · {{ item.created_at }}</small></div></li></ol><section class="mission-evidence-list"><span>REAL EVIDENCE REFERENCES</span><div v-for="item in selectedAIMission.evidence_refs || []" :key="item.chunk_id"><b>{{ item.source }}</b><small>{{ item.paper_id }} / {{ item.chunk_id }} · {{ item.section }}</small></div><p v-if="!(selectedAIMission.evidence_refs || []).length">尚未检索到可引用 Evidence；不会产生科研结论。</p></section><section class="mission-graph"><span>EVIDENCE GRAPH</span><div v-for="node in selectedAIMission.evidence_graph?.nodes || []" :key="node.id"><b>{{ node.type }}</b><small>{{ node.label }}</small></div><p>{{ selectedAIMission.evidence_graph?.boundary }}</p></section><section class="mission-review-panel"><span>HUMAN REVIEW</span><template v-if="selectedAIMission.status === 'WAITING_REVIEW'"><textarea v-model="aiMissionReviewComment" rows="3" placeholder="记录审核意见（可选）"></textarea><div><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="reviewAIMission('APPROVED')">Approve</button><button class="outline-button" type="button" :disabled="aiMissionLoading" @click="reviewAIMission('NEEDS_REVISION')">Needs revision</button><button class="text-button" type="button" :disabled="aiMissionLoading" @click="reviewAIMission('REJECTED')">Reject</button></div></template><template v-else-if="selectedAIMission.status === 'NEEDS_REVISION'"><textarea v-model="aiMissionRevisionSummary" rows="3" placeholder="说明版本修订要求"></textarea><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="reviseAIMission">Create revised draft</button></template><template v-else-if="selectedAIMission.status === 'APPROVED'"><p>方案已由人工批准。交付包仍会保留 AI Generated Draft 与 NEEDS_CONFIRMATION 标识。</p><button class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="generateAIMissionDelivery">Generate Delivery Package</button></template><template v-else-if="selectedAIMission.status === 'COMPLETED'"><p>Mission 已完成。所有内容仍为可追溯的 AI 辅助交付草稿。</p></template><p v-else>等待受控执行和人工审核；系统不会自动生成正式交付。</p></section><section v-if="aiMissionDelivery" class="mission-delivery-package"><span>DELIVERY PACKAGE</span><b>{{ aiMissionDelivery.label }}</b><p>{{ aiMissionDelivery.executive_summary }}</p><small>Evidence references: {{ aiMissionDelivery.evidence_references?.length || 0 }}</small></section></template><div v-else class="product-empty-state"><b>No mission selected</b><p>Create or choose an AI Worker mission to inspect its auditable workflow.</p></div></section>
+          <aside class="mission-intelligence-surface"><p class="section-kicker">AI WORKER CAPABILITIES</p><article v-for="skill in selectedAIMission?.worker_contract?.available_skills || aiWorkerSkills" :key="skill.id"><b>{{ skill.name }}</b><span>{{ skill.evidence_required ? 'Evidence aware' : skill.approval_required ? 'Approval gated' : 'Available' }}</span><small>{{ skill.description }}</small></article><p v-if="!(selectedAIMission?.worker_contract?.available_skills || aiWorkerSkills).length" class="quiet-note">Loading approved AI Worker capabilities.</p><p class="section-kicker">NOTIFICATIONS</p><button v-for="item in aiNotifications" :key="item.id" class="mission-notification" :class="{ read: item.read }" type="button" @click="markAINotificationRead(item.id)"><b>{{ item.type }}</b><small>{{ item.message }}</small></button><p v-if="!aiNotifications.length" class="quiet-note">No persisted notifications.</p></aside>
         </div>
         <section v-if="selectedAIMission" class="mission-version-history"><span>VERSION HISTORY</span><div v-for="item in selectedAIMission.versions || []" :key="item.id"><b>v{{ item.version }} · {{ item.status }}</b><small>{{ item.created_by }} · {{ item.change_summary }} · {{ item.created_at }}</small></div><p v-if="!(selectedAIMission.versions || []).length">尚未生成 Blueprint 版本。</p></section>
-        <section v-if="selectedAIMission?.evaluation" class="mission-evaluation-card"><span>AGENT EVALUATION</span><b>Agent Score · {{ selectedAIMission.evaluation.evaluation_score }}/100</b><small>Evidence {{ selectedAIMission.evaluation.evidence_coverage }} · Verification {{ selectedAIMission.evaluation.verification_result }} · Human revisions {{ selectedAIMission.evaluation.human_revision_count }} · Safety {{ selectedAIMission.evaluation.execution_safety }}</small><p v-if="selectedAIMission.evaluation.failure_type">{{ selectedAIMission.evaluation.failure_type }} · {{ selectedAIMission.evaluation.failure_reason }}</p><details v-if="selectedAIMission.agent_traces?.length"><summary>Agent Trace View</summary><div v-for="trace in selectedAIMission.agent_traces" :key="trace.created_at + trace.action"><b>{{ trace.agent_name }}</b><small>{{ trace.action }} · {{ trace.tool_used || 'orchestration' }} · {{ trace.evidence_count }} Evidence · {{ trace.status }}</small><p>{{ trace.output_summary }}</p></div></details></section>
-        <section v-if="selectedAIMission?.planner_plan" class="mission-evaluation-card"><span>AI PLANNING</span><b>Dynamic execution plan</b><p>{{ selectedAIMission.planner_plan.reason_summary }}</p><div class="planner-agent-list"><small v-for="agent in selectedAIMission.planner_plan.selected_agents" :key="agent">✓ {{ agent }}</small><small v-for="agent in selectedAIMission.planner_plan.skipped_agents" :key="agent">— {{ agent }} skipped</small></div><ol class="mission-timeline"><li v-for="node in selectedAIMission.planner_plan.execution_graph" :key="node.id"><b>{{ node.order }}</b><div><strong>{{ node.agent_name }}</strong><p>{{ node.node_name }}</p><small>{{ node.status }} · depends on {{ node.depends_on?.join(', ') || 'start' }}</small></div></li></ol></section>
-        <section v-if="selectedAIMission" class="mission-evaluation-card"><span>ADAPTIVE LOOP · FINITE</span><b>Loop {{ selectedAIMission.adaptive_iterations?.length || 0 }} / 3</b><p>每次仅执行一个可审计决策；Evidence 不足只请求现有 RAG，Computer 变更始终需要重新审批。</p><button v-if="!['WAITING_ADAPTIVE_REVIEW','COMPLETED','FAILED'].includes(selectedAIMission.status)" class="outline-button" type="button" :disabled="adaptiveMissionLoading" @click="runAdaptiveMission">{{ adaptiveMissionLoading ? 'Evaluating…' : 'Run adaptive decision' }}</button><div v-if="selectedAIMission.status === 'WAITING_ADAPTIVE_REVIEW'"><button class="primary-card-action" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('APPROVE')">Approve next plan</button><button class="text-button" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('REJECT')">Reject</button><button class="outline-button" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('NEEDS_REVISION')">Needs revision</button></div><ol class="mission-timeline"><li v-for="item in selectedAIMission.adaptive_iterations || []" :key="item.created_at + item.iteration"><b>{{ item.iteration }}</b><div><strong>{{ item.decision }}</strong><p>{{ item.summary }}</p><small>{{ item.trigger }} · Graph v{{ item.graph_version }}</small></div></li></ol><details v-if="selectedAIMission.graph_history?.length"><summary>Execution Graph History</summary><div v-for="graph in selectedAIMission.graph_history" :key="graph.version"><b>v{{ graph.version }}</b><small>{{ graph.change_summary }}</small><p>{{ graph.nodes.map(node => node.agent_name).join(' → ') }}</p></div></details></section>
-        <section v-if="selectedAIMission" class="computer-mission-center"><header><div><span>COMPUTER MISSION CENTER</span><b>Sandbox · Diff Review · Human Approval · Verification</b></div><small>仅允许当前 ResearchOS 项目的白名单文件与固定验证命令。</small></header><div class="computer-mission-create"><input v-model="computerMissionTask" placeholder="例如：为首页输入区准备可审阅的焦点状态优化" /><button class="outline-button" type="button" :disabled="computerMissionLoading" @click="createComputerMission">Create & Analyze</button></div><article v-for="item in selectedAIMission.computer_missions || []" :key="item.id"><div class="computer-mission-summary"><b>{{ item.task }}</b><small>{{ item.status }} · {{ item.approval_status }} · {{ item.risk_level }} risk</small><details><summary>View plan, Diff & verification</summary><p>Workspace: {{ item.workspace?.boundary || '尚未扫描' }}</p><p>Plan: {{ item.action_plan?.steps?.length || 0 }} reviewable steps · verification {{ item.verification?.status || 'PENDING' }}</p><pre v-if="item.diff_content">{{ item.diff_content }}</pre><p v-else>尚未生成可安全执行的 Diff。</p><small v-if="item.execution_log?.length">{{ item.execution_log[item.execution_log.length - 1].action }} · {{ item.execution_log[item.execution_log.length - 1].status }}</small></details></div><div class="computer-mission-actions"><button v-if="item.status === 'WAITING_APPROVAL'" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'APPROVED')">Approve Diff</button><button v-if="item.status === 'WAITING_APPROVAL'" class="text-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'REJECTED')">Reject</button><button v-if="item.status === 'WAITING_APPROVAL'" class="outline-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'NEEDS_REVISION')">Request Revision</button><button v-if="item.status === 'APPROVED' && item.execution_allowed" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="executeComputerMission(item)">Execute Approved Diff</button></div></article><p v-if="!(selectedAIMission.computer_missions || []).length">尚无 Computer Mission。创建后只扫描受控 Workspace 与生成 Diff，不会自动写入文件。</p></section>
+        <section class="mission-tool-trace approval-queue" aria-label="Workspace Review Queue"><header><div><p class="section-kicker">WORKSPACE REVIEW QUEUE</p><h3>Pending reviews</h3><p>Evidence, artifacts, controlled computer actions and decisions remain pending until an authorized human resolves them.</p></div><button class="outline-button" type="button" :disabled="approvalLoading" @click="loadApprovalQueue">{{ approvalLoading ? 'Refreshing…' : 'Refresh queue' }}</button></header><p v-if="approvalError" class="quiet-note">{{ approvalError }}</p><article v-for="item in approvalRequests.filter(request => request.status === 'PENDING')" :key="item.id"><div><b>{{ item.request_type }}</b><small>{{ item.priority }} priority · Mission {{ item.mission_id || 'Workspace resource' }}</small><p>{{ item.comment || 'Human review requested for this Workspace resource.' }}</p></div><footer v-if="['OWNER','ADMIN','MANAGER','REVIEWER'].includes(identityProfile?.workspace?.role)"><button class="primary-card-action" type="button" :disabled="approvalLoading" @click="resolveApproval(item, 'approve')">Approve</button><button class="outline-button" type="button" :disabled="approvalLoading" @click="resolveApproval(item, 'changes')">Request changes</button><button class="text-button" type="button" :disabled="approvalLoading" @click="resolveApproval(item, 'reject')">Reject</button></footer></article><div v-if="!approvalLoading && !approvalRequests.filter(request => request.status === 'PENDING').length" class="product-empty-state"><b>Nothing waiting for review</b><p>Reviewable Evidence, delivery releases and controlled Computer actions will appear here when an approved workflow requests a human decision.</p></div></section>
+        <section v-if="selectedAIMission?.evaluation" class="mission-evaluation-card"><span>WORKER QUALITY CHECK</span><b>Quality check · {{ selectedAIMission.evaluation.evaluation_score }}/100</b><small>Evidence {{ selectedAIMission.evaluation.evidence_coverage }} · Verification {{ selectedAIMission.evaluation.verification_result }} · Human revisions {{ selectedAIMission.evaluation.human_revision_count }} · Safety {{ selectedAIMission.evaluation.execution_safety }}</small><p v-if="selectedAIMission.evaluation.failure_type">{{ selectedAIMission.evaluation.failure_type }} · {{ selectedAIMission.evaluation.failure_reason }}</p><details v-if="selectedAIMission.agent_traces?.length"><summary>Workflow details</summary><div v-for="trace in selectedAIMission.agent_traces" :key="trace.created_at + trace.action"><b>AI Worker</b><small>{{ trace.action }} · {{ trace.evidence_count }} Evidence · {{ trace.status }}</small><p>{{ trace.output_summary }}</p></div></details></section>
+        <section v-if="selectedAIMission?.planner_plan" class="mission-evaluation-card"><span>AI WORKER PLAN</span><b>Approved skill workflow</b><p>{{ selectedAIMission.planner_plan.reason_summary }}</p><div class="planner-agent-list"><small v-for="skill in selectedAIMission.worker_contract?.available_skills || aiWorkerSkills" :key="skill.id">✓ {{ skill.name }}</small></div><ol class="mission-timeline"><li v-for="node in selectedAIMission.planner_plan.execution_graph" :key="node.id"><b>{{ node.order }}</b><div><strong>AI Worker</strong><p>{{ node.node_name }}</p><small>{{ node.status }} · depends on {{ node.depends_on?.join(', ') || 'start' }}</small></div></li></ol></section>
+        <section v-if="selectedAIMission" class="mission-evaluation-card"><span>AI WORKER DECISION CYCLE</span><b>Cycle {{ selectedAIMission.adaptive_iterations?.length || 0 }} / 3</b><p>每次仅执行一个可审计决策；Evidence 不足只请求现有 RAG，Computer Skill 变更始终需要重新审批。</p><button v-if="!['WAITING_ADAPTIVE_REVIEW','COMPLETED','FAILED'].includes(selectedAIMission.status)" class="outline-button" type="button" :disabled="adaptiveMissionLoading" @click="runAdaptiveMission">{{ adaptiveMissionLoading ? 'Evaluating…' : 'Evaluate next step' }}</button><div v-if="selectedAIMission.status === 'WAITING_ADAPTIVE_REVIEW'"><button class="primary-card-action" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('APPROVE')">Approve next step</button><button class="text-button" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('REJECT')">Reject</button><button class="outline-button" type="button" :disabled="adaptiveMissionLoading" @click="reviewAdaptiveMission('NEEDS_REVISION')">Needs revision</button></div><ol class="mission-timeline"><li v-for="item in selectedAIMission.adaptive_iterations || []" :key="item.created_at + item.iteration"><b>{{ item.iteration }}</b><div><strong>{{ item.decision }}</strong><p>{{ item.summary }}</p><small>{{ item.trigger }}</small></div></li></ol></section>
+        <section v-if="selectedAIMission" class="computer-mission-center"><header><div><span>CONTROLLED COMPUTER WORKSPACE</span><b>Observe · Plan · Approval · Execute · Verify</b></div><small>仅允许当前 ResearchOS 项目的白名单文件与固定验证命令；没有真实视觉输入时会明确标记为 Demo only。</small></header><div class="computer-mission-create"><input v-model="computerMissionTask" placeholder="例如：为首页输入区准备可审阅的焦点状态优化" /><button class="outline-button" type="button" :disabled="computerMissionLoading" @click="createComputerMission">Create & Analyze</button></div><article v-for="item in selectedAIMission.computer_missions || []" :key="item.id"><div class="computer-mission-summary"><b>{{ item.task }}</b><small>{{ item.status }} · {{ item.approval_status }} · {{ item.risk_level }} risk</small><ol class="computer-control-timeline"><li :class="{ complete: item.workspace?.status || item.action_plan?.computer_observation }"><span>01</span><b>Observation</b><small>{{ item.action_plan?.computer_observation?.vision_mode === 'demo_only' ? 'Demo-only metadata observation' : 'Waiting for controlled observation' }}</small></li><li :class="{ complete: item.action_plan?.controlled_action }"><span>02</span><b>Planning</b><small>{{ item.action_plan?.controlled_action?.action_type || 'No action selected' }}</small></li><li :class="{ active: item.status === 'WAITING_APPROVAL', complete: item.approval_status === 'APPROVED' }"><span>03</span><b>Approval</b><small>{{ item.approval_status || 'Pending' }}</small></li><li :class="{ complete: ['EXECUTING','VERIFYING','COMPLETED','NEEDS_REVISION'].includes(item.status) }"><span>04</span><b>Execution</b><small>Controlled only</small></li><li :class="{ complete: item.verification?.controlled_verification?.status === 'SUCCESS', active: item.status === 'VERIFYING' }"><span>05</span><b>Verification</b><small>{{ item.verification?.controlled_verification?.status || 'Pending' }}</small></li></ol><details><summary>View approved Diff & verification</summary><p>Workspace: {{ item.workspace?.boundary || '尚未扫描' }}</p><p>Plan: {{ item.action_plan?.steps?.length || 0 }} reviewable steps · verification {{ item.verification?.status || 'PENDING' }}</p><pre v-if="item.diff_content">{{ item.diff_content }}</pre><p v-else>尚未生成可安全执行的 Diff。</p><small v-if="item.execution_log?.length">{{ item.execution_log[item.execution_log.length - 1].action }} · {{ item.execution_log[item.execution_log.length - 1].status }}</small></details></div><div class="computer-mission-actions"><button v-if="item.status === 'WAITING_APPROVAL'" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'APPROVED')">Approve Diff</button><button v-if="item.status === 'WAITING_APPROVAL'" class="text-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'REJECTED')">Reject</button><button v-if="item.status === 'WAITING_APPROVAL'" class="outline-button" type="button" :disabled="computerMissionLoading" @click="decideComputerMission(item, 'NEEDS_REVISION')">Request Revision</button><button v-if="item.status === 'APPROVED' && item.execution_allowed" class="primary-card-action" type="button" :disabled="computerMissionLoading" @click="executeComputerMission(item)">Execute Approved Diff</button></div></article><p v-if="!(selectedAIMission.computer_missions || []).length">尚无 Computer Mission。创建后只扫描受控 Workspace 与生成 Diff，不会自动写入文件。</p></section>
         <section v-if="selectedAIMission" class="artifact-studio">
           <header><div><p class="section-kicker">ARTIFACT AGENT</p><h3>Generate only the deliverable you need.</h3><p>每份产物都从当前 Mission 的真实 Evidence 与客户资料引用生成，且必须经过人工审核。</p></div><small v-if="artifactAnalytics">{{ artifactAnalytics.total_artifacts }} artifacts · {{ artifactAnalytics.average_evidence_coverage }}% evidence coverage</small></header>
           <p v-if="artifactError" class="error-alert"><span>!</span>{{ artifactError }}</p>
@@ -3639,12 +3993,14 @@ createApp({
 
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.collaboration" class="mission-tool-trace collaboration-panel" aria-label="Agent Collaboration"><p class="section-kicker">AGENT COLLABORATION</p><h3>Structured collaboration, not hidden reasoning.</h3><p v-if="!selectedAIMission.collaboration.messages?.length" class="quiet-note">尚无 Agent Message。消息仅在实际协作请求、结果、反馈或风险告警发生时记录。</p><article v-for="item in selectedAIMission.collaboration.messages || []" :key="item.id"><b>{{ item.sender_agent }} → {{ item.receiver_agent }}</b><small>Round {{ item.collaboration_round }} · {{ item.message_type }} · {{ item.status }}</small><p>{{ item.payload_summary }}</p></article><div v-for="item in selectedAIMission.collaboration.conflicts || []" :key="item.id" class="collaboration-conflict"><b>Human review required</b><small>{{ item.participants?.join(' ↔ ') }}</small><p>{{ item.summary }}</p></div></section>
 
+      <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.worker_runtime" class="mission-tool-trace" aria-label="AI Worker Execution"><p class="section-kicker">AI WORKER EXECUTION</p><h3>Task → Skills → Progress → Review</h3><p v-if="selectedAIMission.worker_runtime.waiting_action" class="quiet-note">{{ selectedAIMission.worker_runtime.waiting_action }}</p><article v-for="item in selectedAIMission.worker_runtime.timeline || []" :key="item.id"><b>{{ item.skill }}</b><small>{{ item.action_type }} · {{ item.status }} · {{ item.created_at }}</small><p>{{ item.result_summary }}</p></article><p v-if="!(selectedAIMission.worker_runtime.timeline || []).length" class="quiet-note">AI Worker is ready. Execution records appear only after a real controlled Skill runs.</p></section>
+
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.tools_used?.length" class="mission-tool-trace" aria-label="Mission Tool Trace"><p class="section-kicker">TOOLS USED</p><h3>Read-only enterprise operations</h3><article v-for="item in selectedAIMission.tools_used" :key="item.connector_name + item.operation + item.duration_ms"><b>{{ item.connector_name }}</b><small>{{ item.operation }} · {{ item.status }} · {{ item.duration_ms }}ms</small><p>{{ item.result_summary }}</p></article></section>
 
-      <section v-if="activeWorkspaceView === 'governance'" class="connector-center" aria-label="Governance Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE GOVERNANCE</p><h2>Governance Center</h2><p>Workspace RBAC、Audit 与 Policy 均基于真实持久化记录；本地原型不保存身份凭据。</p></div><button class="outline-button" type="button" @click="loadGovernance">Refresh</button></header><div class="connector-metrics"><article><b>{{ governance.organizations.length }}</b><small>Organizations</small></article><article><b>{{ governance.workspaces.length }}</b><small>Workspaces</small></article><article><b>{{ governance.logs.length }}</b><small>Audit events</small></article><article><b>RBAC</b><small>API enforced</small></article></div><div v-if="governance.logs.length" class="connector-grid"><article v-for="item in governance.logs" :key="item.created_at + item.action"><header><span>{{ item.action }}</span><b>{{ item.resource_type }}</b></header><p>{{ item.summary }}</p><small>{{ item.user_id }} · {{ item.workspace_id || 'Organization' }}</small></article></div><div v-else class="product-empty-state"><b>No governed activity yet</b><p>创建 Organization、设置角色或更新 Policy 后，系统会保存不含 Prompt、CoT 和 Secret 的审计摘要。</p></div></section>
+      <section v-if="activeWorkspaceView === 'governance'" class="connector-center" aria-label="Governance Center"><header class="dashboard-heading"><div><p class="section-kicker">ADMIN CONSOLE</p><h2>Governance and oversight</h2><p>Workspace RBAC、Audit 与 Policy 均基于真实持久化记录；不展示凭据、Prompt 或模型内部状态。</p></div><button class="outline-button" type="button" @click="loadGovernance">Refresh</button></header><nav class="admin-console-sections" aria-label="Admin Console sections"><button type="button" class="active">Governance & Audit</button><button type="button" @click="openWorkspaceView('system')">Runtime & Diagnostics</button><button type="button" @click="openWorkspaceView('benchmarks')">Evaluation</button></nav><div class="connector-metrics"><article><b>{{ governance.organizations.length }}</b><small>Organizations</small></article><article><b>{{ governance.workspaces.length }}</b><small>Workspaces</small></article><article><b>{{ governance.logs.length }}</b><small>Audit events</small></article><article><b>RBAC</b><small>API enforced</small></article></div><div v-if="governance.logs.length" class="connector-grid"><article v-for="item in governance.logs" :key="item.created_at + item.action"><header><span>{{ item.action }}</span><b>{{ item.resource_type }}</b></header><p>{{ item.summary }}</p><small>{{ item.user_id }} · {{ item.workspace_id || 'Organization' }}</small></article></div><div v-else class="product-empty-state"><b>No governed activity yet</b><p>创建 Organization、设置角色或更新 Policy 后，系统会保存不含 Prompt、CoT 和 Secret 的审计摘要。</p></div></section>
       <section v-if="activeWorkspaceView === 'benchmarks'" class="connector-center" aria-label="Agent Benchmark Center"><header class="dashboard-heading"><div><p class="section-kicker">AGENT EVALUATION</p><h2>Agent Benchmark Center</h2><p>评分只来自真实 Benchmark Mission 的 Trace、Evidence、Artifact 与 Human Review 状态；未运行时保持 0。</p></div><button class="outline-button" type="button" @click="loadBenchmarks">Refresh</button></header><div v-if="benchmarkDashboard" class="connector-metrics"><article><b>{{ benchmarkDashboard.benchmarks }}</b><small>Benchmarks</small></article><article><b>{{ benchmarkDashboard.runs }}</b><small>Runs</small></article><article><b>{{ benchmarkDashboard.average_score }}</b><small>Average score</small></article><article><b>{{ benchmarkDashboard.success_rate }}%</b><small>Success rate</small></article></div><div v-if="benchmarkDashboard" class="connector-grid"><article v-for="(score, capability) in benchmarkDashboard.capabilities" :key="capability"><header><span>OBSERVED</span><b>{{ capability }}</b></header><p>{{ score }} / 100</p><small>Derived from saved benchmark records only.</small></article></div><div v-if="benchmarkTasks.length" class="connector-grid"><article v-for="task in benchmarkTasks" :key="task.id"><header><span>{{ task.category }}</span><b>{{ task.difficulty }}</b></header><h3>{{ task.name }}</h3><p>{{ task.description }}</p><small>{{ task.expected_agents.length }} expected agents · {{ task.expected_tools.length }} expected tools</small></article></div><div v-else class="product-empty-state"><b>No benchmark task yet</b><p>创建并显式运行受控 Benchmark 后，这里才会显示实际评分，系统不会生成假分数。</p></div></section>
       <section v-if="activeWorkspaceView === 'scenario-center'" class="connector-center" aria-label="Enterprise Scenario Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE SCENARIO DEMO</p><h2>Scenario Center</h2><p>通过同一条 Mission Runtime 演示需求理解、资料检索、风险提示、待审核 Artifact 与 Benchmark 观察；所有场景均为 DEMO_ONLY。</p></div><button class="outline-button" type="button" @click="loadScenarios">Refresh</button></header><div v-if="enterpriseScenarios.length" class="connector-grid"><article v-for="item in enterpriseScenarios" :key="item.id"><header><span>DEMO_ONLY</span><b>{{ item.industry }}</b></header><h3>{{ item.name }}</h3><p>{{ item.description }}</p><small>AI Team · {{ item.expected_agents.join(' · ') }}</small><footer><button class="primary-card-action" :disabled="scenarioLoading" type="button" @click="runScenario(item.id)">{{ scenarioLoading ? 'Running controlled mission…' : 'Run scenario' }}</button></footer></article></div><div v-else class="product-empty-state"><b>No scenario available</b><p>没有已声明的 Demo 场景；系统不会以虚构客户数据填充该页面。</p></div><section v-if="scenarioRunResult" class="mission-tool-trace"><p class="section-kicker">SCENARIO RUN</p><h3>{{ scenarioRunResult.scenario.name }} · {{ scenarioRunResult.status }}</h3><p>{{ scenarioRunResult.boundary }}</p><article v-for="item in scenarioRunResult.timeline" :key="item.created_at + item.action"><b>{{ item.stage }}</b><small>{{ item.status }} · Evidence {{ item.evidence_count }}</small><p>{{ item.result_summary }}</p></article><article v-if="scenarioRunResult.artifact"><b>Artifact</b><small>{{ scenarioRunResult.artifact.status }} · Human Review required</small><p>{{ scenarioRunResult.artifact.content_summary || 'Reviewable draft generated.' }}</p></article><article v-if="scenarioRunResult.benchmark"><b>Observed Benchmark</b><small>{{ scenarioRunResult.benchmark.score }} · same Mission</small><p>{{ scenarioRunResult.benchmark.trace_summary }}</p></article></section></section>
-      <section v-if="activeWorkspaceView === 'ai-workspace'" class="connector-center" aria-label="AI Mission Workspace"><header class="dashboard-heading"><div><p class="section-kicker">AI COMMAND CENTER</p><h2>Enterprise AI Workspace</h2><p>管理 AI 团队的已保存 Mission、Evidence、Artifact 与人工审核；仅展示真实持久化记录。</p></div><button class="outline-button" type="button" @click="loadWorkspaceExperience">Refresh</button></header><div v-if="workspaceExperience" class="connector-metrics"><article><b>{{ workspaceExperience.active_missions }}</b><small>Active missions</small></article><article><b>{{ workspaceExperience.reviews.pending }}</b><small>Pending review</small></article><article><b>{{ workspaceExperience.artifacts.length }}</b><small>Recent artifacts</small></article><article><b>{{ workspaceExperience.agents.filter(item => item.status === 'RUNNING').length }}</b><small>AI team running</small></article></div><div v-if="workspaceExperience" class="connector-grid"><article v-for="item in workspaceExperience.missions" :key="item.id"><header><span>{{ item.status }}</span><b>{{ item.progress }}%</b></header><h3>{{ item.title }}</h3><p>{{ item.current_step }}</p><small>Evidence · {{ item.evidence_refs.length }} · {{ item.created_at }}</small><button class="text-button" type="button" @click="openWorkspaceView('mission-center'); loadAIMissionDetail(item.id)">Open Mission →</button></article></div><div v-if="workspaceExperience && !workspaceExperience.missions.length" class="product-empty-state"><b>No mission yet</b><p>从 Command Center 创建任务后，AI Plan、Timeline、Evidence、Artifact 与 Review 会在同一工作空间中可追溯。</p></div><section v-if="workspaceExperience?.artifacts.length" class="mission-tool-trace"><p class="section-kicker">RECENT ARTIFACTS</p><article v-for="item in workspaceExperience.artifacts" :key="item.id"><b>{{ item.title }}</b><small>{{ item.artifact_type }} · v{{ item.version }} · {{ item.status }}</small><p>Evidence {{ item.evidence_count }} · {{ item.created_at }}</p></article></section></section>
+      <section v-if="activeWorkspaceView === 'ai-workspace'" class="connector-center" aria-label="AI Worker Workspace"><header class="dashboard-heading"><div><p class="section-kicker">WORKSPACE CONTEXT</p><h2>Enterprise AI Workspace</h2><p>当前组织空间中的任务、Evidence、交付物与人工审核保持可追溯；不展示内部运行时字段。</p></div><button class="outline-button" type="button" @click="loadWorkspaceExperience">Refresh</button></header><section class="workspace-context-panel"><article><span>Workspace</span><b>{{ currentWorkspace?.name || 'Authorized Workspace' }}</b><small>{{ currentWorkspace?.member_count || 0 }} members · {{ currentRole || 'Authorized role' }}</small></article><article><span>Current mission</span><b>{{ workspaceExperience?.missions?.[0]?.title || 'No active mission' }}</b><small>{{ workspaceExperience?.missions?.[0]?.current_step || 'Create a Mission to begin a controlled workflow.' }}</small></article><article><span>Recent activity</span><b>{{ workspaceExperience?.missions?.[0]?.status || 'No persisted activity' }}</b><small>{{ workspaceExperience?.missions?.[0]?.created_at || 'Activity appears only after an authorized action.' }}</small></article></section><div v-if="workspaceExperience" class="connector-metrics"><article><b>{{ workspaceExperience.active_missions }}</b><small>Active missions</small></article><article><b>{{ workspaceExperience.reviews.pending }}</b><small>Pending review</small></article><article><b>{{ workspaceExperience.artifacts.length }}</b><small>Recent artifacts</small></article><article><b>{{ workspaceExperience.agents.filter(item => item.status === 'RUNNING').length }}</b><small>Active skills</small></article></div><div v-if="workspaceExperience" class="connector-grid"><article v-for="item in workspaceExperience.missions" :key="item.id"><header><span>{{ item.status }}</span><b>{{ item.progress }}%</b></header><h3>{{ item.title }}</h3><p>{{ item.current_step }}</p><small>Evidence · {{ item.evidence_refs.length }} · {{ item.created_at }}</small><button class="text-button" type="button" @click="openWorkspaceView('mission-center'); loadAIMissionDetail(item.id)">Open Mission →</button></article></div><div v-if="workspaceExperience && !workspaceExperience.missions.length" class="product-empty-state"><b>No mission yet</b><p>从 Command Center 创建任务后，AI Worker Workflow、Evidence、Artifact 与 Review 会在同一工作空间中可追溯。</p></div><section v-if="workspaceExperience?.artifacts.length" class="mission-tool-trace"><p class="section-kicker">RECENT ARTIFACTS</p><article v-for="item in workspaceExperience.artifacts" :key="item.id"><b>{{ item.title }}</b><small>{{ item.artifact_type }} · v{{ item.version }} · {{ item.status }}</small><p>Evidence {{ item.evidence_count }} · {{ item.created_at }}</p></article></section></section>
       <section v-if="activeWorkspaceView === 'memory-center'" class="connector-center" aria-label="Enterprise Memory Center"><header class="dashboard-heading"><div><p class="section-kicker">ENTERPRISE KNOWLEDGE MEMORY</p><h2>Enterprise Memory Center</h2><p>只有经人工审批的决策才会成为可复用的企业知识资产；客户文件与 Demo 数据不会自动进入 Experience Library。</p></div><button class="outline-button" type="button" @click="loadKnowledgeMemory">Refresh</button></header><div v-if="knowledgeMemory.dashboard" class="connector-metrics"><article><b>{{ knowledgeMemory.dashboard.approved_knowledge }}</b><small>Approved knowledge</small></article><article><b>{{ knowledgeMemory.dashboard.decision_count }}</b><small>Decision records</small></article><article><b>{{ knowledgeMemory.dashboard.average_confidence }}</b><small>Avg confidence</small></article><article><b>{{ knowledgeMemory.dashboard.experience_reuse_count }}</b><small>Experience reuse</small></article></div><div class="connector-grid"><article v-for="item in knowledgeMemory.assets" :key="item.id"><header><span>{{ item.status }}</span><b>{{ item.confidence }}/100</b></header><h3>{{ item.title }}</h3><p>{{ item.summary }}</p><small>{{ item.asset_type }} · {{ item.source_type }}</small></article></div><section v-if="knowledgeMemory.decisions.length" class="mission-tool-trace"><p class="section-kicker">DECISION RECORDS</p><article v-for="item in knowledgeMemory.decisions" :key="item.id"><b>{{ item.title }}</b><small>{{ item.review_status }} · Evidence {{ item.evidence_refs.length }}</small><p>{{ item.decision_summary }}</p></article></section><div v-if="!knowledgeMemory.assets.length && !knowledgeMemory.decisions.length" class="product-empty-state"><b>No approved enterprise memory yet</b><p>完成 Mission 后会生成待审核 Decision Draft；只有 Reviewer 审批后才可进入 Experience Library。</p></div></section>
       <section v-if="['showcase','architecture','capabilities','business-dashboard','release-center'].includes(activeWorkspaceView)" class="connector-center" aria-label="Product Showcase"><header class="dashboard-heading"><div><p class="section-kicker">{{ activeWorkspaceView === 'showcase' ? 'DEMO_ONLY · ENTERPRISE DEMO CENTER' : 'RESEARCHOS PRODUCT SHOWCASE' }}</p><h2>{{ activeWorkspaceView === 'architecture' ? 'Enterprise Architecture' : activeWorkspaceView === 'capabilities' ? 'AI Capability Center' : activeWorkspaceView === 'business-dashboard' ? 'Business Overview' : activeWorkspaceView === 'release-center' ? 'Release Center' : 'Enterprise AI Agent Workspace' }}</h2><p>{{ productShowcase.overview?.subtitle || 'From Business Problem To AI-powered Solution' }}</p></div><button class="outline-button" type="button" @click="loadProductShowcase">Refresh</button></header><div v-if="activeWorkspaceView === 'showcase' && productShowcase.workflow" class="connector-grid"><article v-for="(step,index) in productShowcase.workflow.steps" :key="step.title"><header><span>STEP {{ index + 1 }}</span><b>{{ productShowcase.workflow.classification }}</b></header><h3>{{ step.title }}</h3><p>{{ step.summary }}</p></article></div><div v-if="activeWorkspaceView === 'architecture'" class="mission-tool-trace"><h3>User → AI Workspace → Copilot Layer → Mission Engine → Planner → Agent Runtime → Agent Team</h3><p>RAG Knowledge · Connector · Computer Agent · Artifact · Human Review · Governance · Knowledge Memory</p></div><div v-if="activeWorkspaceView === 'capabilities' && productShowcase.capabilities" class="connector-grid"><article v-for="item in productShowcase.capabilities.groups" :key="item.name"><h3>{{ item.name }}</h3><p>{{ item.items.join(' · ') }}</p></article></div><div v-if="activeWorkspaceView === 'business-dashboard' && productShowcase.business" class="connector-metrics"><article v-for="(value,key) in productShowcase.business" v-if="!['data_state','boundary'].includes(key)" :key="key"><b>{{ value }}</b><small>{{ key }}</small></article></div><div v-if="activeWorkspaceView === 'release-center' && productShowcase.releases" class="connector-grid"><article v-for="item in productShowcase.releases.releases" :key="item[0]"><b>{{ item[0] }}</b><p>{{ item[1] }}</p></article></div></section>
 
@@ -3660,7 +4016,7 @@ createApp({
 
       <section v-if="activeWorkspaceView === 'demo-center'" class="product-experience-center" aria-label="Demo Scenario Center"><header class="dashboard-heading"><div><p class="section-kicker">DEMO SCENARIO CENTER</p><h2>Three bounded ways to experience ResearchOS.</h2><p>所有入口均标记为 Demo；不会生成假 Evidence、研究结论或未经批准的源码修改。</p></div></header><div class="product-demo-grid"><article v-for="item in productDemos" :key="item.id"><span>DEMO</span><h3>{{ item.title }}</h3><ol><li v-for="step in item.steps" :key="step">{{ step }}</li></ol><p>{{ item.boundary }}</p><button class="primary-card-action" type="button" @click="startProductDemo(item)">Open demo</button></article></div></section>
 
-      <aside v-if="onboardingOpen" class="product-onboarding-layer" aria-label="ResearchOS welcome"><div><p class="section-kicker">WELCOME TO RESEARCHOS</p><h2>AI Research Operating System</h2><p>From Research Question to Evidence-backed Decision</p><div class="onboarding-choice-grid"><button type="button" @click="completeOnboarding('research'); beginResearchFromHome('Explore a research goal with evidence-backed workflow.')"><b>Explore Research</b><small>输入并探索研究目标</small></button><button type="button" @click="completeOnboarding('workflow'); openWorkspaceView('workflow-studio')"><b>Build Research Workflow</b><small>创建可审阅研究流程</small></button><button type="button" @click="completeOnboarding('computer'); openWorkspaceView('computer')"><b>Ask Computer Agent</b><small>分析项目和受控改动</small></button></div><button class="text-button" type="button" @click="completeOnboarding('welcome')">Explore later</button></div></aside>
+      <aside v-if="onboardingOpen" class="product-onboarding-layer" aria-label="ResearchOS welcome"><div><p class="section-kicker">WELCOME TO RESEARCHOS</p><h2>AI Research Operating System</h2><p>From Research Question to Evidence-backed Decision</p><div class="onboarding-choice-grid"><button type="button" @click="completeOnboarding('research'); beginResearchFromHome('Explore a research goal with evidence-backed workflow.')"><b>Explore Research</b><small>输入并探索研究目标</small></button><button type="button" @click="completeOnboarding('workflow'); openWorkspaceView('workflow-studio')"><b>Build Research Workflow</b><small>创建可审阅研究流程</small></button><button type="button" @click="completeOnboarding('computer'); openWorkspaceView('computer')"><b>Use Computer Skill</b><small>分析项目和受控改动</small></button></div><button class="text-button" type="button" @click="completeOnboarding('welcome')">Explore later</button></div></aside>
 
        <button class="research-assistant-launcher" type="button" @click="assistantPanelOpen = !assistantPanelOpen" :aria-expanded="assistantPanelOpen"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 14 10l6.5 2-6.5 2-2 6.5-2-6.5-6.5-2 6.5-2 2-6.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Research Assistant</button>
       <aside v-if="assistantPanelOpen" class="research-assistant-panel" aria-label="Research Assistant"><header><div><span>Research Copilot</span><h3>从研究问题开始</h3></div><button type="button" @click="assistantPanelOpen = false" aria-label="关闭 Research Assistant">×</button></header><p>我可以帮你创建研究任务、推荐研究策略，或恢复已有 Workspace。</p><div class="copilot-suggestions"><button type="button" @click="beginResearchFromHome('比较当前已索引资料中的研究方法与适用条件。')">创建研究任务</button><button type="button" @click="beginResearchFromHome('根据当前 Evidence 推荐合适的研究策略。')">推荐研究策略</button><button type="button" @click="openWorkspaceView('research-workspace'); assistantPanelOpen = false">打开 Workspace</button></div><textarea v-model="assistantDraft" rows="4" placeholder="例如：比较当前资料中 RAG 方法的适用条件"></textarea><button type="button" class="primary-card-action" @click="sendAssistantToResearch">进入 Research</button><small v-if="!readyPaperCount">当前知识库没有足够资料支持该研究，请先上传并完成索引。</small><small v-else>这是已有 Research Command 的任务入口，不会创建独立聊天记录或虚构结论。</small></aside>
@@ -3751,17 +4107,21 @@ createApp({
         <p><strong>Next recommended action：</strong>{{ researchActions.length ? '前往研究成果中心查看依据并完成人工确认。' : '将有依据的研究建议纳入行动中心，再由负责人确认。' }}</p>
       </section>
 
-      <section v-if="activeWorkspaceView === 'computer'" class="computer-studio computer-agent-workspace" aria-label="Research Computer Operator Pro">
-        <header class="operator-studio-heading computer-operator-heading"><div><p class="section-kicker">COMPUTER OPERATOR PRO</p><h2>Computer Command Center</h2><p>从自然语言任务到受控执行、实时事件与人工审批。默认只分析，不自动修改资料或代码。</p></div><span class="operator-status">{{ computerPlanPreview ? 'Plan ready' : (computerTask?.status || 'Ready') }}</span></header>
+          <section v-if="activeWorkspaceView === 'computer'" class="computer-studio computer-agent-workspace" aria-label="AI Worker Computer Skill Workspace">
+        <header class="operator-studio-heading computer-operator-heading"><div><p class="section-kicker">AI WORKER · COMPUTER SKILL</p><h2>Controlled Computer Workspace</h2><p>AI Worker 将自然语言任务转为受控执行与人工审批。默认只分析，不自动修改资料或代码。</p></div><span class="operator-status">{{ computerPlanPreview ? 'Plan ready' : (computerTask?.status || 'Ready') }}</span></header>
         <p v-if="computerError" class="error-alert"><span>!</span>{{ computerError }}</p>
         <div class="computer-studio-grid">
-          <aside class="operator-task-surface computer-command-surface"><p class="section-kicker">AI TASK INPUT</p><h3>What should AI operate?</h3><textarea v-model="computerGoal" rows="8" @input="computerPlanPreview = null" placeholder="例如：分析当前 ResearchOS 项目代码，找出前端优化点并生成报告"></textarea><label class="computer-mode-label">Execution mode<select v-model="computerMode"><option value="assist">Assist · 只分析</option><option value="supervised">Supervised · 低风险受控执行</option><option value="research">Research · Evidence 绑定交付</option></select></label><button class="analyze-button" type="button" :disabled="computerPlanLoading || !computerGoal.trim()" @click="previewComputerPlan">{{ computerPlanLoading ? 'Building task plan…' : 'Generate AI task plan' }}</button><button v-if="computerPlanPreview" class="outline-button computer-start-button" type="button" :disabled="computerLoading" @click="runComputerTask">{{ computerLoading ? 'Executing…' : 'Start controlled execution' }}</button><div class="operator-template-list"><span>SAFE TASKS · 代码修改、文件变更与交付都需审批</span><button type="button" @click="applyComputerTemplate('分析当前 ResearchOS 项目代码，找出前端优化点并生成报告')">分析项目代码</button><button type="button" @click="applyComputerTemplate('整理我的论文目录并生成综述')">整理论文资料</button><button type="button" @click="applyComputerTemplate('优化首页UI')">优化首页 UI</button></div></aside>
-          <section class="operator-timeline-surface computer-plan-surface"><header><div><p class="section-kicker">AI EXECUTION TIMELINE</p><h3>{{ computerPlanPreview?.goal || computerTask?.user_goal || '等待一个受控 Computer Operator 任务' }}</h3></div><small v-if="computerTask || computerPlanPreview">{{ computerPlanPreview?.task_type || computerTask?.task_type }}</small></header><div v-if="computerPlanPreview" class="computer-plan-summary"><span>{{ computerPlanPreview.task_label }}</span><p>{{ computerPlanPreview.expected_output }}</p><small>{{ computerPlanPreview.resource_boundary }}</small></div><ol v-if="(computerPlanPreview?.plan || computerTask?.plan)?.length" class="operator-plan-list"><li v-for="step in (computerPlanPreview?.plan || computerTask?.plan)" :key="step.id || step.step" :class="step.status"><span>{{ String(step.step).padStart(2, '0') }}</span><div><strong>{{ step.task_name || step.action }}</strong><p>{{ step.reason || step.purpose }}</p><small>{{ step.required_tool || step.tool }} · {{ step.evidence_requirement ? 'Evidence required' : 'plan only' }} · {{ step.status }}</small></div></li></ol><div v-else class="operator-empty-state"><b>Understand · Observe · Execute · Recover · Review · Deliver</b><p>Computer Operator 只自动执行白名单只读操作；不会读取私人屏幕、运行任意 shell 或自动修改资料。</p></div><section v-if="computerTask?.events?.length && !computerPlanPreview" class="operator-tool-trace"><h4>Live execution events</h4><article v-for="event in computerTask.events" :key="event.id"><span>{{ event.agent_name }} · {{ event.event_type }}</span><strong>{{ event.status }}</strong><p>{{ event.message }} <small v-if="event.result_summary">· {{ event.result_summary }}</small></p></article></section><section v-else-if="computerTask?.actions?.length && !computerPlanPreview" class="operator-tool-trace"><h4>Auditable action timeline</h4><article v-for="action in computerTask.actions" :key="action.id"><span>{{ action.tool_name }}</span><strong>{{ action.action_type }} · {{ action.status }}</strong><p>{{ action.result?.message || action.result?.boundary || '已记录受控工具执行摘要。' }}</p></article></section></section>
+          <aside class="operator-task-surface computer-command-surface"><p class="section-kicker">COMPUTER SKILL INPUT</p><h3>What should AI Worker prepare?</h3><textarea v-model="computerGoal" rows="8" @input="computerPlanPreview = null" placeholder="例如：分析当前 ResearchOS 项目代码，找出前端优化点并生成报告"></textarea><label class="computer-mode-label">Execution mode<select v-model="computerMode"><option value="assist">Assist · 只分析</option><option value="supervised">Supervised · 低风险受控执行</option><option value="research">Research · Evidence 绑定交付</option></select></label><button class="analyze-button" type="button" :disabled="computerPlanLoading || !computerGoal.trim()" @click="previewComputerPlan">{{ computerPlanLoading ? 'Building task plan…' : 'Generate skill plan' }}</button><button v-if="computerPlanPreview" class="outline-button computer-start-button" type="button" :disabled="computerLoading" @click="runComputerTask">{{ computerLoading ? 'Executing…' : 'Start controlled execution' }}</button><div class="operator-template-list"><span>SAFE TASKS · 代码修改、文件变更与交付都需审批</span><button type="button" @click="applyComputerTemplate('分析当前 ResearchOS 项目代码，找出前端优化点并生成报告')">分析项目代码</button><button type="button" @click="applyComputerTemplate('整理我的论文目录并生成综述')">整理论文资料</button><button type="button" @click="applyComputerTemplate('优化首页UI')">优化首页 UI</button></div></aside>
+          <section class="operator-timeline-surface computer-plan-surface"><header><div><p class="section-kicker">AI WORKER EXECUTION TIMELINE</p><h3>{{ computerPlanPreview?.goal || computerTask?.user_goal || '等待一个受控 Computer Skill 任务' }}</h3></div><small v-if="computerTask || computerPlanPreview">{{ computerPlanPreview?.task_type || computerTask?.task_type }}</small></header><div v-if="computerPlanPreview" class="computer-plan-summary"><span>{{ computerPlanPreview.task_label }}</span><p>{{ computerPlanPreview.expected_output }}</p><small>{{ computerPlanPreview.resource_boundary }}</small></div><ol v-if="(computerPlanPreview?.plan || computerTask?.plan)?.length" class="operator-plan-list"><li v-for="step in (computerPlanPreview?.plan || computerTask?.plan)" :key="step.id || step.step" :class="step.status"><span>{{ String(step.step).padStart(2, '0') }}</span><div><strong>{{ step.task_name || step.action }}</strong><p>{{ step.reason || step.purpose }}</p><small>{{ step.required_tool || step.tool }} · {{ step.evidence_requirement ? 'Evidence required' : 'plan only' }} · {{ step.status }}</small></div></li></ol><div v-else class="operator-empty-state"><b>Understand · Observe · Execute · Recover · Review · Deliver</b><p>Computer Skill 只自动执行白名单只读操作；不会读取私人屏幕、运行任意 shell 或自动修改资料。</p></div><section v-if="computerTask?.events?.length && !computerPlanPreview" class="operator-tool-trace"><h4>Live execution events</h4><article v-for="event in computerTask.events" :key="event.id"><span>Computer Skill · {{ event.event_type }}</span><strong>{{ event.status }}</strong><p>{{ event.message }} <small v-if="event.result_summary">· {{ event.result_summary }}</small></p></article></section><section v-else-if="computerTask?.actions?.length && !computerPlanPreview" class="operator-tool-trace"><h4>Auditable action timeline</h4><article v-for="action in computerTask.actions" :key="action.id"><span>{{ action.tool_name }}</span><strong>{{ action.action_type }} · {{ action.status }}</strong><p>{{ action.result?.message || action.result?.boundary || '已记录受控工具执行摘要。' }}</p></article></section></section>
           <aside class="operator-artifact-surface"><p class="section-kicker">ENVIRONMENT · PERMISSION · APPROVAL</p><h3>Computer status</h3><div v-if="computerTask?.artifact?.artifacts?.length" class="operator-artifact-list"><article v-for="artifact in computerTask.artifact.artifacts" :key="artifact.path"><strong>{{ artifact.format }}</strong><span>{{ artifact.path }}</span></article></div><div class="operator-artifact-empty"><p>{{ computerTask?.artifact?.message || computerPlanPreview?.risk_summary || '计划不会执行工具，也不会创建文档。' }}</p></div><section v-if="computerTask?.checkpoint" class="operator-evidence"><h4>Execution checkpoint</h4><p>{{ computerTask.checkpoint.current_step }} · {{ computerTask.checkpoint.status }}</p><p>{{ computerTask.checkpoint.completed_actions?.length || 0 }} completed · {{ computerTask.checkpoint.remaining_actions?.length || 0 }} pending</p></section><section v-if="computerTask?.patches?.length" class="operator-evidence computer-patch-review"><h4>Patch review</h4><article v-for="patch in computerTask.patches" :key="patch.id"><strong>{{ patch.file_path }} · {{ patch.status }}</strong><pre>{{ patch.diff_content || 'No source change proposed.' }}</pre></article></section><section class="operator-evidence"><h4>Environment</h4><p>Research workspace：{{ computerEnvironment?.workspace?.file_count ?? '—' }} files · {{ computerEnvironment?.workspace?.document_count ?? '—' }} documents</p><p>Project：{{ computerEnvironment?.project?.project_name || '—' }} · {{ computerEnvironment?.project?.technology?.join(' · ') || '未识别' }}</p></section><section class="operator-evidence"><h4>Evidence references</h4><p v-if="!computerTask?.artifact?.evidence_refs?.length">暂无可验证资料；不会生成科研结论。</p><article v-for="ref in computerTask?.artifact?.evidence_refs || []" :key="ref.paper_id + '-' + ref.chunk_id"><strong>{{ ref.paper_title }}</strong><span>{{ ref.section }} · {{ ref.chunk_id }}</span></article></section><section class="computer-memory"><h4>Computer memory</h4><p>{{ computerProCatalog?.memory_boundary || computerMemory?.memory_boundary || '仅保存任务偏好与输出格式，不保存资料正文。' }}</p></section><section class="operator-tools"><h4>Controlled tools</h4><span v-for="tool in computerProCatalog?.tools || computerTools" :key="tool.name">{{ tool.name }}</span></section></aside>
         </div>
-        <section v-if="computerTask && !computerPlanPreview" class="computer-intelligence-panel" aria-label="Computer Agent Activity Intelligence">
+        <section class="computer-intelligence-panel computer-environment-timeline" aria-label="Controlled Computer Environment Timeline">
+          <header><div><p class="section-kicker">CONTROLLED ENVIRONMENT TIMELINE</p><h3>Environment-aware execution</h3></div><span>{{ computerEnvironment ? 'Environment detected' : 'Awaiting observation' }}</span></header>
+          <ol class="computer-control-timeline"><li :class="{ complete: !!computerEnvironment }"><span>01</span><b>Environment</b><small>{{ computerEnvironment ? 'Metadata detected · vision demo only' : 'Awaiting safe observation' }}</small></li><li :class="{ complete: !!computerPlanPreview || !!computerTask }"><span>02</span><b>Action plan</b><small>{{ computerPlanPreview ? 'Controlled plan prepared' : 'No action selected' }}</small></li><li :class="{ complete: computerTask?.status === 'completed', active: computerTask?.status === 'waiting_approval' }"><span>03</span><b>Approval</b><small>{{ computerTask?.status === 'waiting_approval' ? 'Human review required' : 'Approval boundary active' }}</small></li><li :class="{ complete: ['executing','completed'].includes(computerTask?.status) }"><span>04</span><b>Execution</b><small>Controlled actions only</small></li><li :class="{ complete: computerTask?.status === 'completed' }"><span>05</span><b>Verification</b><small>{{ computerTask?.status === 'completed' ? 'Verified' : 'Pending' }}</small></li><li :class="{ active: computerTask?.status === 'needs_review' }"><span>06</span><b>Recovery</b><small>{{ computerTask?.status === 'needs_review' ? 'Human review required' : 'Only if needed' }}</small></li></ol>
+        </section>
+        <section v-if="computerTask && !computerPlanPreview" class="computer-intelligence-panel" aria-label="Computer Skill Activity Intelligence">
           <header><div><p class="section-kicker">ACTIVITY INTELLIGENCE</p><h3>Explainable execution summary</h3></div><span>{{ computerTask.diffSummary?.impact || 'Workspace analysis' }}</span></header>
-          <div v-if="computerTask.mission" class="computer-mission-progress"><div><span>MISSION</span><strong>{{ computerTask.mission.mission_name }}</strong><small>{{ computerTask.mission.current_stage }}</small></div><b>{{ computerTask.mission.progress }}%</b><i><em :style="{ width: computerTask.mission.progress + '%' }"></em></i><p>Planner · Coder · Reviewer · Tester — source changes remain pending approval.</p></div>
+          <div v-if="computerTask.mission" class="computer-mission-progress"><div><span>MISSION</span><strong>{{ computerTask.mission.mission_name }}</strong><small>{{ computerTask.mission.current_stage }}</small></div><b>{{ computerTask.mission.progress }}%</b><i><em :style="{ width: computerTask.mission.progress + '%' }"></em></i><p>Computer Skill workflow — source changes remain pending approval.</p></div>
           <div v-if="computerTask.activity?.length" class="computer-activity-list"><article v-for="item in computerTask.activity" :key="item.id"><span>{{ item.stage }}</span><div><strong>{{ item.title }}</strong><p>{{ item.description }}</p></div><small>{{ item.status }}</small></article></div>
           <p v-else class="computer-intelligence-empty">执行开始后，这里只显示用户可理解的分析、计划、变更准备与验证摘要。</p>
           <div v-if="computerTask.diffSummary?.files_changed" class="computer-diff-summary"><strong>{{ computerTask.diffSummary.files_changed }} files changed</strong><span>{{ computerTask.diffSummary.changed_lines }} changed lines · {{ computerTask.diffSummary.risk }} risk</span></div>
@@ -3979,7 +4339,7 @@ createApp({
 
       <section v-if="activeWorkspaceView === 'bi'" class="researchos-bi" aria-label="科研BI驾驶舱"><div class="dashboard-heading"><div><p class="section-kicker">RESEARCH BUSINESS INTELLIGENCE</p><h2>科研 BI 驾驶舱</h2><p>从团队已沉淀资料中查看科研资产、成果统计与技术路线状态。</p></div><button class="outline-button" type="button" :disabled="researchBiLoading" @click="loadResearchBi">{{ researchBiLoading ? '刷新中…' : '刷新数据' }}</button></div><p v-if="projectError" class="error-alert"><span>!</span>{{ projectError }}</p><div v-if="researchBi" class="bi-grid"><article><p>科研论文 / 资料</p><strong>{{ researchBi.research_assets?.papers || 0 }}</strong><span>已入库科研资产</span></article><article><p>知识片段</p><strong>{{ researchBi.research_assets?.knowledge_chunks || 0 }}</strong><span>可用于 Agent 检索</span></article><article><p>科研项目</p><strong>{{ researchBi.research_assets?.projects || 0 }}</strong><span>生命周期管理中</span></article></div><div v-if="researchBi" class="researchos-dashboard-grid"><section class="dashboard-card"><p class="section-kicker">ASSET DISTRIBUTION</p><h3>科研资料构成</h3><ul class="bi-list"><li v-for="item in researchBi.asset_distribution" :key="item.document_type"><span>{{ item.document_type }}</span><b>{{ item.count }}</b></li></ul><p v-if="!researchBi.asset_distribution?.length">暂无已入库资料。</p></section><section class="dashboard-card"><p class="section-kicker">TECHNOLOGY ROADMAP</p><h3>技术路线图</h3><ol class="researchos-flow"><li v-for="item in researchBi.technology_roadmap" :key="item">{{ item }}</li></ol></section><section class="dashboard-card"><p class="section-kicker">RESEARCH HOTSPOTS</p><h3>研究热点分析</h3><p>{{ researchBi.trend_boundary }}</p><ul class="bi-list"><li v-for="title in researchBi.latest_assets" :key="title"><span>{{ title }}</span></li></ul><button class="outline-button" type="button" @click="openWorkspaceView('tasks')">运行趋势分析任务</button></section></div></section>
 
-      <section v-if="activeWorkspaceView === 'agents'" class="researchos-agents ai-team-room" aria-label="AI Team"><div class="dashboard-heading"><div><p class="section-kicker">YOUR AI TEAM</p><h2>Specialists with a shared mission.</h2><p>Each role works within its approved boundary, reports a concise outcome and keeps human review in control.</p></div><button class="outline-button" type="button" @click="openWorkspaceView('timeline')">View workflow</button></div><div class="ai-team-roster"><article v-for="agent in agentTeamCards" :key="agent.id"><div class="team-presence"><span>{{ agent.name.slice(0, 1) }}</span><i></i></div><div class="team-profile"><p>{{ agent.name }}</p><h3>{{ agent.name_cn }}</h3><small>{{ agent.description }}</small></div><div class="team-capability"><span>READY</span><b>{{ agent.purpose }}</b><em>Evidence-aware</em></div></article></div></section>
+      <section v-if="activeWorkspaceView === 'agents'" class="researchos-agents ai-team-room" aria-label="AI Worker Capabilities"><div class="dashboard-heading"><div><p class="section-kicker">AI WORKER</p><h2>One worker. Four controlled skills.</h2><p>AI Worker uses approved capabilities, keeps Evidence traceable, and pauses when a human decision is required.</p></div><button class="outline-button" type="button" @click="openWorkspaceView('mission-center')">Open workflow</button></div><div v-if="aiWorkerSkills.length" class="ai-team-roster"><article v-for="skill in aiWorkerSkills" :key="skill.id"><div class="team-presence"><span>{{ skill.name.slice(0, 1) }}</span><i></i></div><div class="team-profile"><p>AI Worker</p><h3>{{ skill.name }}</h3><small>{{ skill.description }}</small></div><div class="team-capability"><span>{{ skill.approval_required ? 'REVIEW GATED' : 'READY' }}</span><b>{{ skill.evidence_required ? 'Traceable Evidence required' : 'Controlled execution boundary' }}</b><em>{{ skill.approval_required ? 'Human approval' : 'Evidence-aware' }}</em></div></article></div><div v-else class="product-empty-state"><b>AI Worker capability catalog unavailable</b><p>Reconnect the workspace to load the currently approved capabilities.</p><button class="primary-card-action" type="button" @click="openWorkspaceView('agents')">Reconnect</button></div></section>
 
       <section v-if="activeWorkspaceView === 'knowledge'" class="library-workspace" aria-label="Knowledge Space">
         <div class="library-header"><div><p class="section-kicker">RESEARCH KNOWLEDGE SPACE</p><h2>Knowledge Space</h2><p>科研资料在这里成为可检索、可引用、可用于持续研究的知识资产。</p></div><div class="library-header-actions"><select v-model="libraryDocumentType" aria-label="科研资料类型"><option value="paper">论文</option><option value="patent">专利</option><option value="experiment_report">实验报告</option><option value="project_material">项目资料</option></select><label class="library-upload-button" :class="{ busy: libraryUploading }"><input ref="libraryFileInput" type="file" accept="application/pdf,.pdf" :disabled="libraryUploading" @change="uploadLibraryPaper" /><span>{{ libraryUploading ? '正在保存资料…' : '＋ 上传 PDF 资料' }}</span></label><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新列表' }}</button></div></div>
@@ -4000,13 +4360,13 @@ createApp({
       </section>
 
       <section v-if="activeWorkspaceView === 'insights'" class="rag-workspace" aria-label="科研洞察">
-        <div class="library-header"><div><p class="section-kicker">RESEARCH INSIGHTS</p><h2>科研洞察</h2><p>Research Agent 会检索团队知识库中的相关片段，再基于引用证据回答问题。</p></div><div class="library-header-actions"><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新论文范围' }}</button></div></div>
+        <div class="library-header"><div><p class="section-kicker">RESEARCH INSIGHTS</p><h2>科研洞察</h2><p>AI Worker 的 Research Skill 会检索团队知识库中的相关片段，再基于引用证据回答问题。</p></div><div class="library-header-actions"><button class="outline-button" type="button" :disabled="libraryLoading" @click="loadLibraryPapers">{{ libraryLoading ? '刷新中' : '刷新论文范围' }}</button></div></div>
         <p v-if="ragError" class="error-alert" role="alert"><span>!</span>{{ ragError }}</p>
         <div v-if="!libraryPapers.length && !libraryLoading" class="library-empty-state"><div class="empty-illustration">⌕</div><h3>暂无可检索论文</h3><p>请先在“我的论文库”上传论文，并等待知识索引建立完成。</p></div>
         <div v-else class="rag-content"><section class="knowledge-status-strip" aria-label="当前知识库状态"><div><span>论文</span><strong>{{ libraryPapers.length }}</strong><small>篇资料</small></div><div><span>知识片段</span><strong>{{ knowledgeChunkTotal }}</strong><small>个可检索片段</small></div><div><span>已就绪</span><strong>{{ readyPaperCount }}</strong><small>篇论文</small></div></section><details class="rag-scope compact-details"><summary>选择论文范围</summary><div class="rag-paper-options"><label v-for="paper in libraryPapers" :key="paper.paper_id"><input v-model="ragSelectedPaperIds" type="checkbox" :value="paper.paper_id" :disabled="!['indexed', 'ready'].includes(paper.quality_status || paper.analysis_status)" /><span>{{ paper.title }}</span><em>{{ paper.quality_status || libraryStatusLabel(paper.analysis_status) }}</em></label></div></details>
           <section class="research-task-center"><div><p class="section-kicker">RESEARCH TASK CENTER</p><h3>研究任务中心</h3><p>选择任务后，Agent 会检索选定论文并生成结构化研究报告。</p></div><div class="report-task-options"><button v-for="item in ragReportTasks" :key="item.id" type="button" :class="{ active: ragReportType === item.id }" @click="ragReportType = item.id"><b>{{ item.name }}</b><small>{{ item.description }}</small></button></div><button class="outline-button" type="button" :disabled="ragReportLoading" @click="generateResearchReport">{{ ragReportLoading ? '正在生成研究报告…' : '生成结构化报告' }}</button><p v-if="ragReportError" class="error-alert" role="alert"><span>!</span>{{ ragReportError }}</p><div v-if="ragReportResult" class="rag-report-card"><div class="rag-answer-heading"><div><p class="section-kicker">STRUCTURED RESEARCH REPORT</p><h3>研究任务结果</h3></div><span>{{ ragReportQuality?.evidence_level || 'low' }} evidence</span></div><article v-for="(value, key) in ragReportResult" :key="key"><h4>{{ key }}</h4><p v-if="typeof value === 'string'">{{ value }}</p><ul v-else><li v-for="item in value" :key="item">{{ item }}</li></ul></article><footer v-if="ragReportEvaluation">检索质量：<b>{{ ragReportEvaluation.retrieval_quality }}</b> · {{ ragReportEvaluation.retrieval_count }} 条证据 · 最高分 {{ ragReportEvaluation.highest_score }}</footer></div></section>
           <div class="rag-question-form"><label for="rag-question">请输入科研知识问题</label><textarea id="rag-question" v-model="ragQuestion" rows="5" placeholder="例如：总结这些论文在研究方法上的差异，并说明各自的适用边界。"></textarea><button class="analyze-button" type="button" :disabled="ragLoading || !libraryPapers.length" @click="askResearchQuestion"><span v-if="ragLoading" class="spinner small-spinner"></span>{{ ragLoading ? 'Agent 正在检索论文证据…' : '开始知识问答' }}</button></div>
-          <div v-if="ragLoading" class="loading-state rag-loading"><div class="process-heading"><span class="spinner"></span><div><h3>Research Agent 正在处理问题</h3><p>正在分析问题、改写检索 Query、检索相关论文、筛选证据并生成回答。</p></div></div><ol class="loading-workflow"><li><i></i>分析研究任务</li><li><i></i>检索相关论文</li><li><i></i>筛选与重排证据</li><li><i></i>生成可信回答</li></ol></div>
+          <div v-if="ragLoading" class="loading-state rag-loading"><div class="process-heading"><span class="spinner"></span><div><h3>AI Worker 正在处理问题</h3><p>Research Skill 正在分析问题、改写检索 Query、检索相关论文、筛选证据并生成回答。</p></div></div><ol class="loading-workflow"><li><i></i>分析研究任务</li><li><i></i>检索相关论文</li><li><i></i>筛选与重排证据</li><li><i></i>生成可信回答</li></ol></div>
           <details v-if="ragAgentPlan && !ragLoading" class="rag-plan compact-details"><summary>AI 执行过程</summary><span>✓ 理解问题</span><span>✓ 检索论文</span><span>✓ 筛选证据</span><span>✓ 生成回答</span><p>{{ ragAgentPlan.instruction }}</p><small>优化检索 Query：{{ ragAgentPlan.retrieval_query }}</small></details>
           <details v-if="ragAgentTrace?.steps?.length" class="rag-trace compact-details" aria-label="AI执行过程"><summary>查看执行摘要</summary><ol><li v-for="(trace, index) in ragAgentTrace.steps" :key="trace.created_at + trace.step"><b>✓</b><div><strong>{{ index + 1 }}. {{ trace.step }}</strong><p>{{ trace.message }}</p></div></li></ol></details>
           <details v-if="ragRetrievalEvaluation" class="rag-evaluation compact-details" aria-label="检索效果"><summary>检索质量 · {{ ragRetrievalEvaluation.retrieval_quality }}</summary><dl><div><dt>检索证据</dt><dd>{{ ragRetrievalEvaluation.retrieval_count }} 条</dd></div><div><dt>平均分</dt><dd>{{ ragRetrievalEvaluation.average_score }}</dd></div><div><dt>最高分</dt><dd>{{ ragRetrievalEvaluation.highest_score }}</dd></div></dl><small>该评分反映检索匹配质量，不代表回答事实准确率。</small></details>
@@ -4417,6 +4777,46 @@ createApp({
       </section>
       </div>
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.source_materials?.length" class="mission-source-material"><p class="section-kicker">SOURCE MATERIAL</p><h3>Customer-provided input files</h3><article v-for="item in selectedAIMission.source_materials" :key="item.file_id"><b>{{ item.filename }}</b><small>{{ item.file_type }} · {{ item.classification }} · 不作为 RAG Evidence</small></article></section>
+      <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.worker_runtime?.research_insight" class="research-insight-panel" aria-label="Research Insight">
+        <header><div><p class="section-kicker">RESEARCH INSIGHT</p><h3>Evidence-bounded research strategy</h3><p>{{ selectedAIMission.worker_runtime.research_insight.strategy.boundary }}</p></div><span>{{ selectedAIMission.worker_runtime.research_insight.gap_analysis.status }}</span></header>
+        <section class="research-insight-grid"><article><b>Research questions</b><ul><li v-for="item in selectedAIMission.worker_runtime.research_insight.strategy.research_questions" :key="item">{{ item }}</li></ul></article><article><b>Knowledge map</b><p>{{ selectedAIMission.worker_runtime.research_insight.strategy.knowledge_areas.join(' · ') }}</p><small>{{ selectedAIMission.worker_runtime.research_insight.strategy.evidence_count }} traceable Evidence reference(s) in scope.</small></article><article><b>Research gap</b><p v-for="item in selectedAIMission.worker_runtime.research_insight.gap_analysis.potential_gaps" :key="item.statement">{{ item.statement }}</p><p v-if="!selectedAIMission.worker_runtime.research_insight.gap_analysis.potential_gaps.length">No evidence-backed gap can be identified yet.</p></article><article><b>Innovation opportunities</b><p v-for="item in selectedAIMission.worker_runtime.research_insight.innovation_proposals" :key="item.opportunity">{{ item.opportunity }}</p><small v-if="!selectedAIMission.worker_runtime.research_insight.innovation_proposals.length">Evidence is required before proposing a reviewable validation opportunity.</small></article></section>
+      </section>
+      <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.worker_runtime?.autonomous_progress" class="ai-progress-panel" aria-label="AI Progress Timeline">
+        <header><div><p class="section-kicker">AI PROGRESS</p><h3>AI Worker progress</h3><p>Only completed, reviewable workflow stages are shown. Internal reasoning is never displayed.</p></div></header>
+        <ol><li v-for="item in selectedAIMission.worker_runtime.autonomous_progress" :key="item.label" :class="item.status.toLowerCase()"><span></span><b>{{ item.label }}</b><small>{{ item.status === 'COMPLETE' ? 'Completed' : item.status === 'ACTIVE' ? 'In progress' : 'Pending' }}</small></li></ol>
+      </section>
+      <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.worker_runtime?.mission_intelligence" class="mission-intelligence-panel" aria-label="Mission Intelligence">
+        <header><div><p class="section-kicker">MISSION INTELLIGENCE</p><h3>Mission understanding</h3><p>{{ selectedAIMission.worker_runtime.mission_intelligence.understanding.goal_summary }}</p></div><span>{{ selectedAIMission.worker_runtime.mission_intelligence.quality.quality }}</span></header>
+        <div class="mission-intelligence-grid"><article><b>Current phase</b><strong>{{ selectedAIMission.worker_runtime.mission_intelligence.current_phase }}</strong><small>{{ selectedAIMission.worker_runtime.mission_intelligence.quality.confidence }}</small></article><article><b>Completed tasks</b><strong>{{ selectedAIMission.worker_runtime.mission_intelligence.completed_tasks.length }}</strong><small>Only completed, user-reviewable tasks are counted.</small></article><article><b>Remaining tasks</b><ul><li v-for="task in selectedAIMission.worker_runtime.mission_intelligence.pending_tasks" :key="task.task_id">{{ task.required_skill }} · {{ task.status }}</li><li v-if="!selectedAIMission.worker_runtime.mission_intelligence.pending_tasks.length">No remaining task is available.</li></ul></article><article><b>Quality status</b><strong>{{ selectedAIMission.worker_runtime.mission_intelligence.quality.quality }}</strong><small>{{ selectedAIMission.worker_runtime.mission_intelligence.quality.next_action }}</small></article></div>
+      </section>
     </main>
+    <section v-else class="login-shell" aria-label="ResearchOS sign in">
+      <div class="login-ambient" aria-hidden="true"></div>
+      <form v-if="authMode === 'login'" class="login-card" @submit.prevent="loginToWorkspace">
+        <div class="login-brand"><span class="brand-orb" aria-hidden="true">R</span><div><b>ResearchOS</b><small>Enterprise AI Workspace</small></div></div>
+        <p class="section-kicker">WORKSPACE AUTHENTICATION</p>
+        <h1>Sign in to your Workspace</h1>
+        <p>ResearchOS loads Mission, Evidence, delivery and review data only after your Workspace identity is verified.</p>
+        <label>Email<input v-model="loginForm.email" type="email" autocomplete="email" placeholder="you@organization.com" /></label>
+        <label>Password<input v-model="loginForm.password" type="password" autocomplete="current-password" placeholder="Enter your password" /></label>
+        <p v-if="loginError" class="login-error">{{ loginError }}</p>
+        <button class="primary-card-action" type="submit" :disabled="loginLoading">{{ loginLoading ? 'Signing in…' : 'Sign in to Workspace' }}</button>
+        <div class="auth-entry-actions"><button class="text-button" type="button" @click="authMode = 'register'; loginError = ''">Create account</button><button class="outline-button" type="button" :disabled="demoLoading" @click="startDemoSession">{{ demoLoading ? 'Starting demo…' : 'Try Demo' }}</button></div>
+        <small class="login-boundary">Your Session is stored locally as an opaque token. Workspace access and role checks remain enforced by the API.</small>
+      </form>
+      <form v-else class="login-card register-card" @submit.prevent="registerWorkspace">
+        <div class="login-brand"><span class="brand-orb" aria-hidden="true">R</span><div><b>ResearchOS</b><small>Enterprise AI Workspace</small></div></div>
+        <p class="section-kicker">CREATE WORKSPACE</p>
+        <h1>Create your AI Workspace</h1>
+        <p>Create a private Workspace with you as its Owner. Roles and access controls remain enforced by the API.</p>
+        <label>Name<input v-model="registrationForm.name" autocomplete="name" placeholder="Your name" /></label>
+        <label>Email<input v-model="registrationForm.email" type="email" autocomplete="email" placeholder="you@organization.com" /></label>
+        <label>Password<input v-model="registrationForm.password" type="password" autocomplete="new-password" minlength="12" placeholder="At least 12 characters" /></label>
+        <label>Workspace name<input v-model="registrationForm.workspace_name" autocomplete="organization" placeholder="Innovation Research" /></label>
+        <p v-if="loginError" class="login-error">{{ loginError }}</p>
+        <button class="primary-card-action" type="submit" :disabled="loginLoading">{{ loginLoading ? 'Creating Workspace…' : 'Create Workspace' }}</button>
+        <div class="auth-entry-actions"><button class="text-button" type="button" @click="authMode = 'login'; loginError = ''">Back to login</button><button class="outline-button" type="button" :disabled="demoLoading" @click="startDemoSession">{{ demoLoading ? 'Starting demo…' : 'Try Demo' }}</button></div>
+      </form>
+    </section>
   `,
 }).mount("#app");

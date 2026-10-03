@@ -9,6 +9,7 @@ venv/
 
 # Python cache and tooling
 __pycache__/
+**pycache**/
 *.py[cod]
 .pytest_cache/
 
@@ -24,6 +25,8 @@ frontend/dist/
 work/
 tmp/
 outputs/
+logs/
+*.log
 
 # Local databases and vector-search artifacts
 *.db
@@ -33,3 +36,6 @@ outputs/
 
 # User-provided autonomous Research Workspace assets
 research_workspace/
+
+# Deployment client metadata is local to the operator account.
+.vercel/

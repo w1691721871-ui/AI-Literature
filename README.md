@@ -433,3 +433,26 @@ v5.0 将既有科研智能能力组织为面向 FDE 面试展示的客户解决�
 - RAG 引用为论文片段和章节级提示；`retrieval_quality` 仅反映检索匹配，不代表回答事实准确率。
 - 业务产物和行动建议是辅助信息，仍需结合访谈、现场环境、数据或专家判断验证。
 - PWA 仅提供基础安装与静态壳缓存，并非离线文档分析能力。
+
+## Public Demo deployment (Vercel + Render)
+
+The repository contains deployment preparation only; no public URL or cloud
+credential is committed. Deploy the FastAPI service from `render.yaml`, then
+deploy this repository to Vercel with `frontend/` as the static output folder.
+
+1. On Render, set `DASHSCOPE_API_KEY` and `CORS_ALLOWED_ORIGINS` in the secret
+   store. `CORS_ALLOWED_ORIGINS` must contain the final `https://<vercel-domain>`
+   and must never be `*`.
+2. In Vercel, set the non-secret build variable `RESEARCHOS_API_URL` to the
+   deployed Render API origin, for example `https://<render-service>.onrender.com`.
+   The build script writes that public origin into `frontend/runtime-config.js`.
+3. Verify `/health`, then use the public frontend. Registration and Try Demo
+   still obtain their identity from the FastAPI API; the frontend does not
+   manufacture a connected session.
+
+`render.yaml` deliberately targets Render's free web-service plan for a
+bounded demo. That filesystem is ephemeral: SQLite state, uploaded files, and
+FAISS data do **not** survive a redeploy. A public demo that must retain the
+seven-paper corpus needs an approved persistent disk/object-storage bootstrap
+plan before release. The ignored local `work/` directory is never copied to a
+cloud service by this repository or deployment configuration.

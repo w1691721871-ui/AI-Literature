@@ -17,6 +17,7 @@ class Connector(Base):
     connector_type: Mapped[str] = mapped_column(String(30), nullable=False)
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="ACTIVE")
     permission: Mapped[str] = mapped_column(String(30), nullable=False, default="READ_ONLY")
+    workspace_id: Mapped[str | None] = mapped_column(String(36), nullable=True, index=True)
     config_summary: Mapped[str] = mapped_column(Text, nullable=False, default="{}")
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=utc_now)
 

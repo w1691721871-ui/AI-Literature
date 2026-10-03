@@ -1,12 +1,17 @@
-from fastapi import APIRouter,HTTPException
+from fastapi import APIRouter,Depends,HTTPException
 from pydantic import BaseModel,Field
 from app.services.governance_service import GovernanceError
 from app.services.artifact_service import ArtifactError
 from app.services.workspace_experience_service import WorkspaceExperienceError,WorkspaceExperienceService
+from app.services.identity_service import IdentityContext
+from app.services.permission_middleware import PermissionMiddleware
 router=APIRouter(prefix="/api",tags=["workspace-experience"]);service=WorkspaceExperienceService()
+permissions=PermissionMiddleware()
 class Comment(BaseModel):reviewer_id:str=Field(min_length=1);workspace_id:str=Field(min_length=1);comment:str=Field(min_length=1,max_length=2000);request_revision:bool=False
 @router.get("/workspace/dashboard")
-def dashboard():return service.dashboard()
+def dashboard(context:IdentityContext=Depends(permissions.current)):
+ permissions.require(context,"MISSION_VIEW")
+ return service.dashboard(context.workspace_id)
 @router.get("/missions/{mission_id}/workspace")
 def workspace(mission_id:str):
  try:return service.mission_workspace(mission_id)

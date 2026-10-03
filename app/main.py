@@ -1,3 +1,5 @@
+import os
+
 from pydantic import BaseModel
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
 from fastapi.exceptions import RequestValidationError
@@ -45,7 +47,11 @@ from app.routes.enterprise_memory import router as enterprise_memory_router
 from app.routes.product_showcase import router as product_showcase_router
 from app.routes.advanced_computer import router as advanced_computer_router
 from app.routes.computer_vision import router as computer_vision_router
+from app.routes.identity import router as identity_router
+from app.routes.approval import router as approval_router
+from app.routes.audit import router as audit_router
 from app.services.runtime_monitor_service import RuntimeMonitor
+from app.services.demo_identity_service import DemoIdentitySeeder
 
 
 app = FastAPI(title="ResearchOS · AI科研创新决策平台")
@@ -74,18 +80,32 @@ app.include_router(enterprise_memory_router)
 app.include_router(product_showcase_router)
 app.include_router(advanced_computer_router)
 app.include_router(computer_vision_router)
+app.include_router(identity_router)
+app.include_router(approval_router)
+app.include_router(audit_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
+def _cors_allowed_origins() -> list[str]:
+    """Return explicit browser origins; never fall back to a wildcard."""
+    configured = os.getenv("CORS_ALLOWED_ORIGINS", "")
+    origins = [value.strip().rstrip("/") for value in configured.split(",") if value.strip()]
+    local_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
+    return list(dict.fromkeys([*local_origins, *origins]))
+
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",
-        "http://127.0.0.1:5173",
-        "https://ai-literature-13.onrender.com",
-    ],
+    allow_origins=_cors_allowed_origins(),
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+@app.on_event("startup")
+def provision_demo_identity_if_enabled() -> None:
+    """Provision explicitly configured demo identities; production is unchanged."""
+    DemoIdentitySeeder().seed_if_enabled()
 
 
 class FollowUpQuestion(BaseModel):
