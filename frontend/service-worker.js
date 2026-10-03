@@ -1,7 +1,9 @@
-const CACHE_NAME = "researchos-workspace-v152";
+const CACHE_NAME = "researchos-workspace-v153";
 // Keep navigation documents network-first. Caching index.html would preserve
 // an old script URL across releases even when the shell cache version changes.
-const APP_SHELL = ["./styles.css?v=152", "./runtime-config.js?v=1", "./app.js?v=152", "./manifest.json"];
+// Runtime configuration is deliberately excluded: it is supplied at deploy
+// time and must always be fetched from the currently deployed environment.
+const APP_SHELL = ["./styles.css?v=153", "./app.js?v=153", "./manifest.json"];
 
 self.addEventListener("install", (event) => {
   event.waitUntil(caches.open(CACHE_NAME).then((cache) => cache.addAll(APP_SHELL)));
@@ -20,6 +22,11 @@ self.addEventListener("activate", (event) => {
 
 self.addEventListener("fetch", (event) => {
   if (event.request.method !== "GET") return;
+  const requestUrl = new URL(event.request.url);
+  if (requestUrl.pathname.endsWith("/runtime-config.js")) {
+    event.respondWith(fetch(event.request, { cache: "no-store" }));
+    return;
+  }
   if (event.request.mode === "navigate") {
     event.respondWith(fetch(event.request).catch(() => caches.match(event.request)));
     return;

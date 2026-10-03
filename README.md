@@ -443,9 +443,12 @@ deploy this repository to Vercel with `frontend/` as the static output folder.
 1. On Render, set `DASHSCOPE_API_KEY` and `CORS_ALLOWED_ORIGINS` in the secret
    store. `CORS_ALLOWED_ORIGINS` must contain the final `https://<vercel-domain>`
    and must never be `*`.
-2. In Vercel, set the non-secret build variable `RESEARCHOS_API_URL` to the
-   deployed Render API origin, for example `https://<render-service>.onrender.com`.
-   The build script writes that public origin into `frontend/runtime-config.js`.
+2. For the current Render Static Site deployment, set the non-secret **build**
+   variable `RESEARCHOS_API_URL=https://ai-literature-109.onrender.com` on the
+   Static Site, use `node scripts/build-runtime-config.mjs` as its build
+   command, and publish `frontend/`. The build script writes that public origin
+   into `frontend/runtime-config.js`. Vercel deployments use the same build
+   variable and build script.
 3. Verify `/health`, then use the public frontend. Registration and Try Demo
    still obtain their identity from the FastAPI API; the frontend does not
    manufacture a connected session.

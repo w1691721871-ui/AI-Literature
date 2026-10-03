@@ -134,6 +134,9 @@ createApp({
     const connectionState = ref("CONNECTING");
     const connectionMessage = ref("Connecting workspace");
     const sessionToken = ref(window.localStorage.getItem("researchos_session_token") || "");
+    // Invalidates a stale identity restore when a user starts a new session while
+    // the application is still checking a previously stored token.
+    let identityRequestEpoch = 0;
     const identityProfile = ref(null);
     const identityMenuOpen = ref(false);
     const identityRestoreError = ref("");
@@ -3025,7 +3028,7 @@ createApp({
       errorMessage.value = "";
     }
 
-    async function readResponse(response) {
+    async function readResponse(response, requestToken = null) {
       let data;
       try {
         data = await response.json();
@@ -3034,7 +3037,7 @@ createApp({
       }
       if (!response.ok) {
         if (response.status === 401) {
-          clearIdentitySession();
+          clearIdentitySession(requestToken);
           throw new Error("Session expired. Please sign in again.");
         }
         if (response.status === 403) throw new Error("Permission denied. You do not have access to this Workspace resource.");
@@ -3090,40 +3093,60 @@ createApp({
     }
 
     async function loadIdentityProfile() {
-      if (!sessionToken.value) { identityProfile.value = null; return false; }
+      const tokenForRequest = sessionToken.value;
+      if (!tokenForRequest) { identityProfile.value = null; return false; }
+      const requestEpoch = ++identityRequestEpoch;
       try {
         identityRestoreError.value = "";
-        identityProfile.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/identity/me`));
+        const profile = await readResponse(
+          await fetchWithTimeout(`${API_BASE_URL}/api/identity/me`),
+          tokenForRequest,
+        );
+        if (requestEpoch !== identityRequestEpoch || tokenForRequest !== sessionToken.value) return false;
+        identityProfile.value = profile;
         return true;
       } catch (error) {
+        if (requestEpoch !== identityRequestEpoch || tokenForRequest !== sessionToken.value) return false;
         identityRestoreError.value = error.message || "Session expired. Please sign in again.";
-        clearIdentitySession();
+        console.error("ResearchOS identity restoration failed.", error);
+        clearIdentitySession(tokenForRequest);
         return false;
       }
     }
 
-    function clearIdentitySession() {
+    function clearIdentitySession(expectedToken = null) {
+      if (expectedToken && sessionToken.value !== expectedToken) return false;
+      identityRequestEpoch += 1;
       sessionToken.value = "";
       identityProfile.value = null;
       identityMenuOpen.value = false;
       window.localStorage.removeItem("researchos_session_token");
+      return true;
     }
 
     async function initializeAuthorizedWorkspace() {
       if (!identityProfile.value?.workspace?.id) return;
-      await loadWorkspaceExperience();
-      await loadAIMissions();
-      await loadLibraryPapers();
-      await loadProductExperience();
-      await loadResearchOsData();
-      await loadResearchWorkspaces();
-      await loadResearchOverview();
+      const workspaceLoaders = [
+        ["workspace overview", loadWorkspaceExperience],
+        ["missions", loadAIMissions],
+        ["knowledge", loadLibraryPapers],
+        ["deliveries", loadProductExperience],
+        ["research data", loadResearchOsData],
+        ["research workspaces", loadResearchWorkspaces],
+        ["research overview", loadResearchOverview],
+      ];
+      const results = await Promise.allSettled(workspaceLoaders.map(([, load]) => load()));
+      results.forEach((result, index) => {
+        if (result.status === "rejected") {
+          console.error(`ResearchOS workspace initialization failed for ${workspaceLoaders[index][0]}.`, result.reason);
+        }
+      });
     }
 
     async function initializeApplication() {
       const identityRestored = await loadIdentityProfile();
       if (!identityRestored) return;
-      await initializeAuthorizedWorkspace();
+      void initializeAuthorizedWorkspace();
     }
 
     async function loginToWorkspace() {
@@ -3146,12 +3169,19 @@ createApp({
     }
 
     async function establishIdentitySession(session, destination = "dashboard") {
+      if (!session?.session_token) throw new Error("Session could not be created. Please try again.");
+      identityRequestEpoch += 1;
       sessionToken.value = session.session_token;
       window.localStorage.setItem("researchos_session_token", session.session_token);
       const identityRestored = await loadIdentityProfile();
-      if (!identityRestored) throw new Error(identityRestoreError.value || "Session could not be restored. Please sign in again.");
+      if (!identityRestored) {
+        console.error("ResearchOS identity verification failed after session creation.");
+        throw new Error(identityRestoreError.value || "Session could not be restored. Please sign in again.");
+      }
       activeWorkspaceView.value = destination;
-      await initializeAuthorizedWorkspace();
+      // Identity is the only requirement for entering the Workspace. Individual
+      // data modules load independently and show their own empty/error states.
+      void initializeAuthorizedWorkspace();
     }
 
     async function registerWorkspace() {
@@ -3179,6 +3209,7 @@ createApp({
         const response = await fetchWithTimeout(`${API_BASE_URL}/api/identity/demo-session`, { method: "POST" });
         await establishIdentitySession(await readResponse(response), "dashboard");
       } catch (error) {
+        console.error("ResearchOS demo session failed.", error);
         loginError.value = error.message || "Demo Workspace could not be started.";
       } finally { demoLoading.value = false; }
     }

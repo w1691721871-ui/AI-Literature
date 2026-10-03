@@ -14,12 +14,24 @@ At startup, ResearchOS initializes its SQLite tables and, when `DEMO_MODE=true`,
 
 ## Public frontend and API connection
 
-Deploy the repository root to Vercel. `vercel.json` builds `frontend/runtime-config.js` and serves `frontend/` as the static output directory; its rewrite sends all browser paths back to `index.html`.
+Deploy the repository root to a static hosting service. `vercel.json` builds
+`frontend/runtime-config.js` and serves `frontend/` as the static output
+directory; its rewrite sends all browser paths back to `index.html`.
 
-Set this non-secret Vercel environment variable before deployment:
+For the current Render Static Site, configure these build settings:
 
 ```text
-RESEARCHOS_API_URL=https://<your-render-service>.onrender.com
+Build Command=node scripts/build-runtime-config.mjs
+Publish Directory=frontend
+RESEARCHOS_API_URL=https://ai-literature-109.onrender.com
+```
+
+`RESEARCHOS_API_URL` is a non-secret Static Site build variable. It must be
+available to the build command; the committed `frontend/runtime-config.js`
+intentionally remains empty. Vercel deployments use the same build variable:
+
+```text
+RESEARCHOS_API_URL=https://ai-literature-109.onrender.com
 ```
 
 Then set the exact Vercel origin in Render (no wildcard):
