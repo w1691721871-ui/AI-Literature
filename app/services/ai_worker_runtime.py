@@ -84,9 +84,12 @@ class AIWorkerRuntime:
         records = self._records(mission_id)
         waiting_action = next((record["result_summary"] for record in reversed(records) if record["status"] == "WAITING_REVIEW"), None)
         computer_plan = None
+        computer_execution = None
         if mission.get("computer_missions"):
             from app.services.computer_task_planner import ComputerTaskPlanner
+            from app.services.computer_mission_runtime import ComputerMissionRuntime
             computer_plan = ComputerTaskPlanner().plan(mission, context)
+            computer_execution = ComputerMissionRuntime().summarize(mission.get("computer_missions"))
         return {
             "mission": {
                 "id": mission["id"], "title": mission.get("title"), "objective": contract.objective,
@@ -96,6 +99,7 @@ class AIWorkerRuntime:
             "skills": self._team.presentation(self._registry, mission, context, understanding=understanding),
             "team_plan": self._team.plan_summary(self._registry, mission, context, understanding=understanding),
             "computer_plan": computer_plan,
+            "computer_execution": computer_execution,
             "context": self._context.presentation(context),
             "timeline": records,
             "research_insight": self._orchestrator.research_insight(mission),

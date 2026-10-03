@@ -89,6 +89,7 @@ class ControlledComputerMissionService:
             row.workspace_profile_json = self._encode(profile)
             self._log(row, "Workspace Scanned", "COMPLETED", "已读取项目结构元数据；未读取 .env、密钥、数据库或 FAISS 文件。")
             observation = self.observer.observe_environment({"mission_id": row.id, "goal": row.task, "workspace_profile": profile})
+            observation["normalized_observation"] = self.observer.normalize_observation(observation)
             self._log(row, "Environment Observed", "OBSERVED", "已完成只读环境观察；当前没有真实视觉输入。")
             parent = session.get(AIMission, row.mission_id) if row.mission_id else None
             workspace_id = str(parent.workspace_id) if parent and parent.workspace_id else None

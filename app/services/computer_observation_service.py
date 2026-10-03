@@ -52,6 +52,35 @@ class ComputerObservationService:
         return self.observe_environment()
 
     @staticmethod
+    def normalize_observation(observation: dict[str, object]) -> dict[str, object]:
+        """Project a safe, stable environment view for a Mission lifecycle.
+
+        The controlled service may retain its existing internal metadata for
+        verification, but every AI Worker decision receives only this compact
+        representation. It excludes raw file names, source contents,
+        screenshots, credentials and model output.
+        """
+        environment = observation.get("environment")
+        environment = environment if isinstance(environment, dict) else {}
+        actions = observation.get("available_actions")
+        actions = [str(action) for action in actions if isinstance(action, str)] if isinstance(actions, list) else []
+        visible = observation.get("visible_elements")
+        visible = visible if isinstance(visible, list) else []
+        return {
+            "observation_status": str(observation.get("status") or "NOT_OBSERVED"),
+            "vision_mode": "demo_only" if observation.get("vision_mode") == "demo_only" else "connected",
+            "page_state": str(observation.get("page_state") or "unknown"),
+            "document_state": "metadata_available" if int(environment.get("document_count") or 0) else "not_available",
+            "data_state": "metadata_available" if int(environment.get("files") or 0) else "not_available",
+            "task_state": "ready_for_controlled_action" if actions else "waiting_for_safe_action",
+            "available_actions": actions,
+            "visible_element_kinds": sorted({str(item.get("kind")) for item in visible if isinstance(item, dict) and item.get("kind")}),
+            "risk_level": str(observation.get("risk_level") or "LOW"),
+            "verification_points": [str(item) for item in observation.get("verification_points", []) if isinstance(item, str)],
+            "boundary": "A normalized metadata observation only; no screenshot, source content, sensitive file data, Prompt or model reasoning is retained.",
+        }
+
+    @staticmethod
     def compare_environment(before_state: dict[str, object], after_state: dict[str, object]) -> dict[str, object]:
         """Compare public-safe state summaries, never screenshots or raw page content."""
         keys = ("page_state", "risk_level", "verification_target", "current_state")

@@ -20,7 +20,14 @@ class ComputerTaskPlanner:
         if workspace.get("id") != mission.get("workspace_id"):
             raise PermissionError("Computer planning requires the current Mission Workspace context.")
         goal = str(mission.get("goal") or mission.get("title") or "")
-        skills = self._registry.match(goal)[: self.MAX_STEPS]
+        matched_skills = self._registry.match(goal)
+        # Browser research is never allowed to bypass the existing Evidence
+        # boundary. Reserve space for its validation step before truncating a
+        # multi-skill plan, rather than appending it and accidentally dropping
+        # it at the final finite-plan limit.
+        requires_evidence_validation = any(skill["id"] == "browser_research" for skill in matched_skills)
+        skill_limit = self.MAX_STEPS - (1 if requires_evidence_validation else 0)
+        skills = matched_skills[:skill_limit]
         evidence_count = len((context.get("knowledge") or {}).get("traceable_evidence_refs") or []) if isinstance(context.get("knowledge"), Mapping) else 0
         steps = [
             {"order": index, "skill": skill["name"], "skill_id": skill["id"], "purpose": self._purpose(skill["id"]),
@@ -28,7 +35,7 @@ class ComputerTaskPlanner:
              "risk_level": skill["risk_level"], "approval_required": skill["approval_required"], "status": "PLANNED"}
             for index, skill in enumerate(skills, start=1)
         ]
-        if any(step["skill_id"] == "browser_research" for step in steps):
+        if requires_evidence_validation:
             steps.append({"order": len(steps) + 1, "skill": "Evidence Validation", "skill_id": "evidence_validation", "purpose": "Validate externally discovered candidates before any knowledge reuse.", "inputs": ["Candidate source references"], "outputs": ["Traceable Evidence or an evidence gap"], "permission": "KNOWLEDGE_ACCESS", "risk_level": "LOW", "approval_required": False, "status": "PLANNED"})
         return {"mission_id": mission.get("id"), "steps": steps[: self.MAX_STEPS], "context_basis": {"traceable_evidence": evidence_count}, "boundary": "Computer observations and external candidates never enter Research Memory without the existing Evidence validation and human review boundaries."}
 

@@ -39,6 +39,13 @@ class ComputerAgentTests(unittest.TestCase):
         self.assertIn("VERIFY", observation["available_actions"])
         self.assertNotIn("DELETE", observation["available_actions"])
 
+    def test_normalized_observation_omits_raw_environment_profile(self):
+        normalized = self.observer.normalize_observation(self.observer.observe_environment({"goal": "browse research workspace"}))
+        self.assertEqual(normalized["vision_mode"], "demo_only")
+        self.assertIn("document_state", normalized)
+        self.assertNotIn("profile", normalized)
+        self.assertNotIn("workspace", normalized)
+
     def test_high_risk_action_requires_approval(self):
         plan = self.planner.plan_next_action(self.observer.observe_environment(), "上传 a report to an external portal")
         self.assertEqual(plan["action_type"], "UPLOAD")
