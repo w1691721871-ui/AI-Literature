@@ -73,6 +73,7 @@ def initialize_database() -> None:
     from app.models.enterprise_scenario import EnterpriseScenario, ScenarioRun, DemoDataSource  # noqa: F401
     from app.models.autonomous_research_run import AutonomousResearchRun  # noqa: F401
     from app.models.research_memory import ResearchMemory  # noqa: F401
+    from app.models.research_monitoring import ResearchMonitoringTask  # noqa: F401
     from app.models.research_worker_run import ResearchWorkerRun  # noqa: F401
     from app.models.research_worker_context import ResearchWorkerContext  # noqa: F401
     from app.models.research_workspace import ResearchWorkspace  # noqa: F401
