@@ -8,6 +8,7 @@ from app.services.identity_service import IdentityContext
 from app.services.permission_middleware import PermissionMiddleware
 from app.services.audit_service import AuditService
 from app.services.mission_lifecycle_service import MissionLifecycleError, MissionLifecycleService
+from app.services.mission_activity_service import MissionActivityService
 
 
 router = APIRouter(prefix="/api", tags=["ai-missions"])
@@ -15,6 +16,7 @@ service = AIMissionService()
 permissions = PermissionMiddleware()
 audit = AuditService()
 lifecycle = MissionLifecycleService()
+activity = MissionActivityService()
 
 
 @router.post("/missions", status_code=status.HTTP_201_CREATED)
@@ -136,6 +138,15 @@ def mission_timeline(mission_id: str, context: IdentityContext = Depends(permiss
         return service.timeline(mission_id)
     except AIMissionNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
+
+
+@router.get("/missions/{mission_id}/activity")
+def mission_activity(mission_id: str, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.mission(context, mission_id, "MISSION_VIEW")
+    try:
+        return activity.timeline(mission_id, context.workspace_id)
+    except PermissionError as error:
+        raise HTTPException(status_code=403, detail="Mission is not available in this Workspace.") from error
 
 
 @router.get("/notifications")
