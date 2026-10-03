@@ -35,7 +35,7 @@ class AIMissionNotFoundError(ValueError): pass
 class AIMissionService:
     """Coordinates existing FDE + RAG services without fabricating Evidence."""
     max_retries = 3
-    allowed_statuses = {"CREATED","PLANNING","REQUIREMENT_ANALYSIS","EVIDENCE_RETRIEVAL","SOLUTION_GENERATION","RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION","ADAPTIVE_REPLANNING","WAITING_ADAPTIVE_REVIEW","APPROVED","DELIVERY_READY","COMPLETED","FAILED"}
+    allowed_statuses = {"CREATED","PLANNING","REQUIREMENT_ANALYSIS","EVIDENCE_RETRIEVAL","SOLUTION_GENERATION","RISK_ANALYSIS","WAITING_REVIEW","NEEDS_REVISION","ADAPTIVE_REPLANNING","WAITING_ADAPTIVE_REVIEW","APPROVED","DELIVERY_READY","COMPLETED","FAILED","PAUSED"}
 
     def __init__(self, session_factory: Callable[[], Session] = SessionLocal, *, initialize: bool = True, fde_service=None, retrieval_service=None, planner_service=None, memory_service=None):
         if initialize: initialize_database()
@@ -60,6 +60,8 @@ class AIMissionService:
 
     def run(self, mission_id: str) -> dict[str, object]:
         mission=self._mission_row(mission_id)
+        if mission["status"] == "PAUSED":
+            raise ValueError("Mission is paused. Resume it before starting another controlled execution.")
         if mission["status"] not in {"CREATED","PLANNING","NEEDS_REVISION"}: raise ValueError("当前 Mission 不处于可执行或可修订状态。")
         try:
             self._graph_status(mission_id,"Research Agent","RUNNING")

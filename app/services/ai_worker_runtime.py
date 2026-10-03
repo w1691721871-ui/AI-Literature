@@ -101,6 +101,8 @@ class AIWorkerRuntime:
 
     def execute(self, mission_id: str, *, actor=None) -> dict[str, object]:
         mission = self._mission(mission_id)
+        if str(mission.get("status") or "").upper() == "PAUSED":
+            raise ValueError("Mission is paused. An authorized Workspace member must resume it before AI Worker execution.")
         context = self._context.build(mission, actor=actor)
         mission = {**mission, "ai_context": context}
         contract = self._worker.contract_for_mission(mission)
