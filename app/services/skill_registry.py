@@ -86,7 +86,8 @@ class ComputerSkillAdapter(SkillAdapter):
         self._planner = action_planner or ComputerActionPlanner()
 
     def capability_metadata(self) -> dict[str, object]:
-        return {"mode": "controlled", "requires_approval": True, "supports_rollback": True, "vision": "demo_only"}
+        from app.services.computer_skill_registry import ComputerSkillRegistry
+        return {"mode": "controlled", "requires_approval": True, "supports_rollback": True, "vision": "demo_only", "available_skills": ComputerSkillRegistry().catalog()}
 
     def execute(self, mission: Mapping[str, Any]) -> SkillResult:
         tasks = mission.get("computer_missions", [])
