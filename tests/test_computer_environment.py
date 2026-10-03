@@ -62,6 +62,13 @@ class ComputerEnvironmentTests(unittest.TestCase):
         self.assertEqual(changed["status"], "STATE_CHANGED")
         self.assertEqual(unchanged["status"], "NO_CHANGE")
 
+    def test_semantic_environment_exposes_meaning_not_raw_content(self):
+        semantic = self.environments.understand_environment(self.observer.observe_environment())
+        self.assertIn("environment_type", semantic)
+        self.assertIn("semantic_observations", semantic)
+        self.assertEqual(semantic["risk_level"], "LOW")
+        self.assertNotIn("profile", semantic)
+
     def test_success_feedback_and_failed_recovery(self):
         action = self.planner.plan_next_action(self.observer.observe_environment(), "browse authorized workspace")
         success = self.feedback.evaluate_action_result(action, {"page_state": "before"}, {"page_state": "after", "verification_status": "PASS"})

@@ -122,6 +122,37 @@ class ComputerEnvironmentService:
                 session.close()
         return summary
 
+    @staticmethod
+    def understand_environment(observation: dict[str, object]) -> dict[str, object]:
+        """Create a semantic, privacy-safe environment description.
+
+        No visual connector is present, therefore browser semantics are
+        explicitly limited to approved metadata and never claim screen
+        understanding.
+        """
+        environment = observation.get("environment") if isinstance(observation.get("environment"), dict) else {}
+        documents = int(environment.get("documents") or environment.get("document_count") or 0)
+        files = int(environment.get("files") or environment.get("file_count") or 0)
+        is_demo_vision = observation.get("vision_mode") == "demo_only"
+        kind = "BROWSER" if "NAVIGATE" in observation.get("available_actions", []) else "WORKSPACE"
+        return {
+            "environment_type": kind,
+            "current_state": str(observation.get("page_state") or "unknown"),
+            "available_actions": [str(item) for item in observation.get("available_actions", []) if isinstance(item, str)],
+            "relevant_context": [
+                "Research source candidates require Evidence validation" if kind == "BROWSER" else "Authorized workspace metadata is available",
+                "Document structure metadata is available" if documents else "No document structure is currently available",
+                "Data metadata is available" if files else "No approved data metadata is currently available",
+            ],
+            "semantic_observations": [
+                "A controlled approval boundary is present.",
+                "Visual interpretation is demo-only; no screenshot content was used." if is_demo_vision else "A connected visual input may require separate review.",
+            ],
+            "risk_level": str(observation.get("risk_level") or "LOW"),
+            "verification_target": str((observation.get("verification_points") or ["state change"])[0]),
+            "boundary": "Semantic observations use authorized metadata only; no raw files, screenshots, secrets, Prompt or model reasoning are retained.",
+        }
+
     def get_state(self, mission_id: str, workspace_id: str) -> ComputerEnvironmentState | None:
         session: Session = self._sessions()
         try:

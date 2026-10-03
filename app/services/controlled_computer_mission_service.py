@@ -98,8 +98,9 @@ class ControlledComputerMissionService:
             environment = self.environment.analyze_environment(
                 observation, mission_id=row.id, workspace_id=workspace_id, goal=row.task,
             )
+            environment["semantic_observation"] = self.environment.understand_environment(observation)
             self._log(row, "Environment Analyzed", "COMPLETED", "已生成用户可理解的环境状态与验证目标；真实视觉仍为 demo_only。")
-            controlled_action = self.action_planner.plan_next_action(observation, row.task)
+            controlled_action = self.action_planner.plan_next_action(observation, row.task, environment["semantic_observation"])
             plan = dict(self.agent.plan(row.task, profile))
             plan["task_understanding"] = self.understanding.understand(row.task)
             plan["computer_observation"] = observation
