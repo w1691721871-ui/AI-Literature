@@ -33,6 +33,8 @@ class ContextSelectionService:
                 "title": row.get("title"), "summary": row.get("summary"),
                 "importance_score": row.get("importance_score", 50),
                 "lifecycle_state": row.get("lifecycle_state", "CREATED"),
+                "context_score": score,
+                "ranking_factors": self._memory_factors(row, goal_terms, str(mission.get("id") or "")),
                 "selection_reason": reason,
             }
             for _, row, reason in ranked[: self.MAX_MEMORIES]
@@ -53,6 +55,8 @@ class ContextSelectionService:
                     "id": artifact.get("id"), "title": artifact.get("title"),
                     "artifact_type": artifact.get("artifact_type"), "status": artifact.get("status"),
                     "summary": artifact.get("summary"), "evidence_count": artifact.get("evidence_count", 0),
+                    "context_score": score,
+                    "ranking_factors": self._artifact_factors(artifact, goal_terms),
                     "selection_reason": reason,
                 }
                 for _, artifact, reason in ranked_artifacts[:3]
@@ -97,3 +101,23 @@ class ContextSelectionService:
         if overlap:
             return score + min(overlap * 12, 36), "Its approved delivery summary is relevant to the current Mission goal."
         return score, "This is an approved, evidence-linked Workspace delivery."
+
+    def _memory_factors(self, memory: Mapping[str, object], goal_terms: set[str], mission_id: str) -> list[str]:
+        factors = ["Task value"]
+        if self._terms(f"{memory.get('title') or ''} {memory.get('summary') or ''}") & goal_terms:
+            factors.append("Mission relevance")
+        if str(memory.get("lifecycle_state") or "") == "VERIFIED":
+            factors.append("Verified trust")
+        if str(memory.get("mission_id") or "") == mission_id:
+            factors.append("Current Mission history")
+        else:
+            factors.append("Recent Workspace context")
+        return factors
+
+    def _artifact_factors(self, artifact: Mapping[str, object], goal_terms: set[str]) -> list[str]:
+        factors = ["Approved trust", "Evidence-linked task value"]
+        if self._terms(f"{artifact.get('title') or ''} {artifact.get('summary') or ''}") & goal_terms:
+            factors.insert(0, "Mission relevance")
+        else:
+            factors.append("Recent Workspace delivery")
+        return factors

@@ -88,6 +88,17 @@ class WorkspaceContextTests(unittest.TestCase):
         self.assertNotIn("file_path", payload["artifacts"][0])
         self.assertIn("approved", payload["artifacts"][0]["selection_reason"].lower())
 
+    def test_context_retrieval_explains_ranking_without_internal_reasoning(self):
+        record = self.memory.save_user_preference("workspace-a", "user-a", "Low-carbon focus", "Prefer low-carbon material comparisons.")
+        payload = self.context.build(self.mission, actor=self.actor_a)
+        explanation = payload["memory"]["explainability"]
+        self.assertGreaterEqual(explanation["candidate_counts"]["authorized_memory"], 1)
+        self.assertIn("Mission relevance", explanation["ranking_criteria"])
+        selected = next(item for item in explanation["selected_context"] if item["title"] == record["title"])
+        self.assertIsInstance(selected["score"], int)
+        self.assertNotIn("prompt", selected)
+        self.assertNotIn("chain_of_thought", selected)
+
     def test_context_rejects_cross_workspace_actor(self):
         with self.assertRaises(PermissionError):
             self.context.build(self.mission, actor=self.actor_b)

@@ -10,20 +10,21 @@ from app.models.enterprise_memory import DecisionRecord, KnowledgeAsset
 from app.models.governance import GovernanceWorkspace, WorkspaceUserRole
 from app.models.ai_mission import AIMission
 from app.models.artifact import Artifact
+from app.models.solution_project import SolutionProject
 from app.services.database import SessionLocal, initialize_database
-from app.services.context_selection_service import ContextSelectionService
+from app.services.context_retrieval_service import ContextRetrievalService
 from app.services.workspace_memory_service import WorkspaceMemoryService
 
 
 class WorkspaceContextService:
     """Joins identity, workspace, mission, knowledge and memory without raw content."""
 
-    def __init__(self, sessions=SessionLocal, *, initialize=True, memories=None, selector=None):
+    def __init__(self, sessions=SessionLocal, *, initialize=True, memories=None, selector=None, retrieval=None):
         if initialize:
             initialize_database()
         self._sessions = sessions
         self._memories = memories or WorkspaceMemoryService(sessions, initialize=False)
-        self._selector = selector or ContextSelectionService()
+        self._retrieval = retrieval or ContextRetrievalService(selector)
 
     def build(self, mission: Mapping[str, object], *, actor=None) -> dict[str, object]:
         workspace_id = str(mission.get("workspace_id") or "")
@@ -57,19 +58,25 @@ class WorkspaceContextService:
                     .limit(12)
                 ).all()
             ]
+            project_row = session.get(SolutionProject, mission.get("solution_project_id")) if mission.get("solution_project_id") else None
+            project = None if project_row is None else {
+                "id": project_row.id, "title": project_row.title, "industry": project_row.industry,
+                "status": project_row.status, "review_status": project_row.review_status, "objective": project_row.objective,
+            }
         finally:
             session.close()
         evidence_refs = mission.get("evidence_refs") if isinstance(mission.get("evidence_refs"), list) else []
-        memory_selection = self._selector.select(
+        memory_selection = self._retrieval.retrieve(
             mission,
             self._memories.list(workspace_id, user_id=user_id),
             approved_artifacts,
+            project,
         )
         self._memories.mark_used(memory_selection["selected_ids"], workspace_id)
         return {
             "identity": {"user_id": user_id, "role": getattr(actor, "role", "SYSTEM"), "source": "SESSION" if actor else "MISSION_OWNER_OR_SYSTEM"},
             "workspace": {"id": workspace_id, "name": workspace_name, "member_count": member_count, "is_demo": workspace_name == "ResearchOS Demo Workspace"},
-            "project": {"id": mission.get("solution_project_id"), "status": "linked" if mission.get("solution_project_id") else "not_linked"},
+            "project": memory_selection["project_context"] or {"id": mission.get("solution_project_id"), "status": "not_linked"},
             "mission": {"id": mission_id, "goal": str(mission.get("goal") or mission.get("title") or ""), "status": mission.get("status"), "evidence_count": len(evidence_refs)},
             "knowledge": {"traceable_evidence_refs": evidence_refs[:20], "approved_assets": approved_assets, "approved_decisions": approved_decisions},
             "artifacts": memory_selection["artifact_summaries"],
