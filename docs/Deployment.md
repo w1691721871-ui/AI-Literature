@@ -50,7 +50,7 @@ Optionally set demo emails. Do not enable this option in a customer or productio
 
 - Confirm HTTPS and allowed browser origins.
 - Use managed secrets for model and demo credentials.
-- A free Render web service has ephemeral local storage. For a durable public demo, attach a paid Render Persistent Disk and set `DATABASE_URL` and `STORAGE_ROOT` to paths under that mount. The ignored local `work/` corpus is not deployed automatically; import an approved corpus backup before claiming the hosted diagnostics contain the 7-paper library.
+- A free Render web service has ephemeral local storage. For a durable public demo, attach a paid Render Persistent Disk at `/var/data`. The included Render configuration maps `WORK_DIRECTORY`, `DATABASE_URL`, and `STORAGE_ROOT` there, keeping SQLite, FAISS, and generated artifacts together. The ignored local `work/` corpus is not deployed automatically; import an approved corpus backup before claiming the hosted diagnostics contain the 7-paper library.
 - Verify `/health` and `/researchos/diagnostics` after deployment.
 - Confirm that the initial owner has an authorized Workspace membership.
 - Verify `POST /api/identity/demo-session`, `GET /api/identity/me`, and `GET /api/missions` with the returned session. A Demo session must receive `403` from `GET /api/organizations`.

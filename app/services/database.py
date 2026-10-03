@@ -9,7 +9,9 @@ from sqlalchemy.orm import DeclarativeBase, Session, sessionmaker
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
-WORK_DIRECTORY = PROJECT_ROOT / "work"
+# Keep the existing local ``work/`` layout, while allowing a deployment to
+# mount one persistent volume for SQLite, FAISS, and generated artifacts.
+WORK_DIRECTORY = Path(os.getenv("WORK_DIRECTORY", str(PROJECT_ROOT / "work")))
 DATABASE_PATH = WORK_DIRECTORY / "research_library.db"
 # Deployment may supply an external-compatible URL later; local development
 # remains intentionally SQLite-compatible. No credential value is logged.

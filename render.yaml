@@ -8,13 +8,15 @@ services:
     healthCheckPath: /health
     envVars:
       - key: DATABASE_URL
-        value: sqlite:////opt/render/project/src/work/research_library.db
+        value: sqlite:////var/data/research_library.db
+      - key: WORK_DIRECTORY
+        value: /var/data
       - key: PYTHON_VERSION
         value: "3.14"
       - key: STORAGE_PROVIDER
         value: LOCAL
       - key: STORAGE_ROOT
-        value: /opt/render/project/src/work/runtime_storage
+        value: /var/data/runtime_storage
       - key: TOKEN_EXPIRE
         value: "43200"
       - key: DEMO_MODE
