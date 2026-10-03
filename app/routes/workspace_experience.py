@@ -13,15 +13,18 @@ def dashboard(context:IdentityContext=Depends(permissions.current)):
  permissions.require(context,"MISSION_VIEW")
  return service.dashboard(context.workspace_id)
 @router.get("/missions/{mission_id}/workspace")
-def workspace(mission_id:str):
+def workspace(mission_id:str,context:IdentityContext=Depends(permissions.current)):
+ permissions.mission(context,mission_id,"MISSION_VIEW")
  try:return service.mission_workspace(mission_id)
  except (ValueError,WorkspaceExperienceError) as e:raise HTTPException(404,detail=str(e))
 @router.get("/artifacts/{artifact_id}/preview")
-def preview(artifact_id:str):
+def preview(artifact_id:str,context:IdentityContext=Depends(permissions.current)):
+ permissions.artifact(context,artifact_id,"ARTIFACT_VIEW")
  try:return service.preview(artifact_id)
  except (WorkspaceExperienceError,ArtifactError) as e:raise HTTPException(404,detail=str(e))
 @router.post("/artifacts/{artifact_id}/comments")
-def comment(artifact_id:str,payload:Comment):
- try:return service.comment(artifact_id,payload.reviewer_id,payload.comment,payload.workspace_id,payload.request_revision)
+def comment(artifact_id:str,payload:Comment,context:IdentityContext=Depends(permissions.current)):
+ permissions.artifact(context,artifact_id,"ARTIFACT_REVIEW")
+ try:return service.comment(artifact_id,context.user_id,payload.comment,context.workspace_id,payload.request_revision)
  except GovernanceError as e:raise HTTPException(403,detail=str(e))
  except WorkspaceExperienceError as e:raise HTTPException(404,detail=str(e))

@@ -76,7 +76,7 @@ class ComputerSkillAdapter(SkillAdapter):
     description = "Observes controlled computer work and preserves Diff approval gates."
 
     def required_permission(self) -> str | None:
-        return "COMPUTER_USE"
+        return "COMPUTER_EXECUTE"
 
     def __init__(self, observation_service=None, action_planner=None):
         from app.services.computer_action_planner import ComputerActionPlanner
@@ -112,7 +112,7 @@ class DeliverySkillAdapter(SkillAdapter):
         self._artifacts = artifact_service
 
     def required_permission(self) -> str | None:
-        return "ARTIFACT_REVIEW"
+        return "MISSION_EXECUTE"
 
     def execute(self, mission: Mapping[str, Any]) -> SkillResult:
         if str(mission.get("status") or "") != "APPROVED":
@@ -129,7 +129,7 @@ class ReviewSkillAdapter(SkillAdapter):
     description = "Presents evidence, changes, and deliveries for explicit human decisions."
 
     def required_permission(self) -> str | None:
-        return "MISSION_APPROVE"
+        return "MISSION_VIEW"
 
     def execute(self, mission: Mapping[str, Any]) -> SkillResult:
         state = str(mission.get("status") or "")

@@ -27,7 +27,7 @@ class RuntimeTaskCreate(BaseModel):
 def worker_mission_runtime(mission_id: str, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
     permissions.mission(context, mission_id, "MISSION_VIEW")
     try:
-        return ai_worker_runtime.snapshot(mission_id)
+        return ai_worker_runtime.snapshot(mission_id, actor=context)
     except AIMissionNotFoundError as error:
         raise HTTPException(status_code=404, detail=str(error)) from error
 
@@ -37,7 +37,7 @@ def execute_worker_mission_runtime(mission_id: str, context: IdentityContext = D
     permissions.mission(context, mission_id, "MISSION_EXECUTE")
     audit.record_event(context.workspace_id,context.user_id,"MISSION_EXECUTED","Mission",mission_id,mission_id,"Unified runtime execution started.")
     try:
-        result=ai_worker_runtime.execute(mission_id)
+        result=ai_worker_runtime.execute(mission_id, actor=context)
         audit.record_event(context.workspace_id,context.user_id,"MISSION_EXECUTED","Mission",mission_id,mission_id,"Unified runtime recorded a bounded Skill result.",result.get("status","SUCCESS"))
         return result
     except AIMissionNotFoundError as error:

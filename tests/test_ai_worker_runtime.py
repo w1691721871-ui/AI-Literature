@@ -45,6 +45,25 @@ class FakeSkill(SkillAdapter):
         return self.result
 
 
+class FakeContextService:
+    """Preserves the legacy runtime fixtures while Context behavior is tested separately."""
+    def build(self, mission, *, actor=None):
+        return {
+            "workspace": {"id": mission["workspace_id"], "name": "Test Workspace"},
+            "mission": {"id": mission["id"]}, "knowledge": {},
+            "memory": {"workspace": [], "user": [], "mission": [], "knowledge": []},
+            "boundary": "test",
+        }
+
+    def presentation(self, context):
+        return {"workspace": context["workspace"], "mission": context["mission"], "knowledge": {}, "memory_counts": {}, "boundary": "test"}
+
+
+class FakeWorkspaceMemory:
+    def record_mission_summary(self, mission, *, owner_id=None):
+        return None
+
+
 class AIWorkerRuntimeTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -53,7 +72,7 @@ class AIWorkerRuntimeTests(unittest.TestCase):
         self.mission = {
             "id": "mission-p53", "title": "Evidence bounded mission", "goal": "Compare traceable evidence",
             "status": "PLANNING", "type": "RESEARCH", "current_step": "Planning",
-            "evidence_refs": [], "computer_missions": [],
+            "workspace_id": "workspace-p53", "evidence_refs": [], "computer_missions": [],
         }
 
     def tearDown(self):
@@ -68,6 +87,8 @@ class AIWorkerRuntimeTests(unittest.TestCase):
             worker_service=AIWorkerService(),
             registry=SkillRegistry(adapters=adapters),
             adaptive_service=adaptive or FakeAdaptiveService(),
+            context_service=FakeContextService(),
+            workspace_memory_service=FakeWorkspaceMemory(),
         )
 
     def test_loads_mission_contract_and_skill_selection(self):

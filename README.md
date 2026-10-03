@@ -25,6 +25,16 @@ the product execution path; legacy planner, benchmark, evaluation, collaboration
 and advanced-computer endpoints remain available for compatibility but are now
 authenticated and either Mission-scoped or administrator-only.
 
+### Unified Workspace Context and Research Memory
+
+Before an AI Worker can plan or execute a Mission, ResearchOS constructs one
+authorized context from the active Session, Workspace, linked Project, Mission,
+traceable Evidence, approved knowledge and compact Research Memory summaries.
+This is not a hidden global memory: user, workspace, mission and knowledge
+memory are visible, traceable, scoped, explainable and removable. Prompts,
+chain-of-thought, credentials and source-document bodies are excluded. See
+[Unified Workspace Context](docs/Unified-Workspace-Context.md).
+
 - **Member work**: Mission, Research, Knowledge, Delivery and controlled Computer actions require the permissions of the current Workspace membership.
 - **Human control**: Evidence, Artifact release and modifying Computer work stop at an explicit review boundary.
 - **Administrator surfaces**: Runtime monitoring, agent registry, historical global memory, benchmarks and advanced diagnostics require an OWNER or ADMIN session.

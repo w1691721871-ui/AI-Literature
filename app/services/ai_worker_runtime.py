@@ -20,6 +20,9 @@ from app.services.mission_intelligence_service import MissionIntelligenceService
 from app.services.mission_quality_service import MissionQualityService
 from app.services.skill_capability_registry import SkillCapabilityRegistry
 from app.services.skill_registry import SkillRegistry, SkillResult
+from app.services.ai_team_orchestrator import AITeamOrchestrator
+from app.services.workspace_context_service import WorkspaceContextService
+from app.services.workspace_memory_service import WorkspaceMemoryService
 
 
 class ResearchOrchestrator:
@@ -52,6 +55,9 @@ class AIWorkerRuntime:
         mission_intelligence=None,
         quality_service=None,
         capability_registry=None,
+        context_service=None,
+        team_orchestrator=None,
+        workspace_memory_service=None,
     ):
         if initialize:
             initialize_database()
@@ -65,9 +71,13 @@ class AIWorkerRuntime:
         self._intelligence = mission_intelligence or MissionIntelligenceService(session_factory, initialize=False, capabilities=self._capabilities)
         self._quality = quality_service or MissionQualityService()
         self._orchestrator = ResearchOrchestrator()
+        self._context = context_service or WorkspaceContextService(session_factory, initialize=False)
+        self._team = team_orchestrator or AITeamOrchestrator()
+        self._workspace_memory = workspace_memory_service or WorkspaceMemoryService(session_factory, initialize=False)
 
-    def snapshot(self, mission_id: str) -> dict[str, object]:
+    def snapshot(self, mission_id: str, *, actor=None) -> dict[str, object]:
         mission = self._mission(mission_id)
+        context = self._context.build(mission, actor=actor)
         contract = self._worker.contract_for_mission(mission)
         self._sync_contract(mission, contract, "CREATED")
         records = self._records(mission_id)
@@ -78,7 +88,8 @@ class AIWorkerRuntime:
                 "status": mission.get("status"), "evidence_count": contract.context["evidence_count"],
                 "approval_requirement": contract.approval_requirement,
             },
-            "skills": [{"id": skill_id, "name": adapter.name, "description": adapter.description, "capability": adapter.capability_metadata() if hasattr(adapter, "capability_metadata") else None} for skill_id, adapter in self._orchestrator.build_plan(self._registry, mission)],
+            "skills": self._team.presentation(self._registry, mission, context),
+            "context": self._context.presentation(context),
             "timeline": records,
             "research_insight": self._orchestrator.research_insight(mission),
             "mission_intelligence": self._mission_intelligence_snapshot(mission),
@@ -87,15 +98,18 @@ class AIWorkerRuntime:
             "waiting_action": waiting_action,
         }
 
-    def execute(self, mission_id: str) -> dict[str, object]:
+    def execute(self, mission_id: str, *, actor=None) -> dict[str, object]:
         mission = self._mission(mission_id)
+        context = self._context.build(mission, actor=actor)
+        mission = {**mission, "ai_context": context}
         contract = self._worker.contract_for_mission(mission)
         if not contract.objective:
             raise ValueError("Mission Contract 缺少 objective。")
 
         self._sync_contract(mission, contract, "PLANNING")
         self._prepare_mission_intelligence(mission)
-        for index, (skill_id, adapter) in enumerate(self._orchestrator.build_plan(self._registry, mission), start=1):
+        self._state(mission_id, "CONTEXT_READY", "AI Worker", "Authorized Workspace context prepared.", "Identity, Workspace, Mission, Knowledge and approved Memory are available.", "Plan approved Skills", "")
+        for index, (skill_id, adapter) in enumerate(self._team.plan(self._registry, mission, context), start=1):
             step_id = f"{skill_id}-{index}"
             adapter.validate(mission)
             record_id = self._record(mission_id, step_id, adapter.name, "PLAN", "PLANNED", "Skill added to the controlled AI Worker plan.", "")
@@ -118,6 +132,8 @@ class AIWorkerRuntime:
             # Mission state can change inside an adapter. It is reloaded only
             # after the action, never synthesized from an internal trace.
             mission = self._mission(mission_id)
+            context = self._context.build(mission, actor=actor)
+            mission = {**mission, "ai_context": context}
             latest_contract = self._worker.contract_for_mission(mission)
             intelligence_state = self._complete_mission_skill(mission, skill_id, result.status)
             quality = self._quality.evaluate_completion(mission, intelligence_state)
@@ -156,7 +172,8 @@ class AIWorkerRuntime:
                 break
         else:
             self._sync_contract(mission, self._worker.contract_for_mission(mission), "COMPLETED")
-        return self.snapshot(mission_id)
+        self._workspace_memory.record_mission_summary(mission, owner_id=getattr(actor, "user_id", None))
+        return self.snapshot(mission_id, actor=actor)
 
     def _sync_contract(self, mission, contract, execution_state: str, stop_reason: str = "") -> None:
         """Persist a contract only for a workspace-bound Mission; legacy data stays readable."""

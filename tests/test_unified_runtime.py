@@ -28,6 +28,18 @@ class _Adaptive:
     def run_once(self, mission_id): return {"decision":"REQUEST_REVIEW","summary":"Evidence remains insufficient."}
 
 
+class _Context:
+    """Keeps legacy runtime tests focused on lifecycle, not database seeding."""
+    def build(self, mission, *, actor=None):
+        return {"workspace": {"id": mission["workspace_id"], "name": "Test Workspace"}, "mission": {"id": mission["id"]}, "knowledge": {}, "memory": {"workspace": [], "user": [], "mission": [], "knowledge": []}, "boundary": "test"}
+
+    def presentation(self, context): return {"workspace": context["workspace"], "mission": context["mission"], "knowledge": {}, "memory_counts": {}, "boundary": "test"}
+
+
+class _Memory:
+    def record_mission_summary(self, mission, *, owner_id=None): return None
+
+
 class UnifiedRuntimeTests(unittest.TestCase):
     def setUp(self):
         self.engine=create_engine("sqlite:///:memory:",connect_args={"check_same_thread":False})
@@ -37,7 +49,7 @@ class UnifiedRuntimeTests(unittest.TestCase):
     def tearDown(self): self.engine.dispose()
 
     def runtime(self, adapters):
-        return AIWorkerRuntime(self.sessions,initialize=False,mission_service=_MissionService(self.mission),worker_service=AIWorkerService(),registry=SkillRegistry(adapters=adapters),adaptive_service=_Adaptive())
+        return AIWorkerRuntime(self.sessions,initialize=False,mission_service=_MissionService(self.mission),worker_service=AIWorkerService(),registry=SkillRegistry(adapters=adapters),adaptive_service=_Adaptive(),context_service=_Context(),workspace_memory_service=_Memory())
 
     def test_creates_workspace_bound_mission_contract(self):
         runtime=self.runtime({"research":_Skill("Research Skill",SkillResult("WAITING_REVIEW","Evidence observed","Review needed")),"review":_Skill("Review Skill",SkillResult("WAITING_REVIEW","",""))})

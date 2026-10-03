@@ -1,0 +1,93 @@
+"""P0/P1 context and Research Memory boundaries."""
+
+from __future__ import annotations
+
+import unittest
+from types import SimpleNamespace
+
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+
+from app.models.enterprise_memory import DecisionRecord, KnowledgeAsset
+from app.models.governance import GovernanceWorkspace, WorkspaceUserRole
+from app.models.workspace_memory import WorkspaceMemory
+from app.services.ai_team_orchestrator import AITeamOrchestrator
+from app.services.database import Base
+from app.services.skill_capability_registry import SkillCapabilityRegistry
+from app.services.workspace_context_service import WorkspaceContextService
+from app.services.workspace_memory_service import WorkspaceMemoryError, WorkspaceMemoryService
+
+
+class _Registry:
+    def plan(self, mission):
+        return []
+
+
+class WorkspaceContextTests(unittest.TestCase):
+    def setUp(self):
+        self.engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
+        Base.metadata.create_all(self.engine)
+        self.sessions = sessionmaker(bind=self.engine, autoflush=False, autocommit=False)
+        session = self.sessions()
+        try:
+            session.add_all([
+                GovernanceWorkspace(id="workspace-a", organization_id="org-a", owner_id="user-a", name="Research A"),
+                GovernanceWorkspace(id="workspace-b", organization_id="org-b", owner_id="user-b", name="Research B"),
+                WorkspaceUserRole(workspace_id="workspace-a", user_id="user-a", role="OWNER"),
+                WorkspaceUserRole(workspace_id="workspace-a", user_id="user-reviewer", role="REVIEWER"),
+                WorkspaceUserRole(workspace_id="workspace-b", user_id="user-b", role="OWNER"),
+                KnowledgeAsset(workspace_id="workspace-a", asset_type="PAPER", source_type="UPLOAD", title="Verified source", summary="Safe summary", status="VERIFIED"),
+                DecisionRecord(mission_id="decision-a", workspace_id="workspace-a", title="Approved decision", review_status="APPROVED"),
+            ])
+            session.commit()
+        finally:
+            session.close()
+        self.memory = WorkspaceMemoryService(self.sessions, initialize=False)
+        self.context = WorkspaceContextService(self.sessions, initialize=False, memories=self.memory)
+        self.actor_a = SimpleNamespace(user_id="user-a", workspace_id="workspace-a", role="OWNER")
+        self.actor_b = SimpleNamespace(user_id="user-b", workspace_id="workspace-b", role="OWNER")
+        self.mission = {"id": "mission-a", "workspace_id": "workspace-a", "title": "Evidence review", "status": "PLANNING", "evidence_refs": [{"paper_id": "p-1"}]}
+
+    def tearDown(self):
+        self.engine.dispose()
+
+    def test_context_joins_only_authorized_workspace_data(self):
+        preference = self.memory.save_user_preference("workspace-a", "user-a", "Concise updates", "Prefer concise evidence-backed summaries.")
+        payload = self.context.build(self.mission, actor=self.actor_a)
+        self.assertEqual(payload["workspace"]["name"], "Research A")
+        self.assertEqual(payload["knowledge"]["approved_assets"], 1)
+        self.assertEqual(payload["knowledge"]["approved_decisions"], 1)
+        self.assertEqual(payload["memory"]["user"][0]["id"], preference["id"])
+        self.assertNotIn("prompt", payload["memory"]["user"][0])
+        self.assertNotIn("cot", payload["memory"]["user"][0])
+
+    def test_context_rejects_cross_workspace_actor(self):
+        with self.assertRaises(PermissionError):
+            self.context.build(self.mission, actor=self.actor_b)
+
+    def test_research_memory_is_user_visible_traceable_and_deletable(self):
+        record = self.memory.save_user_preference("workspace-a", "user-a", "Output preference", "Prefer a concise delivery review.")
+        self.assertEqual(self.memory.list("workspace-b", user_id="user-b"), [])
+        explanation = self.memory.explain(record["id"], "workspace-a", user_id="user-a")
+        self.assertIn("traceable", explanation["explanation"].lower())
+        self.assertEqual(self.memory.delete(record["id"], "workspace-a", user_id="user-a"), {"id": record["id"], "deleted": True})
+        self.assertEqual(self.memory.list("workspace-a", user_id="user-a"), [])
+
+    def test_sensitive_memory_is_rejected(self):
+        with self.assertRaises(WorkspaceMemoryError):
+            self.memory.save_user_preference("workspace-a", "user-a", "API key", "Store my secret token")
+
+    def test_ai_team_orchestrator_requires_matching_context(self):
+        orchestrator = AITeamOrchestrator()
+        self.assertEqual(orchestrator.plan(_Registry(), self.mission, {"workspace": {"id": "workspace-a"}}), [])
+        with self.assertRaises(PermissionError):
+            orchestrator.plan(_Registry(), self.mission, {"workspace": {"id": "workspace-b"}})
+
+    def test_capability_catalog_is_product_safe(self):
+        catalog = SkillCapabilityRegistry().catalog()
+        self.assertEqual({row["id"] for row in catalog}, {"research", "computer", "delivery", "review"})
+        self.assertNotIn("prompt", str(catalog).lower())
+
+
+if __name__ == "__main__":
+    unittest.main()
