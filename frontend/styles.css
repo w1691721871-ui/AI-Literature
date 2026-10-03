@@ -1527,3 +1527,51 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .computer-studio > .operator-approval-bar::before { position: static; display: block; margin-bottom: 8px; }
   .computer-studio .computer-control-timeline { grid-template-columns: repeat(5, minmax(130px, 1fr)); }
 }
+
+/* AI Research Employee collaboration hierarchy.  These rules only change the
+   presentation of persisted mission summaries; they intentionally do not
+   derive activity, evidence, or approval states in the client. */
+.ai-activity-surface,
+.ai-team-plan-surface,
+.research-insight-panel,
+.mission-intelligence-panel {
+  position: relative;
+  overflow: hidden;
+}
+.ai-activity-surface::before,
+.ai-team-plan-surface::before,
+.research-insight-panel::before,
+.mission-intelligence-panel::before {
+  content: "";
+  position: absolute;
+  inset: 0 auto 0 0;
+  width: 3px;
+  background: linear-gradient(180deg, var(--accent-cyan), rgba(132, 99, 255, .15));
+  opacity: .8;
+}
+.ai-activity-surface .section-kicker,
+.ai-team-plan-surface .section-kicker,
+.research-insight-panel .section-kicker,
+.mission-intelligence-panel .section-kicker { font-size: 0; }
+.ai-activity-surface .section-kicker::after { content: "AI COLLABORATION ACTIVITY"; font-size: 10px; letter-spacing: .12em; }
+.ai-team-plan-surface .section-kicker::after { content: "HOW YOUR AI WORKER WILL HELP"; font-size: 10px; letter-spacing: .12em; }
+.research-insight-panel .section-kicker::after { content: "EVIDENCE-BOUND RESEARCH INSIGHTS"; font-size: 10px; letter-spacing: .12em; }
+.mission-intelligence-panel .section-kicker::after { content: "RESEARCH GUIDANCE"; font-size: 10px; letter-spacing: .12em; }
+.ai-activity-surface > header small { display: inline-flex; align-items: center; gap: 6px; margin-top: 7px; padding: 6px 9px; border: 1px solid rgba(128, 188, 255, .16); border-radius: 999px; background: rgba(102, 163, 255, .065); color: var(--text-secondary); }
+.ai-activity-surface > header small::before { content: "NEXT"; color: var(--accent-cyan); font-size: 9px; font-weight: 750; letter-spacing: .09em; }
+.ai-activity-surface ol { display: grid; gap: 9px; }
+.ai-activity-surface li { padding: 13px 14px; border-radius: 14px; background: linear-gradient(145deg, rgba(255,255,255,.035), rgba(255,255,255,.014)); }
+.ai-activity-surface li > div { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 8px 14px; }
+.ai-activity-surface li p { margin: 5px 0 0; color: var(--text-secondary); line-height: 1.5; }
+.ai-activity-surface li small { white-space: normal; color: var(--text-muted); }
+.ai-team-plan-surface .team-plan-item { min-height: 108px; padding: 16px; border-radius: 15px; background: linear-gradient(145deg, rgba(105, 153, 255, .065), rgba(255,255,255,.015)); }
+.research-insight-panel .research-insight-card { min-height: 142px; padding: 17px; }
+.research-insight-panel .research-insight-card small { display: inline-flex; margin-top: 10px; color: var(--accent-cyan); }
+.computer-execution-runtime header p { max-width: 560px; line-height: 1.5; }
+.computer-runtime-goal > div:first-child::before { content: "CURRENT MISSION"; display: block; margin-bottom: 7px; color: var(--accent-cyan); font-size: 9px; font-weight: 750; letter-spacing: .1em; }
+.computer-runtime-status { text-transform: capitalize; }
+@media (max-width: 800px) {
+  .ai-activity-surface li > div { grid-template-columns: 1fr; }
+  .ai-team-plan-surface .team-plan-item,
+  .research-insight-panel .research-insight-card { min-height: 0; }
+}
