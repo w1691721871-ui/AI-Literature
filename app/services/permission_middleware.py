@@ -10,6 +10,7 @@ from app.models.artifact import Artifact
 from app.models.computer_mission import ComputerMission
 from app.models.connector import Connector
 from app.models.enterprise_memory import KnowledgeAsset
+from app.models.governance import GovernanceWorkspace
 from app.services.database import SessionLocal
 from app.services.governance_service import GovernanceError, PermissionService
 from app.services.identity_service import IdentityContext, IdentityError, IdentityService
@@ -37,6 +38,20 @@ class PermissionMiddleware:
             self.permissions.check(context.workspace_id, context.user_id, permission)
         except GovernanceError as error:
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Workspace permission denied.") from error
+
+    def admin_console(self, context: IdentityContext) -> None:
+        """Protect governance APIs independently of frontend navigation."""
+        session = self._sessions()
+        try:
+            workspace = session.get(GovernanceWorkspace, context.workspace_id)
+            is_demo = bool(workspace and workspace.name == IdentityService.demo_workspace_name)
+        finally:
+            session.close()
+        if is_demo or context.role not in {"OWNER", "ADMIN"}:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Workspace administration is not available for this session.",
+            )
 
     def mission(self, context: IdentityContext, mission_id: str, permission: str) -> None:
         self._resource_workspace(context, AIMission, mission_id, permission)

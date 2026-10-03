@@ -9,6 +9,8 @@ services:
     envVars:
       - key: DATABASE_URL
         value: sqlite:////opt/render/project/src/work/research_library.db
+      - key: PYTHON_VERSION
+        value: "3.14"
       - key: STORAGE_PROVIDER
         value: LOCAL
       - key: STORAGE_ROOT

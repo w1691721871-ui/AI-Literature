@@ -71,6 +71,13 @@ class IdentityExperienceTests(unittest.TestCase):
         with self.assertRaises(GovernanceError):
             self.permissions.check(context.workspace_id, context.user_id, "MISSION_APPROVE")
 
+    def test_demo_session_is_denied_from_admin_console(self):
+        demo = self.identity.create_demo_session()
+        context = self.identity.context_for_token(demo["session_token"])
+        with self.assertRaises(HTTPException) as denied:
+            self.middleware.admin_console(context)
+        self.assertEqual(denied.exception.status_code, 403)
+
     def test_demo_workspace_cannot_access_customer_workspace(self):
         customer = self.identity.register_workspace(
             "customer@identity-experience.test", "Customer", "a-safe-test-password", "Customer Workspace"

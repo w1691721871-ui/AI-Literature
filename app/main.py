@@ -52,6 +52,7 @@ from app.routes.approval import router as approval_router
 from app.routes.audit import router as audit_router
 from app.services.runtime_monitor_service import RuntimeMonitor
 from app.services.demo_identity_service import DemoIdentitySeeder
+from app.services.database import initialize_database
 
 
 app = FastAPI(title="ResearchOS · AI科研创新决策平台")
@@ -104,7 +105,8 @@ app.add_middleware(
 
 @app.on_event("startup")
 def provision_demo_identity_if_enabled() -> None:
-    """Provision explicitly configured demo identities; production is unchanged."""
+    """Initialize persistence before optionally provisioning demo identities."""
+    initialize_database()
     DemoIdentitySeeder().seed_if_enabled()
 
 
