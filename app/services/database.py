@@ -215,6 +215,18 @@ def _apply_lightweight_migrations() -> None:
     if "created_by" not in version_columns:
         with engine.begin() as connection:
             connection.execute(text("ALTER TABLE solution_versions ADD COLUMN created_by VARCHAR(80) NOT NULL DEFAULT 'AI'"))
+    memory_columns = {column["name"] for column in inspect(engine).get_columns("workspace_memories")}
+    memory_additions = {
+        "importance_score": "INTEGER NOT NULL DEFAULT 50",
+        "lifecycle_state": "VARCHAR(30) NOT NULL DEFAULT 'CREATED'",
+        "use_count": "INTEGER NOT NULL DEFAULT 0",
+        "last_used_at": "DATETIME",
+        "validated_at": "DATETIME",
+    }
+    for name, definition in memory_additions.items():
+        if name not in memory_columns:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE workspace_memories ADD COLUMN {name} {definition}"))
     computer_mission_columns = {column["name"] for column in inspect(engine).get_columns("computer_missions")}
     computer_mission_additions = {
         "mission_id": "VARCHAR(36)", "task": "TEXT NOT NULL DEFAULT ''", "reason": "TEXT NOT NULL DEFAULT ''",

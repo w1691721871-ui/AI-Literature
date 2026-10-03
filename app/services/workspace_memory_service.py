@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import re
 from collections.abc import Mapping
+from datetime import datetime, timezone
 
 from sqlalchemy import select
 
@@ -59,6 +60,7 @@ class WorkspaceMemoryService:
                     summary=summary,
                     references_json=json.dumps(evidence_refs[:20]),
                     source_type="RUNTIME_SUMMARY",
+                    importance_score=60 if evidence_refs else 45,
                 )
                 session.add(row)
             else:
@@ -66,6 +68,57 @@ class WorkspaceMemoryService:
                 row.references_json = json.dumps(evidence_refs[:20])
             session.commit(); session.refresh(row)
             return self._item(row)
+        finally:
+            session.close()
+
+    def mark_used(self, memory_ids: list[str], workspace_id: str) -> None:
+        """Record context use without retaining a prompt or model output."""
+        valid_ids = [memory_id for memory_id in memory_ids if memory_id]
+        if not valid_ids:
+            return
+        session = self._sessions()
+        try:
+            rows = session.scalars(select(WorkspaceMemory).where(
+                WorkspaceMemory.workspace_id == workspace_id,
+                WorkspaceMemory.id.in_(valid_ids),
+                WorkspaceMemory.status == "ACTIVE",
+            )).all()
+            now = datetime.now(timezone.utc)
+            for row in rows:
+                row.use_count += 1
+                row.last_used_at = now
+                if row.lifecycle_state == "CREATED":
+                    row.lifecycle_state = "IN_USE"
+            session.commit()
+        finally:
+            session.close()
+
+    def validate(self, memory_id: str, workspace_id: str) -> dict[str, object]:
+        session = self._sessions()
+        try:
+            row = session.get(WorkspaceMemory, memory_id)
+            if row is None or row.workspace_id != workspace_id or row.status != "ACTIVE":
+                raise WorkspaceMemoryError("Memory is not available in this Workspace.")
+            row.lifecycle_state = "VERIFIED"
+            row.validated_at = datetime.now(timezone.utc)
+            session.commit(); session.refresh(row)
+            return self._item(row)
+        finally:
+            session.close()
+
+    def archive(self, memory_id: str, workspace_id: str, *, user_id: str | None = None, allow_workspace_archive: bool = False) -> dict[str, object]:
+        session = self._sessions()
+        try:
+            row = session.get(WorkspaceMemory, memory_id)
+            if row is None or row.workspace_id != workspace_id or row.status != "ACTIVE":
+                raise WorkspaceMemoryError("Memory is not available in this Workspace.")
+            if row.owner_id and row.owner_id != user_id and not allow_workspace_archive:
+                raise PermissionError("Only the memory owner or an authorized reviewer can archive this memory.")
+            if row.owner_id is None and not allow_workspace_archive:
+                raise PermissionError("Workspace memory requires an authorized reviewer to archive.")
+            row.status = "ARCHIVED"; row.lifecycle_state = "ARCHIVED"
+            session.commit()
+            return {"id": memory_id, "archived": True}
         finally:
             session.close()
 
@@ -120,7 +173,7 @@ class WorkspaceMemoryService:
             raise WorkspaceMemoryError("Memory must be a compact non-sensitive summary.")
         session = self._sessions()
         try:
-            row = WorkspaceMemory(workspace_id=workspace_id, owner_id=owner_id, memory_type=memory_type, title=clean_title, summary=clean_summary, source_type=source_type)
+            row = WorkspaceMemory(workspace_id=workspace_id, owner_id=owner_id, memory_type=memory_type, title=clean_title, summary=clean_summary, source_type=source_type, importance_score=self._importance(memory_type, source_type))
             session.add(row); session.commit(); session.refresh(row)
             return self._item(row)
         finally:
@@ -138,9 +191,19 @@ class WorkspaceMemoryService:
             session.close()
 
     @staticmethod
+    def _importance(memory_type: str, source_type: str) -> int:
+        if memory_type == "KNOWLEDGE" or source_type == "HUMAN_VERIFIED":
+            return 80
+        if memory_type == "WORKSPACE":
+            return 70
+        if memory_type == "MISSION":
+            return 60
+        return 55
+
+    @staticmethod
     def _item(row: WorkspaceMemory) -> dict[str, object]:
         try:
             references = json.loads(row.references_json or "[]")
         except json.JSONDecodeError:
             references = []
-        return {"id": row.id, "workspace_id": row.workspace_id, "owner_id": row.owner_id, "mission_id": row.mission_id, "memory_type": row.memory_type, "title": row.title, "summary": row.summary, "references": references, "source_type": row.source_type, "created_at": row.created_at, "updated_at": row.updated_at}
+        return {"id": row.id, "workspace_id": row.workspace_id, "owner_id": row.owner_id, "mission_id": row.mission_id, "memory_type": row.memory_type, "title": row.title, "summary": row.summary, "references": references, "source_type": row.source_type, "importance_score": row.importance_score, "lifecycle_state": row.lifecycle_state, "use_count": row.use_count, "last_used_at": row.last_used_at, "validated_at": row.validated_at, "created_at": row.created_at, "updated_at": row.updated_at}

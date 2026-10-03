@@ -23,6 +23,11 @@ class _Registry:
         return []
 
 
+class _PlannedRegistry:
+    def plan(self, mission):
+        return [("review", object()), ("research", object()), ("computer", object())]
+
+
 class WorkspaceContextTests(unittest.TestCase):
     def setUp(self):
         self.engine = create_engine("sqlite:///:memory:", connect_args={"check_same_thread": False})
@@ -57,9 +62,10 @@ class WorkspaceContextTests(unittest.TestCase):
         self.assertEqual(payload["workspace"]["name"], "Research A")
         self.assertEqual(payload["knowledge"]["approved_assets"], 1)
         self.assertEqual(payload["knowledge"]["approved_decisions"], 1)
-        self.assertEqual(payload["memory"]["user"][0]["id"], preference["id"])
-        self.assertNotIn("prompt", payload["memory"]["user"][0])
-        self.assertNotIn("cot", payload["memory"]["user"][0])
+        self.assertEqual(payload["memory"]["selected"][0]["id"], preference["id"])
+        self.assertIn("relevant", payload["memory"]["selected"][0]["selection_reason"].lower())
+        self.assertNotIn("prompt", payload["memory"]["selected"][0])
+        self.assertNotIn("cot", payload["memory"]["selected"][0])
 
     def test_context_rejects_cross_workspace_actor(self):
         with self.assertRaises(PermissionError):
@@ -77,11 +83,30 @@ class WorkspaceContextTests(unittest.TestCase):
         with self.assertRaises(WorkspaceMemoryError):
             self.memory.save_user_preference("workspace-a", "user-a", "API key", "Store my secret token")
 
+    def test_memory_lifecycle_records_use_validation_and_archive(self):
+        record = self.memory.save_user_preference("workspace-a", "user-a", "Research style", "Prefer concise evidence summaries.")
+        self.assertEqual(record["importance_score"], 55)
+        self.memory.mark_used([record["id"]], "workspace-a")
+        used = self.memory.list("workspace-a", user_id="user-a")[0]
+        self.assertEqual(used["lifecycle_state"], "IN_USE")
+        self.assertEqual(used["use_count"], 1)
+        verified = self.memory.validate(record["id"], "workspace-a")
+        self.assertEqual(verified["lifecycle_state"], "VERIFIED")
+        self.assertEqual(self.memory.archive(record["id"], "workspace-a", user_id="user-a"), {"id": record["id"], "archived": True})
+        self.assertEqual(self.memory.list("workspace-a", user_id="user-a"), [])
+
     def test_ai_team_orchestrator_requires_matching_context(self):
         orchestrator = AITeamOrchestrator()
         self.assertEqual(orchestrator.plan(_Registry(), self.mission, {"workspace": {"id": "workspace-a"}}), [])
         with self.assertRaises(PermissionError):
             orchestrator.plan(_Registry(), self.mission, {"workspace": {"id": "workspace-b"}})
+
+    def test_ai_team_orchestrator_orders_only_existing_runnable_skills(self):
+        plan = AITeamOrchestrator().plan(
+            _PlannedRegistry(), self.mission, {"workspace": {"id": "workspace-a"}},
+            understanding={"required_capabilities": ["computer", "research"]},
+        )
+        self.assertEqual([skill_id for skill_id, _ in plan], ["computer", "research", "review"])
 
     def test_capability_catalog_is_product_safe(self):
         catalog = SkillCapabilityRegistry().catalog()

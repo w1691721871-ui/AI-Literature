@@ -78,6 +78,7 @@ class AIWorkerRuntime:
     def snapshot(self, mission_id: str, *, actor=None) -> dict[str, object]:
         mission = self._mission(mission_id)
         context = self._context.build(mission, actor=actor)
+        understanding = self._intelligence.analyze_mission_goal(str(mission.get("goal") or mission.get("title") or ""))
         contract = self._worker.contract_for_mission(mission)
         self._sync_contract(mission, contract, "CREATED")
         records = self._records(mission_id)
@@ -88,7 +89,7 @@ class AIWorkerRuntime:
                 "status": mission.get("status"), "evidence_count": contract.context["evidence_count"],
                 "approval_requirement": contract.approval_requirement,
             },
-            "skills": self._team.presentation(self._registry, mission, context),
+            "skills": self._team.presentation(self._registry, mission, context, understanding=understanding),
             "context": self._context.presentation(context),
             "timeline": records,
             "research_insight": self._orchestrator.research_insight(mission),
@@ -108,8 +109,9 @@ class AIWorkerRuntime:
 
         self._sync_contract(mission, contract, "PLANNING")
         self._prepare_mission_intelligence(mission)
+        understanding = self._intelligence.analyze_mission_goal(str(mission.get("goal") or mission.get("title") or ""))
         self._state(mission_id, "CONTEXT_READY", "AI Worker", "Authorized Workspace context prepared.", "Identity, Workspace, Mission, Knowledge and approved Memory are available.", "Plan approved Skills", "")
-        for index, (skill_id, adapter) in enumerate(self._team.plan(self._registry, mission, context), start=1):
+        for index, (skill_id, adapter) in enumerate(self._team.plan(self._registry, mission, context, understanding=understanding), start=1):
             step_id = f"{skill_id}-{index}"
             adapter.validate(mission)
             record_id = self._record(mission_id, step_id, adapter.name, "PLAN", "PLANNED", "Skill added to the controlled AI Worker plan.", "")

@@ -91,3 +91,23 @@ def delete_research_memory(memory_id: str, context: IdentityContext = Depends(pe
         raise HTTPException(status_code=403, detail="You do not have permission to remove this Workspace memory.") from error
     except WorkspaceMemoryError as error:
         raise HTTPException(status_code=404, detail="Memory is unavailable.") from error
+
+
+@router.post("/research-memory/{memory_id}/validate")
+def validate_research_memory(memory_id: str, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.require(context, "ARTIFACT_REVIEW")
+    try:
+        return memory_service.validate(memory_id, context.workspace_id)
+    except WorkspaceMemoryError as error:
+        raise HTTPException(status_code=404, detail="Memory is unavailable.") from error
+
+
+@router.post("/research-memory/{memory_id}/archive")
+def archive_research_memory(memory_id: str, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    try:
+        allow_workspace_archive = context.role in {"OWNER", "ADMIN", "MANAGER", "REVIEWER"}
+        return memory_service.archive(memory_id, context.workspace_id, user_id=context.user_id, allow_workspace_archive=allow_workspace_archive)
+    except PermissionError as error:
+        raise HTTPException(status_code=403, detail="You do not have permission to archive this Workspace memory.") from error
+    except WorkspaceMemoryError as error:
+        raise HTTPException(status_code=404, detail="Memory is unavailable.") from error
