@@ -27,13 +27,16 @@ class BenchmarkService:
         s=self.s()
         try:return [self._task(x) for x in s.scalars(select(BenchmarkTask).order_by(BenchmarkTask.created_at.desc())).all()]
         finally:s.close()
-    def run(self,task_id,*,policy=None,permission_check=None):
+    def run(self,task_id,*,workspace_id=None,policy=None,permission_check=None):
         s=self.s()
         try: task=s.get(BenchmarkTask,task_id)
         finally:s.close()
         if not task:raise BenchmarkError("Benchmark task not found.")
         if permission_check:permission_check("MISSION_CREATE")
-        mission=self.missions.create({"title":f"Benchmark · {task.name}","mission_type":task.category,"goal":task.description})
+        mission_payload={"title":f"Benchmark · {task.name}","mission_type":task.category,"goal":task.description}
+        if workspace_id:
+            mission_payload["workspace_id"]=workspace_id
+        mission=self.missions.create(mission_payload)
         config=LLMGateway().configuration();s=self.s()
         try:
             run=BenchmarkRun(task_id=task.id,mission_id=mission["id"],runtime_version="P36",planner_version="v1",model_version=config["model"]);s.add(run);s.add(AgentVersion(runtime_version=run.runtime_version,planner_version=run.planner_version,model_version=run.model_version));s.commit();s.refresh(run)

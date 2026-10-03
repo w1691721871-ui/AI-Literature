@@ -8,9 +8,10 @@ from app.services.database import Base
 from app.services.scenario_demo_service import ScenarioDemoService
 
 class _Missions:
-    def __init__(self, sessions): self.s = sessions
+    def __init__(self, sessions): self.s = sessions; self.created_payloads=[]
     def create(self, data):
-        s=self.s(); row=AIMission(title=data["title"], mission_type=data["mission_type"], goal=data["goal"]); s.add(row); s.commit(); s.refresh(row); output={"id":row.id}; s.close(); return output
+        self.created_payloads.append(dict(data))
+        s=self.s(); row=AIMission(title=data["title"], mission_type=data["mission_type"], goal=data["goal"], workspace_id=data.get("workspace_id")); s.add(row); s.commit(); s.refresh(row); output={"id":row.id}; s.close(); return output
     def detail(self, mission_id): return {"id":mission_id,"timeline":[],"status":"WAITING_REVIEW"}
 class _Runtime:
     def execute(self, mission_id, **_): return {"mission_id":mission_id,"status":"WAITING_REVIEW"}
@@ -38,4 +39,8 @@ class ScenarioDemoTests(unittest.TestCase):
     def test_permission_prevents_run(self):
         scenario=self.service.list()[0]
         with self.assertRaises(PermissionError): self.service.run(scenario["id"],permission_check=lambda _:(_ for _ in ()).throw(PermissionError("blocked")))
+    def test_workspace_context_is_forwarded_to_created_mission(self):
+        scenario=self.service.list()[0]
+        self.service.run(scenario["id"],workspace_id="workspace-fixture")
+        self.assertEqual(self.service.missions.created_payloads[-1]["workspace_id"],"workspace-fixture")
 if __name__=="__main__": unittest.main()

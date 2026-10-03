@@ -8,9 +8,11 @@ from app.services.benchmark_service import BenchmarkService
 from app.services.database import Base
 
 class _MissionService:
-    def __init__(self,sessions):self.s=sessions
+    def __init__(self,sessions):self.s=sessions;self.created_payloads=[]
     def create(self,data):
-        s=self.s();row=AIMission(title=data["title"],goal=data["goal"]);s.add(row);s.commit();s.refresh(row);out={"id":row.id};s.close();return out
+        self.created_payloads.append(dict(data)
+        )
+        s=self.s();row=AIMission(title=data["title"],goal=data["goal"],workspace_id=data.get("workspace_id"));s.add(row);s.commit();s.refresh(row);out={"id":row.id};s.close();return out
 class _Runtime:
     def execute(self,mission_id,**_):return {"mission_id":mission_id,"status":"WAITING_REVIEW"}
 class BenchmarkTests(unittest.TestCase):
@@ -34,4 +36,8 @@ class BenchmarkTests(unittest.TestCase):
     def test_permission_check_blocks_runner_before_mission_creation(self):
         task=self.service.create({"name":"Guarded","category":"RESEARCH","difficulty":"EASY","description":"Fixture only","expected_agents":[],"expected_tools":[],"evaluation_rules":{}})
         with self.assertRaises(PermissionError): self.service.run(task["id"],permission_check=lambda _action: (_ for _ in ()).throw(PermissionError("blocked")))
+    def test_runner_forwards_workspace_boundary_to_created_mission(self):
+        task=self.service.create({"name":"Scoped","category":"RESEARCH","difficulty":"EASY","description":"Fixture only","expected_agents":[],"expected_tools":[],"evaluation_rules":{}})
+        self.service.run(task["id"],workspace_id="workspace-fixture")
+        self.assertEqual(self.service.missions.created_payloads[-1]["workspace_id"],"workspace-fixture")
 if __name__=="__main__":unittest.main()

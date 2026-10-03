@@ -16,6 +16,20 @@ AI Workspace → Copilot → Mission Engine → Planner → Agent Runtime → Ev
 
 RAG references remain traceable. Prompts, chain-of-thought, secrets and unapproved customer materials are not exposed as enterprise knowledge. Demo flows are explicitly `DEMO_ONLY`.
 
+## Current runtime and access boundaries
+
+The product uses one Workspace-bound identity context for all user-facing
+execution. A Mission, its controlled Computer work, Evidence, approvals and
+deliveries stay within the Session Workspace. The unified AI Worker runtime is
+the product execution path; legacy planner, benchmark, evaluation, collaboration
+and advanced-computer endpoints remain available for compatibility but are now
+authenticated and either Mission-scoped or administrator-only.
+
+- **Member work**: Mission, Research, Knowledge, Delivery and controlled Computer actions require the permissions of the current Workspace membership.
+- **Human control**: Evidence, Artifact release and modifying Computer work stop at an explicit review boundary.
+- **Administrator surfaces**: Runtime monitoring, agent registry, historical global memory, benchmarks and advanced diagnostics require an OWNER or ADMIN session.
+- **Demo isolation**: Demo sessions use their own MEMBER-scoped Workspace and cannot access administrative controls or another Workspace’s resources.
+
 > **AI Research Operating System · AI 科研决策与执行平台**
 
 ResearchOS 是面向高校实验室、科研机构、企业研发团队与产学研协作场景的 AI 产品原型。它以一个明确的研究目标为起点，把授权资料、AI 研究、Evidence、人工确认、项目执行与成果交付组织为同一条可追溯的科研闭环。
@@ -391,7 +405,7 @@ EMBEDDING_DIMENSIONS=1024
 
 ResearchOS v4.2 在既有 Research Master、Research Worker、RAG 与 Evidence 能力之上，增加面向实验室和产学研协作的产品层：
 
-- **Research Workspace**：用工作空间名称、展示型成员角色、项目/文档/执行记录概览组织科研协作；当前不包含登录或真实权限校验。
+- **Research Workspace**：以登录 Session、Workspace 成员角色、项目/文档/执行记录组织科研协作；资源访问由服务端 RBAC 校验，而非前端传入的用户或工作空间字段决定。
 - **Research Task Center**：管理文献分析、数据分析、企业需求分析与技术路线规划任务，并可关联既有 Worker 执行记录、Evidence 数量和输出报告。
 - **Client Delivery Center**：将 Worker 的已有资料和 Evidence 摘要整理为交付预览，可导出标明“AI辅助生成，需人工审核”的 PDF。
 - **Agent Monitor**：基于本地 Worker 运行记录展示执行次数、任务状态、平均耗时和允许工具调用次数；不展示 Prompt、Token 或模型思维链。

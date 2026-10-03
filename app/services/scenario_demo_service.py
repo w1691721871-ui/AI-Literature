@@ -21,13 +21,16 @@ class ScenarioDemoService:
         self._seed_demo(); s = self.s()
         try: return [self._scenario(row, s) for row in s.scalars(select(EnterpriseScenario).order_by(EnterpriseScenario.created_at.desc())).all()]
         finally: s.close()
-    def run(self, scenario_id, *, permission_check=None, policy=None):
+    def run(self, scenario_id, *, workspace_id=None, permission_check=None, policy=None):
         self._seed_demo(); s = self.s()
         try: scenario = s.get(EnterpriseScenario, scenario_id)
         finally: s.close()
         if not scenario: raise ScenarioError("Scenario not found.")
         if permission_check: permission_check("MISSION_CREATE")
-        mission = self.missions.create({"title": f"DEMO_ONLY · {scenario.name}", "mission_type": "ENTERPRISE", "goal": scenario.customer_need})
+        mission_payload = {"title": f"DEMO_ONLY · {scenario.name}", "mission_type": "ENTERPRISE", "goal": scenario.customer_need}
+        if workspace_id:
+            mission_payload["workspace_id"] = workspace_id
+        mission = self.missions.create(mission_payload)
         s = self.s()
         try: run = ScenarioRun(scenario_id=scenario.id, mission_id=mission["id"], status="RUNNING"); s.add(run); s.commit(); s.refresh(run)
         finally: s.close()

@@ -115,12 +115,15 @@ class IdentityExperienceTests(unittest.TestCase):
         dashboard = WorkspaceExperienceService(self.sessions, initialize=False).dashboard(first["workspace"]["id"])
         self.assertEqual([item["title"] for item in dashboard["missions"]], ["First mission"])
 
-    def test_frontend_waits_for_identity_before_workspace_loaders(self):
+    def test_frontend_requires_identity_then_isolates_workspace_loaders(self):
         source = (Path(__file__).resolve().parents[1] / "frontend" / "app.js").read_text(encoding="utf-8")
         initialize = source[source.index("async function initializeAuthorizedWorkspace"):source.index("async function loginToWorkspace")]
-        self.assertLess(initialize.index("await loadWorkspaceExperience"), initialize.index("await loadAIMissions"))
-        self.assertLess(initialize.index("await loadAIMissions"), initialize.index("await loadLibraryPapers"))
+        self.assertIn("const results = await Promise.allSettled", initialize)
+        self.assertIn("[\"workspace overview\", loadWorkspaceExperience]", initialize)
+        self.assertIn("[\"missions\", loadAIMissions]", initialize)
         self.assertIn("const identityRestored = await loadIdentityProfile();", source)
+        establish = source[source.index("async function establishIdentitySession"):source.index("async function registerWorkspace")]
+        self.assertLess(establish.index("activeWorkspaceView.value = destination"), establish.index("void initializeAuthorizedWorkspace()"))
         self.assertIn("void initializeApplication();", source)
 
 

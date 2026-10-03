@@ -47,7 +47,8 @@ def execute_worker_mission_runtime(mission_id: str, context: IdentityContext = D
 
 
 @router.post("/tasks", status_code=status.HTTP_201_CREATED)
-def create_task(payload: RuntimeTaskCreate) -> dict[str, object]:
+def create_task(payload: RuntimeTaskCreate, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.mission(context, payload.mission_id, "MISSION_EXECUTE")
     try:
         return queue.enqueue(payload.mission_id)
     except ValueError as error:
@@ -55,26 +56,31 @@ def create_task(payload: RuntimeTaskCreate) -> dict[str, object]:
 
 
 @router.get("/tasks")
-def list_tasks() -> list[dict[str, object]]:
+def list_tasks(context: IdentityContext = Depends(permissions.current)) -> list[dict[str, object]]:
+    permissions.admin_console(context)
     return queue.list()
 
 
 @router.post("/worker/run-once")
-def run_worker_once() -> dict[str, object]:
+def run_worker_once(context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.admin_console(context)
     task = AgentWorker().run_once()
     return {"status": "IDLE" if task is None else "PROCESSED", "task": task}
 
 
 @router.get("/monitor")
-def runtime_monitor() -> dict[str, object]:
+def runtime_monitor(context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.admin_console(context)
     return monitor.snapshot()
 
 
 @router.get("/health")
-def runtime_health() -> dict[str, object]:
+def runtime_health(context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.admin_console(context)
     return {"status": "ok", "components": monitor.health_components()}
 
 
 @router.get("/config")
-def runtime_config() -> dict[str, object]:
+def runtime_config(context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
+    permissions.admin_console(context)
     return ConfigService().summary()
