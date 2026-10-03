@@ -23,9 +23,19 @@ class _Registry:
         return []
 
 
+class _Adapter:
+    def __init__(self, skill_id):
+        self.name = f"{skill_id.title()} Skill"
+        self.description = "Existing controlled skill."
+
+    @staticmethod
+    def required_permission():
+        return "MISSION_VIEW"
+
+
 class _PlannedRegistry:
     def plan(self, mission):
-        return [("review", object()), ("research", object()), ("computer", object())]
+        return [(skill_id, _Adapter(skill_id)) for skill_id in ("review", "research", "computer")]
 
 
 class WorkspaceContextTests(unittest.TestCase):
@@ -107,6 +117,15 @@ class WorkspaceContextTests(unittest.TestCase):
             understanding={"required_capabilities": ["computer", "research"]},
         )
         self.assertEqual([skill_id for skill_id, _ in plan], ["computer", "research", "review"])
+
+    def test_ai_team_plan_explains_deferred_capabilities_without_creating_skills(self):
+        summary = AITeamOrchestrator().plan_summary(
+            _PlannedRegistry(), self.mission, {"workspace": {"id": "workspace-a"}, "memory": {"selected": [], "evidence_refs": []}},
+            understanding={"required_capabilities": ["delivery", "research"]},
+        )
+        self.assertEqual([step["skill_id"] for step in summary["steps"]], ["research", "computer", "review"])
+        self.assertEqual(summary["deferred"], [{"skill_id": "delivery", "status": "DEFERRED", "reason": "Delivery begins only after a Mission has approved, traceable Evidence."}])
+        self.assertNotIn("prompt", str(summary).lower())
 
     def test_capability_catalog_is_product_safe(self):
         catalog = SkillCapabilityRegistry().catalog()

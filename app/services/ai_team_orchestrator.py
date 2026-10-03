@@ -34,6 +34,33 @@ class AITeamOrchestrator:
             for skill_id, adapter in self.plan(registry, mission, context, understanding=understanding)
         ]
 
+    def plan_summary(self, registry, mission: Mapping[str, object], context: Mapping[str, object], *, understanding: Mapping[str, object] | None = None) -> dict[str, object]:
+        """Return a user-readable, finite execution plan over existing adapters.
+
+        Requested capabilities that cannot yet run are shown as deferred rather
+        than silently invented.  The Registry remains the execution authority.
+        """
+        runnable = self.presentation(registry, mission, context, understanding=understanding)
+        runnable_ids = {str(item["skill_id"]) for item in runnable}
+        requested = [str(item) for item in (understanding or {}).get("required_capabilities", []) if str(item)]
+        deferred = [
+            {"skill_id": skill_id, "status": "DEFERRED", "reason": self._deferred_reason(skill_id)}
+            for skill_id in requested
+            if skill_id not in runnable_ids
+        ]
+        memory = context.get("memory") if isinstance(context.get("memory"), Mapping) else {}
+        selected = memory.get("selected") if isinstance(memory.get("selected"), list) else []
+        return {
+            "steps": runnable,
+            "deferred": deferred,
+            "context_basis": {
+                "authorized_memory_records": len(selected),
+                "traceable_evidence_references": len(memory.get("evidence_refs") or []),
+                "project_context_included": bool(memory.get("project_included")),
+            },
+            "boundary": "The AI Worker selects only existing, permitted Skills. Deferred work never bypasses Evidence or human approval requirements.",
+        }
+
     @staticmethod
     def _reason(skill_id: str, understanding: Mapping[str, object] | None) -> str:
         requested = understanding.get("required_capabilities", []) if isinstance(understanding, Mapping) else []
@@ -42,3 +69,11 @@ class AITeamOrchestrator:
         if skill_id == "review":
             return "Included to preserve the required human decision boundary."
         return "Included because the current Mission state has an existing runnable Skill."
+
+    @staticmethod
+    def _deferred_reason(skill_id: str) -> str:
+        if skill_id == "delivery":
+            return "Delivery begins only after a Mission has approved, traceable Evidence."
+        if skill_id == "computer":
+            return "Computer work begins only after a controlled task is attached and approved."
+        return "This capability is not runnable in the current Mission state."

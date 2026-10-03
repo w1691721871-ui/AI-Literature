@@ -90,6 +90,7 @@ class AIWorkerRuntime:
                 "approval_requirement": contract.approval_requirement,
             },
             "skills": self._team.presentation(self._registry, mission, context, understanding=understanding),
+            "team_plan": self._team.plan_summary(self._registry, mission, context, understanding=understanding),
             "context": self._context.presentation(context),
             "timeline": records,
             "research_insight": self._orchestrator.research_insight(mission),
