@@ -43,6 +43,14 @@ class ResearchOrchestrator:
 class AIWorkerRuntime:
     """Runs legacy capabilities as a single, finite, auditable AI Worker lifecycle."""
 
+    # These are product-safe lifecycle states.  The detailed action history is
+    # retained in RuntimeExecution; this field intentionally never stores a
+    # prompt, a model trace, or a raw tool payload.
+    EXECUTION_STATES = {
+        "CREATED", "UNDERSTANDING", "PLANNING", "EXECUTING", "OBSERVING",
+        "EVALUATING", "REPLANNING", "WAITING_REVIEW", "COMPLETED",
+    }
+
     def __init__(
         self,
         session_factory: Callable = SessionLocal,
@@ -84,6 +92,7 @@ class AIWorkerRuntime:
         contract = self._worker.contract_for_mission(mission)
         self._sync_contract(mission, contract, "CREATED")
         records = self._records(mission_id)
+        execution = self._execution_state(mission_id)
         waiting_action = next((record["result_summary"] for record in reversed(records) if record["status"] == "WAITING_REVIEW"), None)
         computer_plan = None
         computer_execution = None
@@ -105,11 +114,12 @@ class AIWorkerRuntime:
             "computer_execution": computer_execution,
             "context": self._context.presentation(context),
             "timeline": records,
+            "execution": execution,
             "research_insight": self._orchestrator.research_insight(mission),
             "mission_intelligence": intelligence,
             "autonomous_progress": self._autonomous.progress(mission, records),
             "employee_report": self._employee_report.build(mission, records, quality=intelligence.get("quality") if isinstance(intelligence, Mapping) else None),
-            "status": records[-1]["status"] if records else str(mission.get("status") or "CREATED"),
+            "status": execution["state"] if execution else (records[-1]["status"] if records else str(mission.get("status") or "CREATED")),
             "waiting_action": waiting_action,
         }
 
@@ -124,21 +134,23 @@ class AIWorkerRuntime:
             raise ValueError("Mission Contract 缺少 objective。")
 
         self._sync_contract(mission, contract, "PLANNING")
+        self._state(mission_id, "UNDERSTANDING", "AI Worker", "The AI Worker is checking the mission goal and authorized Workspace context.", "Mission goal is available.", "Prepare a bounded plan", "")
         self._prepare_mission_intelligence(mission)
         understanding = self._intelligence.analyze_mission_goal(str(mission.get("goal") or mission.get("title") or ""))
-        self._state(mission_id, "CONTEXT_READY", "AI Worker", "Authorized Workspace context prepared.", "Identity, Workspace, Mission, Knowledge and approved Memory are available.", "Plan approved Skills", "")
+        self._state(mission_id, "PLANNING", "AI Worker", "Authorized Workspace context is ready.", "Identity, Workspace, Mission, Knowledge and approved Memory are available.", "Plan approved Skills", "")
         for index, (skill_id, adapter) in enumerate(self._team.plan(self._registry, mission, context, understanding=understanding), start=1):
             step_id = f"{skill_id}-{index}"
             adapter.validate(mission)
             record_id = self._record(mission_id, step_id, adapter.name, "PLAN", "PLANNED", "Skill added to the controlled AI Worker plan.", "")
             self._update(record_id, "RUNNING", "Skill execution started within existing service boundaries.", "")
-            self._state(mission_id, "OBSERVE", adapter.name, "Skill execution started.", "", "Evaluate current state", "")
+            self._state(mission_id, "EXECUTING", adapter.name, "The AI Worker started an authorized Skill step.", "", "Observe the result", "")
             self._set_mission_phase(mission, "OBSERVE")
             try:
                 result = adapter.execute(mission)
             except Exception as error:
                 result = SkillResult("FAILED", "A controlled Skill action failed.", self._safe_error(error), "EXECUTE")
 
+            self._state(mission_id, "OBSERVING", adapter.name, adapter.observe(result), "The result is being checked against the Mission goal.", "Evaluate the result", "")
             status = "WAITING_REVIEW" if result.status in {"WAITING_REVIEW", "NEEDS_EVIDENCE"} else result.status
             observation = adapter.observe(result)
             summary = result.result_summary
@@ -164,7 +176,7 @@ class AIWorkerRuntime:
             )
             if mission_decision["decision"] == "REPLAN":
                 self._replan_mission(mission, {"status": result.status, "summary": observation})
-                self._state(mission_id, "REPLAN", adapter.name, "Evidence gap requires a bounded replan.", str(mission_decision["reason"]), str(mission_decision["action"]), str(mission_decision["stop_reason"]))
+                self._state(mission_id, "REPLANNING", adapter.name, "The current Evidence set is insufficient, so the AI Worker queued one bounded research adjustment.", str(mission_decision["reason"]), "Continue the approved research plan", str(mission_decision["stop_reason"]))
             autonomous = self._autonomous.evaluate_current_state(
                 {
                     "workspace_id": mission.get("workspace_id"),
@@ -172,17 +184,16 @@ class AIWorkerRuntime:
                     "approval_state": latest_contract.approval_requirement,
                     "execution_state": "COMPLETED" if str(mission.get("status") or "").upper() == "COMPLETED" else "",
                 },
-                {"completed_steps": index, "max_steps": self._autonomous.MAX_STEPS, "current_skill": adapter.name},
+                {"completed_steps": index, "max_steps": self._autonomous.MAX_STEPS, "current_skill": adapter.name, **intelligence_state},
                 {"status": result.status, "action_type": result.action_type, "summary": observation},
                 workspace_id=mission.get("workspace_id"),
             )
-            self._state(mission_id, "EVALUATE", adapter.name, observation, str(autonomous["reason"]), str(autonomous["action"]), str(autonomous["stop_reason"]))
-            self._state(mission_id, "DECIDE", adapter.name, "A bounded next action was selected.", str(autonomous["decision"]), str(autonomous["action"]), str(autonomous["stop_reason"]))
+            self._state(mission_id, "EVALUATING", adapter.name, observation, str(autonomous["reason"]), str(autonomous["action"]), str(autonomous["stop_reason"]))
             if autonomous["decision"] in {"REQUEST_REVIEW", "STOP"} and status == "SUCCESS":
                 status = "WAITING_REVIEW" if autonomous["decision"] == "REQUEST_REVIEW" else "FAILED"
                 summary = f"{summary} {autonomous['reason']}".strip()
             self._update(record_id, status, observation, summary, result.action_type)
-            execution_state = "WAITING_APPROVAL" if status == "WAITING_REVIEW" else "FAILED" if status == "FAILED" else "EXECUTE"
+            execution_state = "WAITING_REVIEW" if status in {"WAITING_REVIEW", "FAILED"} else "EXECUTING"
             next_action = "Human review required" if status == "WAITING_REVIEW" else str(autonomous["action"])
             self._state(mission_id, execution_state, adapter.name, observation, adapter.evaluate(result), next_action, str(autonomous["stop_reason"]))
             if status != "SUCCESS" or autonomous["decision"] == "STOP":
@@ -190,6 +201,7 @@ class AIWorkerRuntime:
                 break
         else:
             self._sync_contract(mission, self._worker.contract_for_mission(mission), "COMPLETED")
+            self._state(mission_id, "COMPLETED", "AI Worker", "All bounded Skill steps completed.", "The Mission has reached its recorded completion boundary.", "Review the completed delivery", "")
         self._workspace_memory.record_mission_summary(mission, owner_id=getattr(actor, "user_id", None))
         return self.snapshot(mission_id, actor=actor)
 
@@ -229,7 +241,7 @@ class AIWorkerRuntime:
         plan = self._intelligence.build_task_plan(str(mission["id"]), understanding)
         self._intelligence.ensure_state(str(mission["id"]), workspace_id, plan)
         self._intelligence.set_phase(str(mission["id"]), workspace_id, "PLAN")
-        self._state(str(mission["id"]), "PLAN", "AI Worker", "Mission goal was translated into existing Skill tasks.", "User-readable task plan created.", "Execute bounded Skill", "")
+        self._state(str(mission["id"]), "PLANNING", "AI Worker", "Mission goal was translated into existing Skill tasks.", "User-readable task plan created.", "Execute bounded Skill", "")
 
     def _complete_mission_skill(self, mission: Mapping[str, Any], skill_id: str, result_status: str) -> dict[str, object]:
         workspace_id = str(mission.get("workspace_id") or "")
@@ -260,6 +272,8 @@ class AIWorkerRuntime:
         return {"understanding": understanding, "current_phase": state["current_phase"], "completed_tasks": state["completed_tasks"], "pending_tasks": state["pending_tasks"], "blocked_reason": state["blocked_reason"], "replan_count": state["replan_count"], "max_replan_count": state["max_replan_count"], "quality": quality}
 
     def _state(self, mission_id, current_step, current_skill, observation, evaluation, next_action, stop_reason) -> None:
+        if current_step not in self.EXECUTION_STATES:
+            raise ValueError(f"Unsupported AI Worker execution state: {current_step}")
         session = self._sessions()
         try:
             row = session.scalar(select(RuntimeExecutionState).where(RuntimeExecutionState.mission_id == mission_id))
@@ -267,6 +281,24 @@ class AIWorkerRuntime:
                 row = RuntimeExecutionState(mission_id=mission_id); session.add(row)
             row.current_step=current_step; row.current_skill=current_skill; row.observation_summary=observation; row.evaluation_result=evaluation; row.next_action=next_action; row.stop_reason=stop_reason
             session.commit()
+        finally:
+            session.close()
+
+    def _execution_state(self, mission_id: str) -> dict[str, object] | None:
+        session = self._sessions()
+        try:
+            row = session.scalar(select(RuntimeExecutionState).where(RuntimeExecutionState.mission_id == mission_id))
+            if row is None:
+                return None
+            return {
+                "state": row.current_step,
+                "skill": row.current_skill,
+                "observation": row.observation_summary,
+                "evaluation": row.evaluation_result,
+                "next_action": row.next_action,
+                "stop_reason": row.stop_reason,
+                "updated_at": row.updated_at,
+            }
         finally:
             session.close()
 

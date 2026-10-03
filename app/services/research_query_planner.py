@@ -17,6 +17,20 @@ class ResearchQueryPlanner:
         queries = [core, *[f"{core} {term}" for term in related]][:5]
         return {"topic": core, "related_directions": related, "queries": queries, "strategy": "Search a core research topic, then diversify by adjacent methods and evaluation criteria.", "boundary": "Queries are a retrieval plan only; they contain no research conclusion or hidden model reasoning."}
 
+    def adapt(self, goal: str, *, round_number: int) -> dict[str, object]:
+        """Return one bounded public-source expansion after insufficient coverage."""
+        base = self.plan(goal)
+        if round_number < 1 or round_number > 2:
+            return {"queries": [], "summary": "The permitted query-adjustment limit was reached."}
+        topic = str(base["topic"])
+        suffixes = ("recent review", "systematic review", "life cycle assessment")
+        queries = [f"{topic} {suffix}" for suffix in suffixes][:2]
+        return {
+            "queries": queries,
+            "summary": "The initial public-source coverage was limited, so the Worker broadened the same research topic with review and evaluation-oriented queries.",
+            "boundary": "This is a finite retrieval adjustment only. It does not create Evidence or a research conclusion.",
+        }
+
     @staticmethod
     def _topic(goal: str) -> str:
         cleaned = " ".join(goal.replace("analyze", "").replace("分析", "").replace("future direction", "").replace("未来方向", "").split())

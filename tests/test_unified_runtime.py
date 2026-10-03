@@ -68,9 +68,17 @@ class UnifiedRuntimeTests(unittest.TestCase):
         session=self.sessions()
         try:
             state=session.scalar(select(RuntimeExecutionState).where(RuntimeExecutionState.mission_id=="p55-mission"))
-            self.assertEqual(state.current_step,"WAITING_APPROVAL"); self.assertEqual(state.current_skill,"Research Skill")
+            self.assertEqual(state.current_step,"WAITING_REVIEW"); self.assertEqual(state.current_skill,"Research Skill")
             self.assertEqual(session.scalar(select(RuntimeExecution).where(RuntimeExecution.mission_id=="p55-mission")).status,"WAITING_REVIEW")
         finally: session.close()
+
+    def test_snapshot_exposes_a_persisted_user_readable_execution_state(self):
+        runtime=self.runtime({"research":_Skill("Research Skill",SkillResult("WAITING_REVIEW","Evidence observed","Review needed")),"review":_Skill("Review Skill",SkillResult("WAITING_REVIEW","",""))})
+        runtime.execute("p55-mission")
+        snapshot=runtime.snapshot("p55-mission")
+        self.assertEqual(snapshot["execution"]["state"], "WAITING_REVIEW")
+        self.assertEqual(snapshot["execution"]["skill"], "Research Skill")
+        self.assertNotIn("prompt", snapshot["execution"])
 
     def test_evidence_stop_condition_is_user_readable(self):
         runtime=self.runtime({"research":_Skill("Research Skill",SkillResult("NEEDS_EVIDENCE","No Evidence observed.","Evidence is required.")),"review":_Skill("Review Skill",SkillResult("WAITING_REVIEW","",""))})

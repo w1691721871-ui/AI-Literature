@@ -41,8 +41,24 @@ class AIEmployeeReportService:
                 ),
             },
             "artifacts": artifacts,
+            "daily_work": self._daily_work(records, evidence_count, review_needed),
             "next_step": self._next_step(status, review_needed, evidence_count, quality_data),
             "boundary": "This report is derived only from saved Mission status, approved workflow records and Evidence references. It excludes prompts, chain-of-thought, secrets and raw external content.",
+        }
+
+    @staticmethod
+    def _daily_work(records: Sequence[Mapping[str, object]], evidence_count: int, review_needed: bool) -> dict[str, object]:
+        completed = [str(item.get("result_summary") or "")[:220] for item in records if str(item.get("status") or "").upper() == "SUCCESS"]
+        concerns = []
+        if evidence_count == 0:
+            concerns.append("Traceable Evidence is not yet sufficient for a grounded research conclusion.")
+        if any(str(item.get("status") or "").upper() == "FAILED" for item in records):
+            concerns.append("A controlled step needs human attention before the Mission can continue.")
+        return {
+            "completed_today": completed[:3],
+            "issues": concerns,
+            "adjustment": "A bounded research adjustment is queued when the existing Adaptive workflow records an evidence gap." if any(str(item.get("status") or "").upper() == "REPLANNING" for item in records) else "No unverified strategy adjustment is claimed.",
+            "waiting_for": "Human review" if review_needed else "The next authorized Skill step",
         }
 
     @staticmethod
