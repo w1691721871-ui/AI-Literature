@@ -23,9 +23,9 @@ class SkillCapabilityRegistry:
     def catalog(self) -> list[dict[str, object]]:
         """A public-safe capability declaration for the single AI Worker."""
         metadata = {
-            "research": {"inputs": ["Workspace Knowledge", "Evidence"], "outputs": ["Research summary", "Evidence assessment"], "permission": "KNOWLEDGE_ACCESS"},
-            "computer": {"inputs": ["Approved Mission", "Controlled environment"], "outputs": ["Change proposal", "Verification result"], "permission": "COMPUTER_EXECUTE"},
-            "delivery": {"inputs": ["Approved Evidence", "Mission context"], "outputs": ["Reviewable Artifact draft"], "permission": "MISSION_EXECUTE"},
-            "review": {"inputs": ["Evidence", "Artifact or change proposal"], "outputs": ["Human approval request"], "permission": "MISSION_VIEW"},
+            "research": {"name": "Research Skill", "description": "Uses authorized knowledge and traceable Evidence to prepare a research summary.", "inputs": ["Workspace Knowledge", "Evidence"], "outputs": ["Research summary", "Evidence assessment"], "permission": "KNOWLEDGE_ACCESS", "evidence_required": True, "approval_required": False},
+            "computer": {"name": "Computer Skill", "description": "Prepares controlled actions with verification and human approval boundaries.", "inputs": ["Approved Mission", "Controlled environment"], "outputs": ["Change proposal", "Verification result"], "permission": "COMPUTER_EXECUTE", "evidence_required": False, "approval_required": True},
+            "delivery": {"name": "Delivery Skill", "description": "Creates a reviewable delivery draft that remains linked to approved Evidence.", "inputs": ["Approved Evidence", "Mission context"], "outputs": ["Reviewable Artifact draft"], "permission": "MISSION_EXECUTE", "evidence_required": True, "approval_required": True},
+            "review": {"name": "Review Skill", "description": "Routes consequential evidence, changes and releases to an explicit human decision.", "inputs": ["Evidence", "Artifact or change proposal"], "outputs": ["Human approval request"], "permission": "MISSION_VIEW", "evidence_required": False, "approval_required": True},
         }
         return [{"id": skill, "capabilities": list(capabilities), **metadata[skill]} for skill, capabilities in self._CAPABILITIES.items()]
