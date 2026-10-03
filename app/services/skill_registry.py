@@ -61,7 +61,7 @@ class ResearchSkillAdapter(SkillAdapter):
 
     def execute(self, mission: Mapping[str, Any]) -> SkillResult:
         state = str(mission.get("status") or "CREATED")
-        if state not in {"CREATED", "PLANNING", "NEEDS_REVISION"}:
+        if state not in {"CREATED", "PLANNING", "NEEDS_REVISION", "ADAPTIVE_REPLANNING"}:
             return SkillResult("SUCCESS", "Existing research state observed.", "Research Skill has no runnable evidence step in the current mission state.")
         detail = self._missions.run(str(mission["id"]))
         refs = detail.get("evidence_refs", []) if isinstance(detail, Mapping) else []
@@ -168,7 +168,7 @@ class SkillRegistry:
         """Choose a bounded sequence without inventing or auto-approving work."""
         state = str(mission.get("status") or "CREATED")
         steps: list[str] = []
-        if state in {"CREATED", "PLANNING", "NEEDS_REVISION"}:
+        if state in {"CREATED", "PLANNING", "NEEDS_REVISION", "ADAPTIVE_REPLANNING"}:
             steps.append("research")
         if mission.get("computer_missions"):
             steps.append("computer")

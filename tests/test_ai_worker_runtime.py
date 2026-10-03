@@ -152,6 +152,13 @@ class AIWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(review.calls, 0)
         self.assertEqual(len(result["timeline"]), 1)
 
+    def test_bounded_adaptive_replan_remains_a_runnable_research_skill(self):
+        research = FakeSkill("Research Skill", SkillResult("SUCCESS", "Replanned evidence pass completed.", "A bounded retry completed."))
+        mission = {**self.mission, "status": "ADAPTIVE_REPLANNING"}
+        result = self.runtime({"research": research, "review": FakeSkill("Review Skill", SkillResult("WAITING_REVIEW", "Review pending.", "Review required."))}, mission=mission).execute("mission-p53")
+        self.assertEqual(research.calls, 1)
+        self.assertEqual(result["timeline"][0]["skill"], "Research Skill")
+
     def test_execution_record_excludes_sensitive_reasoning_fields(self):
         self.assertEqual(set(RuntimeExecution.__table__.columns.keys()), {
             "id", "mission_id", "step_id", "skill", "action_type", "status",

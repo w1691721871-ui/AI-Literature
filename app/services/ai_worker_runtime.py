@@ -23,6 +23,7 @@ from app.services.skill_registry import SkillRegistry, SkillResult
 from app.services.ai_team_orchestrator import AITeamOrchestrator
 from app.services.workspace_context_service import WorkspaceContextService
 from app.services.workspace_memory_service import WorkspaceMemoryService
+from app.services.ai_employee_report_service import AIEmployeeReportService
 
 
 class ResearchOrchestrator:
@@ -74,6 +75,7 @@ class AIWorkerRuntime:
         self._context = context_service or WorkspaceContextService(session_factory, initialize=False)
         self._team = team_orchestrator or AITeamOrchestrator()
         self._workspace_memory = workspace_memory_service or WorkspaceMemoryService(session_factory, initialize=False)
+        self._employee_report = AIEmployeeReportService()
 
     def snapshot(self, mission_id: str, *, actor=None) -> dict[str, object]:
         mission = self._mission(mission_id)
@@ -90,6 +92,7 @@ class AIWorkerRuntime:
             from app.services.computer_mission_runtime import ComputerMissionRuntime
             computer_plan = ComputerTaskPlanner().plan(mission, context)
             computer_execution = ComputerMissionRuntime().summarize(mission.get("computer_missions"))
+        intelligence = self._mission_intelligence_snapshot(mission)
         return {
             "mission": {
                 "id": mission["id"], "title": mission.get("title"), "objective": contract.objective,
@@ -103,8 +106,9 @@ class AIWorkerRuntime:
             "context": self._context.presentation(context),
             "timeline": records,
             "research_insight": self._orchestrator.research_insight(mission),
-            "mission_intelligence": self._mission_intelligence_snapshot(mission),
+            "mission_intelligence": intelligence,
             "autonomous_progress": self._autonomous.progress(mission, records),
+            "employee_report": self._employee_report.build(mission, records, quality=intelligence.get("quality") if isinstance(intelligence, Mapping) else None),
             "status": records[-1]["status"] if records else str(mission.get("status") or "CREATED"),
             "waiting_action": waiting_action,
         }

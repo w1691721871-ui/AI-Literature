@@ -62,7 +62,10 @@ class AIMissionService:
         mission=self._mission_row(mission_id)
         if mission["status"] == "PAUSED":
             raise ValueError("Mission is paused. Resume it before starting another controlled execution.")
-        if mission["status"] not in {"CREATED","PLANNING","NEEDS_REVISION"}: raise ValueError("当前 Mission 不处于可执行或可修订状态。")
+        # The existing Adaptive service may queue one graph-versioned replan.
+        # It remains subject to its own finite retry count and all later human
+        # review gates; this merely makes that already-recorded plan runnable.
+        if mission["status"] not in {"CREATED","PLANNING","NEEDS_REVISION","ADAPTIVE_REPLANNING"}: raise ValueError("当前 Mission 不处于可执行或可修订状态。")
         try:
             self._graph_status(mission_id,"Research Agent","RUNNING")
             project_id=self._ensure_project(mission)
