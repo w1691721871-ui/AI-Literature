@@ -8,6 +8,8 @@ from types import SimpleNamespace
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from app.models.ai_mission import AIMission
+from app.models.artifact import Artifact
 from app.models.enterprise_memory import DecisionRecord, KnowledgeAsset
 from app.models.governance import GovernanceWorkspace, WorkspaceUserRole
 from app.models.workspace_memory import WorkspaceMemory
@@ -53,6 +55,8 @@ class WorkspaceContextTests(unittest.TestCase):
                 WorkspaceUserRole(workspace_id="workspace-b", user_id="user-b", role="OWNER"),
                 KnowledgeAsset(workspace_id="workspace-a", asset_type="PAPER", source_type="UPLOAD", title="Verified source", summary="Safe summary", status="VERIFIED"),
                 DecisionRecord(mission_id="decision-a", workspace_id="workspace-a", title="Approved decision", review_status="APPROVED"),
+                AIMission(id="historical-mission", workspace_id="workspace-a", title="Low-carbon materials delivery", goal="Low-carbon materials", status="COMPLETED"),
+                Artifact(mission_id="historical-mission", artifact_type="DELIVERY_PACKAGE", title="Low-carbon materials review", status="APPROVED", content_summary="Approved evidence-backed material comparison.", evidence_count=3),
             ])
             session.commit()
         finally:
@@ -76,6 +80,13 @@ class WorkspaceContextTests(unittest.TestCase):
         self.assertIn("relevant", payload["memory"]["selected"][0]["selection_reason"].lower())
         self.assertNotIn("prompt", payload["memory"]["selected"][0])
         self.assertNotIn("cot", payload["memory"]["selected"][0])
+
+    def test_context_selects_only_approved_workspace_artifact_summaries(self):
+        payload = self.context.build(self.mission, actor=self.actor_a)
+        self.assertEqual(len(payload["artifacts"]), 1)
+        self.assertEqual(payload["artifacts"][0]["title"], "Low-carbon materials review")
+        self.assertNotIn("file_path", payload["artifacts"][0])
+        self.assertIn("approved", payload["artifacts"][0]["selection_reason"].lower())
 
     def test_context_rejects_cross_workspace_actor(self):
         with self.assertRaises(PermissionError):

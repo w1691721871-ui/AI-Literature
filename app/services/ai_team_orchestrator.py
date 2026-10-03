@@ -56,6 +56,7 @@ class AITeamOrchestrator:
             "context_basis": {
                 "authorized_memory_records": len(selected),
                 "traceable_evidence_references": len(memory.get("evidence_refs") or []),
+                "approved_artifact_summaries": len(memory.get("artifact_summaries") or []),
                 "project_context_included": bool(memory.get("project_included")),
             },
             "boundary": "The AI Worker selects only existing, permitted Skills. Deferred work never bypasses Evidence or human approval requirements.",

@@ -12,7 +12,12 @@ class ContextSelectionService:
     MAX_MEMORIES = 6
     MAX_EVIDENCE_REFS = 12
 
-    def select(self, mission: Mapping[str, object], memories: list[Mapping[str, object]]) -> dict[str, object]:
+    def select(
+        self,
+        mission: Mapping[str, object],
+        memories: list[Mapping[str, object]],
+        artifacts: list[Mapping[str, object]] | None = None,
+    ) -> dict[str, object]:
         goal = str(mission.get("goal") or mission.get("title") or "")
         goal_terms = self._terms(goal)
         ranked = []
@@ -33,10 +38,25 @@ class ContextSelectionService:
             for _, row, reason in ranked[: self.MAX_MEMORIES]
         ]
         refs = mission.get("evidence_refs") if isinstance(mission.get("evidence_refs"), list) else []
+        ranked_artifacts = []
+        for artifact in artifacts or []:
+            score, reason = self._score_artifact(artifact, goal_terms)
+            if score > 0:
+                ranked_artifacts.append((score, artifact, reason))
+        ranked_artifacts.sort(key=lambda item: (-item[0], str(item[1].get("updated_at") or "")), reverse=False)
         return {
             "selected": selected,
             "selected_ids": [str(item["id"]) for item in selected if item.get("id")],
             "evidence_refs": refs[: self.MAX_EVIDENCE_REFS],
+            "artifact_summaries": [
+                {
+                    "id": artifact.get("id"), "title": artifact.get("title"),
+                    "artifact_type": artifact.get("artifact_type"), "status": artifact.get("status"),
+                    "summary": artifact.get("summary"), "evidence_count": artifact.get("evidence_count", 0),
+                    "selection_reason": reason,
+                }
+                for _, artifact, reason in ranked_artifacts[:3]
+            ],
             "project_included": bool(mission.get("solution_project_id")),
             "selection_summary": "Context includes only relevant, authorized Workspace summaries and traceable Evidence references.",
         }
@@ -67,3 +87,13 @@ class ContextSelectionService:
         if lifecycle == "VERIFIED":
             score += 15
         return score, reason
+
+    def _score_artifact(self, artifact: Mapping[str, object], goal_terms: set[str]) -> tuple[int, str]:
+        if str(artifact.get("status") or "").upper() != "APPROVED":
+            return 0, "Unapproved artifacts are excluded."
+        score = 45 + min(int(artifact.get("evidence_count") or 0) * 3, 25)
+        text_terms = self._terms(f"{artifact.get('title') or ''} {artifact.get('summary') or ''}")
+        overlap = len(goal_terms & text_terms)
+        if overlap:
+            return score + min(overlap * 12, 36), "Its approved delivery summary is relevant to the current Mission goal."
+        return score, "This is an approved, evidence-linked Workspace delivery."
