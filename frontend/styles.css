@@ -613,6 +613,8 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .workspace-context-panel { gap: 10px; margin-bottom: 14px; }
 .workspace-context-panel article { min-height: 88px; padding: 16px; border-radius: 16px; }
 .mission-context-surface { display: grid; gap: 10px; padding: 18px; border: 1px solid rgba(227,233,255,.09); border-radius: 18px; background: linear-gradient(145deg, rgba(103,132,255,.10), rgba(255,255,255,.025)); box-shadow: 0 18px 44px rgba(0,0,0,.16); }
+.mission-control-surface { display: grid; gap: 14px; padding: 18px; border: 1px solid rgba(227,233,255,.11); border-radius: 18px; background: linear-gradient(145deg, rgba(113,103,255,.12), rgba(255,255,255,.024)); box-shadow: 0 18px 44px rgba(0,0,0,.16); }
+.mission-control-surface header, .mission-control-surface footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }.mission-control-surface h3, .mission-control-surface p { margin: 0; }.mission-control-surface h3 { color: var(--text-primary); font-size: 17px; }.mission-control-surface p, .mission-control-surface header > small, .mission-control-surface footer > small { color: var(--text-secondary); font-size: 12px; line-height: 1.55; }.mission-control-surface header > small { max-width: 180px; text-align: right; }.mission-control-surface footer { align-items: center; }
 .mission-context-surface h3 { margin: 0; color: var(--text-primary); font-size: 16px; }
 .mission-context-surface article { display: grid; gap: 5px; padding-top: 12px; border-top: 1px solid rgba(255,255,255,.07); }
 .mission-context-surface b { color: var(--text-primary); font-size: 13px; }

@@ -1161,6 +1161,11 @@ createApp({
           await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/activity`),
         );
       } catch (_) { selectedAIMission.value.activity_timeline = null; }
+      try {
+        selectedAIMission.value.control = await readResponse(
+          await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/control`),
+        );
+      } catch (_) { selectedAIMission.value.control = null; }
       try { selectedAIMission.value.evaluation = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/evaluations/${missionId}`)); } catch (_) { selectedAIMission.value.evaluation = null; }
       try { selectedAIMission.value.agent_traces = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent-traces/${missionId}`)); } catch (_) { selectedAIMission.value.agent_traces = []; }
       try { selectedAIMission.value.planner_plan = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/plan`)); } catch (_) { selectedAIMission.value.planner_plan = null; }
@@ -1422,6 +1427,20 @@ createApp({
         await loadAIMissions();
       } catch (error) { aiMissionError.value = error.message || "AI Worker 当前无法执行该受控步骤。"; }
       finally { aiMissionLoading.value = false; }
+    }
+
+    async function updateMissionControl(action) {
+      const missionId = selectedAIMission.value?.id;
+      if (!missionId || !['pause', 'resume', 'recover'].includes(action)) return;
+      aiMissionLoading.value = true;
+      aiMissionError.value = "";
+      try {
+        await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/${action}`, { method: "POST" }));
+        await loadAIMissionDetail(missionId);
+        await loadAIMissions();
+      } catch (error) {
+        aiMissionError.value = error.message || "This mission control action is not available right now.";
+      } finally { aiMissionLoading.value = false; }
     }
 
     async function reviewAIMission(status) {
@@ -3784,6 +3803,7 @@ createApp({
       reviewAdaptiveMission,
       runAIMission,
       executeAIWorkerRuntime,
+      updateMissionControl,
       reviewAIMission,
       reviseAIMission,
       generateAIMissionDelivery,
@@ -4850,6 +4870,7 @@ createApp({
       </section>
       </div>
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.source_materials?.length" class="mission-source-material"><p class="section-kicker">SOURCE MATERIAL</p><h3>Customer-provided input files</h3><article v-for="item in selectedAIMission.source_materials" :key="item.file_id"><b>{{ item.filename }}</b><small>{{ item.file_type }} · {{ item.classification }} · 不作为 RAG Evidence</small></article></section>
+      <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.control" class="mission-control-surface" aria-label="Mission control"><header><div><p class="section-kicker">MISSION CONTROL</p><h3>{{ selectedAIMission.control.status === 'PAUSED' ? 'Mission is waiting' : selectedAIMission.control.status === 'FAILED' ? 'Mission needs attention' : 'Mission is active' }}</h3><p>{{ selectedAIMission.control.status === 'PAUSED' ? 'Work is safely paused. An authorized Workspace member can continue when ready.' : selectedAIMission.control.status === 'FAILED' ? 'A bounded recovery can prepare this mission for human review.' : 'You can pause this mission at any time without bypassing approval or review.' }}</p></div><small>{{ selectedAIMission.control.next_action }}</small></header><footer><button v-if="selectedAIMission.control.status !== 'PAUSED' && !['COMPLETED','REJECTED','FAILED'].includes(selectedAIMission.control.status)" class="outline-button" type="button" :disabled="aiMissionLoading" @click="updateMissionControl('pause')">Pause mission</button><button v-if="selectedAIMission.control.status === 'PAUSED'" class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="updateMissionControl('resume')">Continue mission</button><button v-if="selectedAIMission.control.status === 'FAILED' && selectedAIMission.control.recovery_count < selectedAIMission.control.max_recoveries" class="primary-card-action" type="button" :disabled="aiMissionLoading" @click="updateMissionControl('recover')">Prepare recovery review</button><small v-if="selectedAIMission.control.status === 'FAILED'">{{ selectedAIMission.control.recovery_count }} of {{ selectedAIMission.control.max_recoveries }} recovery reviews used</small></footer></section>
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.workspace_context" class="mission-context-surface" aria-label="Authorized Mission Context"><p class="section-kicker">AUTHORIZED CONTEXT</p><h3>What AI Worker can use for this Mission</h3><article><b>{{ selectedAIMission.workspace_context.workspace.name }}</b><small>{{ selectedAIMission.workspace_context.workspace.member_count }} Workspace members · {{ selectedAIMission.workspace_context.knowledge.traceable_evidence_refs.length }} traceable Evidence reference(s)</small><p>Approved knowledge assets: {{ selectedAIMission.workspace_context.knowledge.approved_assets }} · Approved decisions: {{ selectedAIMission.workspace_context.knowledge.approved_decisions }} · Research Memory is limited to this authorized Workspace.</p></article></section>
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.activity_timeline" class="ai-activity-surface" aria-label="AI Activity Timeline"><header><div><p class="section-kicker">AI ACTIVITY</p><h3>{{ selectedAIMission.activity_timeline.current_phase }}</h3><p>{{ selectedAIMission.activity_timeline.current_summary }}</p></div><small>{{ selectedAIMission.activity_timeline.next_action }}</small></header><ol><li v-for="item in selectedAIMission.activity_timeline.activities" :key="item.created_at + item.summary" :class="item.status.toLowerCase()"><span></span><div><b>{{ item.phase }}</b><p>{{ item.summary }}</p></div><small v-if="item.evidence_count">{{ item.evidence_count }} Evidence reference{{ item.evidence_count === 1 ? '' : 's' }}</small></li></ol></section>
       <section v-if="activeWorkspaceView === 'mission-center' && selectedAIMission?.worker_runtime?.research_insight" class="research-insight-panel" aria-label="Research Insight">
