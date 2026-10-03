@@ -27,6 +27,7 @@ from app.services.computer_feedback_service import ComputerFeedbackService
 from app.services.computer_observation_service import ComputerObservationService
 from app.services.computer_recovery_service import ComputerRecoveryService
 from app.services.computer_verification_service import ComputerVerificationService
+from app.services.computer_task_understanding_service import ComputerTaskUnderstandingService
 from app.services.database import SessionLocal, initialize_database
 from app.services.diff_generator_service import DiffGeneratorService
 from app.services.workspace_service import WorkspaceManager
@@ -45,7 +46,7 @@ class ControlledComputerMissionService:
                  verifier: VerificationAgent | None = None, observer: ComputerObservationService | None = None,
                  action_planner: ComputerActionPlanner | None = None, verification: ComputerVerificationService | None = None,
                  environment: ComputerEnvironmentService | None = None, feedback: ComputerFeedbackService | None = None,
-                 recovery: ComputerRecoveryService | None = None) -> None:
+                 recovery: ComputerRecoveryService | None = None, understanding: ComputerTaskUnderstandingService | None = None) -> None:
         if initialize:
             initialize_database()
         self._sessions = session_factory
@@ -60,6 +61,7 @@ class ControlledComputerMissionService:
         self.environment = environment or ComputerEnvironmentService(session_factory)
         self.feedback = feedback or ComputerFeedbackService(self.observer)
         self.recovery = recovery or ComputerRecoveryService()
+        self.understanding = understanding or ComputerTaskUnderstandingService()
 
     def create(self, payload: dict[str, object]) -> dict[str, object]:
         task = str(payload["task"]).strip()
@@ -99,6 +101,7 @@ class ControlledComputerMissionService:
             self._log(row, "Environment Analyzed", "COMPLETED", "已生成用户可理解的环境状态与验证目标；真实视觉仍为 demo_only。")
             controlled_action = self.action_planner.plan_next_action(observation, row.task)
             plan = dict(self.agent.plan(row.task, profile))
+            plan["task_understanding"] = self.understanding.understand(row.task)
             plan["computer_observation"] = observation
             plan["environment_understanding"] = environment
             plan["controlled_action"] = controlled_action
