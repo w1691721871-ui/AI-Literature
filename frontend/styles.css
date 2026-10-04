@@ -1661,6 +1661,118 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .computer-studio .computer-control-timeline { grid-template-columns: repeat(5, minmax(130px, 1fr)); }
 }
 
+/* Premium enterprise hierarchy: one clear user path, not a collection of
+   engineering panels. These rules only change visibility and presentation of
+   existing Workspace records. */
+.home-workspace .workspace-home-hero h1 { font-size: 0; }
+.home-workspace .workspace-home-hero h1::after {
+  display: block;
+  color: var(--text-primary);
+  content: "AI Research Employee";
+  font-size: clamp(38px, 5vw, 62px);
+  line-height: .98;
+  letter-spacing: -.055em;
+}
+.home-workspace .workspace-home-hero > p:not(.section-kicker):not(.quiet-note):not(.error-alert) { color: transparent; font-size: 0; }
+.home-workspace .workspace-home-hero > p:not(.section-kicker):not(.quiet-note):not(.error-alert)::after {
+  color: var(--text-secondary);
+  content: "From research goal to trusted delivery.";
+  font-size: 15px;
+  line-height: 1.55;
+}
+
+/* The copy now lives in the document rather than being synthesized by CSS.
+   This keeps the headline accessible while preserving the premium hierarchy. */
+.home-workspace .workspace-home-hero h1 {
+  color: var(--text-primary);
+  font-size: clamp(38px, 5vw, 62px);
+  line-height: .98;
+  letter-spacing: -.055em;
+}
+.home-workspace .workspace-home-hero h1::after { content: none; }
+.home-workspace .workspace-home-hero > p:not(.section-kicker):not(.quiet-note):not(.error-alert) {
+  color: var(--text-secondary);
+  font-size: 15px;
+  line-height: 1.55;
+}
+.home-workspace .workspace-home-hero > p:not(.section-kicker):not(.quiet-note):not(.error-alert)::after { content: none; }
+.home-workspace .workspace-home-hero > small::after {
+  display: block;
+  margin-top: 10px;
+  color: var(--accent-cyan);
+  content: "MISSION  →  EVIDENCE  →  REVIEW  →  ARTIFACT";
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .13em;
+}
+.home-workspace .home-focus-grid { margin-top: 16px; }
+.home-workspace .home-focus-card { min-height: 124px; }
+.home-workspace .home-focus-card h3 { max-width: 250px; font-size: 15px; letter-spacing: -.02em; }
+.home-workspace .home-focus-card p { max-width: 280px; }
+
+/* Mission detail focuses on the goal, AI progress, evidence, review and
+   delivery. The creation form remains available only when no Mission is open. */
+.mission-center:has(.mission-stream-surface > header) .mission-create-surface,
+.mission-center:has(.mission-stream-surface > header) .mission-intelligence-surface { display: none; }
+.mission-center:has(.mission-stream-surface > header) .mission-center-layout { grid-template-columns: minmax(0, 1fr); }
+.mission-center .mission-stream-surface > header > div > small { color: transparent; font-size: 0; }
+.mission-center .mission-stream-surface > header > div > small::after {
+  color: var(--text-secondary);
+  content: "AI Employee progress is shown below.";
+  font-size: 11px;
+}
+.mission-center .mission-stream-surface .mission-timeline li small { display: none; }
+.mission-center .mission-stream-surface .mission-requirements > span { color: var(--accent-cyan); }
+.mission-center .mission-stream-surface .mission-review-panel > span { color: var(--warning); }
+.mission-source-material,
+.mission-control-surface,
+.mission-context-surface,
+.context-retrieval-surface,
+.ai-team-plan-surface,
+.research-insight-panel,
+.mission-intelligence-panel,
+.mission-collaboration-panel,
+.mission-center .mission-evaluation-card,
+.mission-center .computer-mission-center,
+.mission-center .computer-execution-runtime { display: none !important; }
+.ai-activity-surface,
+.next-best-action-panel { max-width: 1200px; margin: 20px auto; }
+.ai-activity-surface { padding: 20px; border-radius: var(--product-radius); background: var(--dark-card); }
+.approval-queue article small { color: transparent; font-size: 0; }
+.approval-queue article small::after {
+  color: var(--text-muted);
+  content: "Workspace review item · priority is set by the request";
+  font-size: 10px;
+}
+
+/* Computer is described as an employee workspace. Raw events, tool data,
+   path information and technical status remain out of the normal product view. */
+.computer-studio .computer-operator-heading > div > .section-kicker { font-size: 0; }
+.computer-studio .computer-operator-heading > div > .section-kicker::after {
+  color: var(--accent-cyan);
+  content: "COMPUTER EMPLOYEE WORKSPACE";
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.computer-studio .operator-status { text-transform: capitalize; }
+.computer-studio .operator-timeline-surface > header > small,
+.computer-studio .operator-plan-list li small { display: none; }
+.computer-studio .operator-plan-list li p { color: var(--text-secondary); font-size: 11px; }
+.computer-studio .computer-capability-card { margin-bottom: 16px; }
+.computer-studio .computer-capability-card h3 { font-size: 19px; }
+
+/* Keep all seven core destinations reachable on a small screen. The list can
+   scroll horizontally rather than silently hiding Workspace or Delivery. */
+@media (max-width: 760px) {
+  .top-navigation-links.product-navigation { max-width: calc(100vw - 78px); overflow-x: auto; }
+  .top-navigation-links.product-navigation button { display: inline-flex !important; flex: 0 0 auto; }
+  .home-workspace .workspace-home-hero h1::after { font-size: clamp(36px, 12vw, 48px); }
+  .home-workspace .workspace-home-hero > small::after { line-height: 1.7; }
+  .mission-center .mission-stage-strip { grid-template-columns: repeat(4, minmax(122px, 1fr)); overflow-x: auto; }
+  .mission-center .mission-header-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+}
+
 /* AI Research Employee collaboration hierarchy.  These rules only change the
    presentation of persisted mission summaries; they intentionally do not
    derive activity, evidence, or approval states in the client. */
@@ -1707,6 +1819,103 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .ai-activity-surface li > div { grid-template-columns: 1fr; }
   .ai-team-plan-surface .team-plan-item,
   .research-insight-panel .research-insight-card { min-height: 0; }
+}
+
+/* Final UI excellence pass: visual emphasis follows the enterprise journey —
+   understand, execute, decide, then deliver.  All numbers remain API-backed. */
+.product-capability-grid > button,
+.home-focus-card,
+.connector-center[aria-label="AI Worker Workspace"] > article,
+.mission-stream-surface,
+.computer-studio .computer-capability-card,
+.solution-showcase-story > article {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 18px 42px rgba(0,0,0,.18);
+  transition: transform 220ms ease, border-color 220ms ease, box-shadow 220ms ease, background 220ms ease;
+}
+.product-capability-grid > button:hover,
+.home-focus-card:hover,
+.connector-center[aria-label="AI Worker Workspace"] > article:hover,
+.solution-showcase-story > article:hover {
+  transform: translateY(-3px);
+  border-color: rgba(139, 187, 255, .28);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.09), 0 24px 54px rgba(0,0,0,.26), 0 0 28px rgba(92,141,255,.08);
+}
+.product-capability-grid > button { min-height: 144px; text-align: left; }
+.product-capability-grid > button b { font-size: 18px; letter-spacing: -.025em; }
+.product-capability-grid > button small { max-width: 210px; font-size: 12px; line-height: 1.5; }
+
+/* An organization dashboard should orient people around work and assets, not
+   infrastructure. Existing empty-state components remain visible when there
+   is no persisted Workspace data. */
+.connector-center[aria-label="AI Worker Workspace"] {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(127, 171, 255, .17);
+  background: linear-gradient(145deg, rgba(93,132,221,.1), rgba(255,255,255,.022) 52%, rgba(73,193,222,.04));
+}
+.connector-center[aria-label="AI Worker Workspace"]::before {
+  content: "AI RESEARCH ORGANIZATION";
+  display: block;
+  margin-bottom: 13px;
+  color: var(--accent-cyan);
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .13em;
+}
+.connector-center[aria-label="AI Worker Workspace"] > article {
+  min-height: 112px;
+  border-color: rgba(255,255,255,.075);
+  background: linear-gradient(150deg, rgba(255,255,255,.055), rgba(255,255,255,.018));
+}
+.connector-center[aria-label="AI Worker Workspace"] > article b { font-size: clamp(24px, 3vw, 32px); letter-spacing: -.045em; }
+
+/* Mission Room keeps ownership, progress and the irreversible human decision
+   visible without exposing execution internals. */
+.mission-center .mission-stream-surface {
+  border-color: rgba(123, 174, 255, .2);
+  background: linear-gradient(150deg, rgba(98,135,238,.09), rgba(255,255,255,.025) 44%, rgba(48,203,197,.035));
+}
+.mission-center .mission-stage-strip { gap: 10px; }
+.mission-center .mission-stage-strip > * { min-height: 96px; }
+.mission-center .mission-review-panel {
+  position: relative;
+  overflow: hidden;
+  border-color: rgba(246, 190, 93, .28);
+  background: linear-gradient(145deg, rgba(246,190,93,.105), rgba(255,255,255,.02));
+}
+.mission-center .mission-review-panel::before {
+  content: "HUMAN DECISION";
+  display: block;
+  margin-bottom: 7px;
+  color: #f3c978;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .12em;
+}
+.mission-center .mission-review-panel > span { display: none; }
+
+/* Computer is an assistant-facing progress surface. Safety is present without
+   presenting raw actions, paths, or system event identifiers. */
+.computer-studio .computer-capability-card {
+  border-color: rgba(91, 208, 196, .18);
+  background: linear-gradient(145deg, rgba(54,178,190,.09), rgba(255,255,255,.02));
+}
+.computer-studio .computer-capability-card ul { gap: 10px; }
+.computer-studio .computer-capability-card li { padding: 10px 0; border-color: rgba(255,255,255,.07); }
+.computer-studio .computer-capability-card li b { color: var(--text-primary); }
+.computer-studio .computer-capability-card li:nth-child(1) b::before { content: "✓ "; color: #72d8cb; }
+.computer-studio .computer-capability-card li:nth-child(2) b::before { content: "✓ "; color: #a8c7ff; }
+.computer-studio .computer-capability-card li:nth-child(3) b::before { content: "✓ "; color: #f2c674; }
+
+/* Presentation mode is deliberately sparse: a decision-maker sees the
+   customer problem, the solution, the workflow, then the result. */
+.presentation-mode .solution-showcase { max-width: 1180px; margin-inline: auto; }
+.presentation-mode .solution-showcase-demos { display: none; }
+.presentation-mode .solution-showcase-story > article { min-height: 178px; }
+.presentation-mode .solution-showcase-flow { margin-top: 26px; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { scroll-behavior: auto !important; animation-duration: .01ms !important; transition-duration: .01ms !important; }
 }
 
 /* Workspace collaboration is a projection of persisted member, Mission and
