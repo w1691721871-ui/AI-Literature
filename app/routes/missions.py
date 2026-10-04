@@ -9,6 +9,7 @@ from app.services.permission_middleware import PermissionMiddleware
 from app.services.audit_service import AuditService
 from app.services.mission_lifecycle_service import MissionLifecycleError, MissionLifecycleService
 from app.services.mission_activity_service import MissionActivityService
+from app.services.ai_worker_runtime import AIWorkerRuntime
 
 
 router = APIRouter(prefix="/api", tags=["ai-missions"])
@@ -17,6 +18,7 @@ permissions = PermissionMiddleware()
 audit = AuditService()
 lifecycle = MissionLifecycleService()
 activity = MissionActivityService()
+ai_worker_runtime = AIWorkerRuntime()
 
 
 @router.post("/missions", status_code=status.HTTP_201_CREATED)
@@ -30,10 +32,10 @@ def create_mission(payload: AIMissionCreate, context: IdentityContext = Depends(
 @router.post("/missions/{mission_id}/run")
 def run_mission(mission_id: str, context: IdentityContext = Depends(permissions.current)) -> dict[str, object]:
     permissions.mission(context, mission_id, "MISSION_EXECUTE")
-    audit.record_event(context.workspace_id,context.user_id,"MISSION_EXECUTED","Mission",mission_id,mission_id,"Mission execution started.")
+    audit.record_event(context.workspace_id,context.user_id,"MISSION_EXECUTED","Mission",mission_id,mission_id,"Unified AI Worker execution started.")
     try:
-        result=service.run(mission_id)
-        audit.record_event(context.workspace_id,context.user_id,"MISSION_EXECUTED","Mission",mission_id,mission_id,"Mission execution reached its controlled review boundary.")
+        result=ai_worker_runtime.execute(mission_id, actor=context)
+        audit.record_event(context.workspace_id,context.user_id,"MISSION_EXECUTED","Mission",mission_id,mission_id,"Unified AI Worker reached its bounded Skill result.",result.get("status","SUCCESS"))
         return result
     except (AIMissionNotFoundError, ValueError) as error:
         raise HTTPException(status_code=400, detail=str(error)) from error

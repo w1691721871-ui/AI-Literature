@@ -22,6 +22,7 @@ class RuntimeExecute(BaseModel):
 
 @router.post("/missions/{mission_id}/execute")
 def execute(mission_id:str,payload:RuntimeExecute,context:IdentityContext=Depends(permissions.current)):
+    permissions.admin_console(context)
     permissions.mission(context,mission_id,"MISSION_EXECUTE")
     try:
         # Compatibility fields remain in the schema but are never treated as
@@ -34,7 +35,7 @@ def execute(mission_id:str,payload:RuntimeExecute,context:IdentityContext=Depend
 
 @router.get("/missions/{mission_id}/observations")
 def observations(mission_id:str,context:IdentityContext=Depends(permissions.current)):
-    permissions.mission(context,mission_id,"MISSION_VIEW"); return loop.observations(mission_id)
+    permissions.admin_console(context); permissions.mission(context,mission_id,"MISSION_VIEW"); return loop.observations(mission_id)
 
 @router.get("/dashboard")
 def dashboard(context:IdentityContext=Depends(permissions.current)):
