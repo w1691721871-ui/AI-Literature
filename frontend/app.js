@@ -481,6 +481,8 @@ createApp({
     const scenarioLoading = ref(false);
     const workspaceExperience = ref(null);
     const workspaceExperienceError = ref("");
+    const organizationIntelligence = ref(null);
+    const organizationIntelligenceError = ref("");
     const knowledgeMemory = ref({ assets: [], decisions: [], dashboard: null });
     const productShowcase = ref({ overview: null, workflow: null, capabilities: null, releases: null, business: null });
     const workflowDiagnostics = ref(null);
@@ -867,7 +869,7 @@ createApp({
       if (view === "dashboard" || view === "tasks" || view === "agents") {
         await loadResearchOsData();
       }
-      if (view === "dashboard") await Promise.all([loadWorkspaceExperience(), loadTeamDashboard()]);
+      if (view === "dashboard") await Promise.all([loadWorkspaceExperience(), loadTeamDashboard(), loadOrganizationIntelligence()]);
       if (view === "dashboard" || view === "artifact-center" || view === "demo-center") await loadProductExperience();
       if (view === "workflow-studio") await loadResearchWorkflows();
       if (view === "dashboard") await loadResearchWorkspaces();
@@ -1302,6 +1304,16 @@ createApp({
       } catch (error) {
         workspaceExperience.value = null;
         workspaceExperienceError.value = error.message || "Workspace temporarily unavailable.";
+      }
+    }
+    async function loadOrganizationIntelligence() {
+      if (!identityProfile.value?.workspace?.id) return;
+      try {
+        organizationIntelligenceError.value = "";
+        organizationIntelligence.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/workspace/intelligence`));
+      } catch (error) {
+        organizationIntelligence.value = null;
+        organizationIntelligenceError.value = error.message || "Organizational learning details are temporarily unavailable.";
       }
     }
     async function loadTeamDashboard() {
@@ -3213,6 +3225,7 @@ createApp({
       if (!identityProfile.value?.workspace?.id) return;
       const workspaceLoaders = [
         ["workspace overview", loadWorkspaceExperience],
+        ["organizational learning", loadOrganizationIntelligence],
         ["team collaboration", loadTeamDashboard],
         ["missions", loadAIMissions],
         ["knowledge", loadLibraryPapers],
@@ -3728,6 +3741,8 @@ createApp({
       scenarioLoading,
       workspaceExperience,
       workspaceExperienceError,
+      organizationIntelligence,
+      organizationIntelligenceError,
       knowledgeMemory,
       productShowcase,
       workflowDiagnostics,
@@ -3873,6 +3888,7 @@ createApp({
       loadScenarios,
       runScenario,
       loadWorkspaceExperience,
+      loadOrganizationIntelligence,
       loadTeamDashboard,
       loadMissionCollaboration,
       loadUnifiedWorkspaceContext,
@@ -4142,6 +4158,7 @@ createApp({
           <div class="home-hero workspace-home-hero"><p class="section-kicker">RESEARCHOS · EVIDENCE-DRIVEN AI WORKSPACE</p><h1>Your AI Worker<br />is ready to work.</h1><p>Transform research goals into evidence-backed decisions and enterprise deliverables.</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="Describe your research or business goal..."></textarea><button type="button" class="primary-card-action" :disabled="entryCopilotLoading" @click="startCopilotMission">{{ entryCopilotLoading ? 'Planning mission…' : 'Start Mission' }}</button></div><div class="enterprise-upload-strip"><button class="outline-button" type="button" @click="openWorkspaceView('demo-center')">Try Demo</button><label class="outline-button"><input type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt" @change="uploadEnterpriseFile" hidden />{{ enterpriseFileLoading ? 'Analyzing material…' : 'Add material' }}</label></div><small>AI drafts remain reviewable. Customer material never becomes Knowledge Evidence automatically.</small><p v-if="entryCopilotResult" class="quiet-note">{{ entryCopilotResult.summary }} · Mission 已创建。</p><p v-if="enterpriseFileError" class="error-alert"><span>!</span>{{ enterpriseFileError }}</p></div>
           <section class="solution-narrative" aria-label="How ResearchOS creates value"><span>AI RESEARCH EMPLOYEE</span><h2>From a business question to a trusted research delivery.</h2><p>Describe the outcome. Your AI Worker prepares a governed workflow, builds an Evidence foundation, and produces an Artifact that stays reviewable until release.</p><ol><li><b>01</b><div><strong>Set the goal</strong><small>Start with a customer question or research outcome.</small></div></li><li><b>02</b><div><strong>Verify Evidence</strong><small>Human review keeps sources separate from conclusions.</small></div></li><li><b>03</b><div><strong>Deliver with confidence</strong><small>Artifacts remain traceable and approval-aware.</small></div></li></ol></section>
           <div class="home-quick-grid product-capability-grid" aria-label="AI Worker capabilities"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><span class="capability-mark">01</span><b>Research Intelligence</b><small>Discover insights from trusted evidence.</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Organize approved research materials and prepare a reviewable summary.'; computerPlanPreview = null"><span class="capability-mark">02</span><b>Controlled Computer</b><small>Execute approved digital workflows safely.</small></button><button type="button" @click="openWorkspaceView('artifact-center')"><span class="capability-mark">03</span><b>Enterprise Delivery</b><small>Generate reviewed business artifacts.</small></button></div>
+          <section class="organization-learning-surface" aria-label="AI Employee Memory and Organizational Learning"><header><div><span>AI EMPLOYEE MEMORY &amp; ORGANIZATIONAL LEARNING</span><h2>{{ organizationIntelligence?.long_term_value?.title || 'Organizational learning' }}</h2><p>{{ organizationIntelligence?.long_term_value?.summary || 'Loading only the persisted Mission, Evidence, Review, Artifact, and Research Memory records available in this Workspace.' }}</p></div><button class="text-button" type="button" @click="openWorkspaceView('ai-workspace')">Open Workspace context →</button></header><div v-if="organizationIntelligence?.data_state === 'READY'" class="organization-learning-grid"><article v-for="item in Object.values(organizationIntelligence.knowledge_assets)" :key="item.label"><b>{{ item.count }}</b><strong>{{ item.label }}</strong><small>{{ item.summary }}</small></article></div><div v-else class="organization-learning-empty"><b>No organizational learning data yet</b><p>Complete a reviewable Mission to build traceable Evidence, delivery history, and reusable Research Memory for this Workspace.</p></div><p v-if="organizationIntelligenceError" class="quiet-note">{{ organizationIntelligenceError }}</p><small class="organization-learning-boundary">{{ organizationIntelligence?.boundary || 'No data is inferred from other Workspaces, prompts, or internal reasoning.' }}</small></section>
           <section class="home-focus-grid home-missions-panel" :class="'connection-' + connectionState.toLowerCase()" aria-label="Active missions">
             <article class="home-focus-card">
               <header><span class="focus-dot mission-dot"></span><p class="section-kicker">ACTIVE MISSIONS</p></header>
