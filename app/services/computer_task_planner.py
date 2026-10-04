@@ -29,6 +29,7 @@ class ComputerTaskPlanner:
         skill_limit = self.MAX_STEPS - (1 if requires_evidence_validation else 0)
         skills = matched_skills[:skill_limit]
         evidence_count = len((context.get("knowledge") or {}).get("traceable_evidence_refs") or []) if isinstance(context.get("knowledge"), Mapping) else 0
+        computer_memory = context.get("computer_memory") if isinstance(context.get("computer_memory"), list) else []
         steps = [
             {"order": index, "skill": skill["name"], "skill_id": skill["id"], "purpose": self._purpose(skill["id"]),
              "inputs": skill["inputs"], "outputs": skill["outputs"], "permission": skill["permission"],
@@ -37,7 +38,9 @@ class ComputerTaskPlanner:
         ]
         if requires_evidence_validation:
             steps.append({"order": len(steps) + 1, "skill": "Evidence Validation", "skill_id": "evidence_validation", "purpose": "Validate externally discovered candidates before any knowledge reuse.", "inputs": ["Candidate source references"], "outputs": ["Traceable Evidence or an evidence gap"], "permission": "KNOWLEDGE_ACCESS", "risk_level": "LOW", "approval_required": False, "status": "PLANNED"})
-        return {"mission_id": mission.get("id"), "steps": steps[: self.MAX_STEPS], "context_basis": {"traceable_evidence": evidence_count}, "boundary": "Computer observations and external candidates never enter Research Memory without the existing Evidence validation and human review boundaries."}
+        for step in steps:
+            step["verification"] = self._verification(str(step["skill_id"]))
+        return {"mission_id": mission.get("id"), "steps": steps[: self.MAX_STEPS], "context_basis": {"traceable_evidence": evidence_count, "authorized_computer_memory": len(computer_memory)}, "boundary": "Computer observations and external candidates never enter Research Memory without the existing Evidence validation and human review boundaries."}
 
     @staticmethod
     def _purpose(skill_id: str) -> str:
@@ -46,4 +49,14 @@ class ComputerTaskPlanner:
             "document_preparation": "Prepare an approval-gated document draft from authorized material.",
             "data_operation": "Prepare a reviewable result from an approved read-only source.",
             "report_preparation": "Prepare an Evidence-linked delivery draft for human review.",
+        }[skill_id]
+
+    @staticmethod
+    def _verification(skill_id: str) -> str:
+        return {
+            "browser_research": "Confirm candidate sources are present; validate them through the Evidence workflow.",
+            "document_preparation": "Confirm the authorized document structure is available before review.",
+            "data_operation": "Confirm an authorized data summary exists; do not infer an analytical conclusion.",
+            "report_preparation": "Confirm a versioned Artifact draft exists and remains pending human review.",
+            "evidence_validation": "Confirm each candidate is approved or explicitly rejected by the existing Evidence workflow.",
         }[skill_id]

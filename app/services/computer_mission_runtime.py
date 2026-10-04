@@ -20,7 +20,13 @@ class ComputerMissionRuntime:
         ("VERIFICATION", "Verification", "The result is checked through the existing allow-listed verification."),
     )
 
-    def summarize(self, computer_missions: Sequence[Mapping[str, object]] | object) -> dict[str, object] | None:
+    def summarize(
+        self,
+        computer_missions: Sequence[Mapping[str, object]] | object,
+        *,
+        task_plan: Mapping[str, object] | None = None,
+        artifacts: Sequence[Mapping[str, object]] | object = (),
+    ) -> dict[str, object] | None:
         if not isinstance(computer_missions, Sequence) or isinstance(computer_missions, (str, bytes)) or not computer_missions:
             return None
         current = computer_missions[-1]
@@ -35,6 +41,10 @@ class ComputerMissionRuntime:
         approval = str(current.get("approval_status") or "PENDING").upper()
         verify = verification.get("controlled_verification") if isinstance(verification.get("controlled_verification"), Mapping) else {}
         verification_status = str(verify.get("status") or verification.get("status") or "PENDING").upper()
+        plan = task_plan if isinstance(task_plan, Mapping) else {}
+        planned_steps = plan.get("steps") if isinstance(plan.get("steps"), list) else []
+        artifact_rows = artifacts if isinstance(artifacts, Sequence) and not isinstance(artifacts, (str, bytes)) else []
+        linked_artifacts = [item for item in artifact_rows if isinstance(item, Mapping)]
         return {
             "mission_id": current.get("id"),
             "task": str(current.get("task") or ""),
@@ -51,8 +61,10 @@ class ComputerMissionRuntime:
                 "summary": str(verify.get("summary") or "Verification has not completed."),
             },
             "recovery": self._recovery(recovery),
+            "task_decomposition": self._task_decomposition(planned_steps),
             "stages": self._stages(status, approval, verification_status),
-            "asset_status": "No delivery asset was created by this Computer Mission." if not current.get("artifact_id") else "A linked delivery asset is available.",
+            "artifact": self._artifact(linked_artifacts),
+            "asset_status": self._asset_status(linked_artifacts),
             "boundary": "This is a controlled Computer Skill: modifying actions require approval; verification and existing rollback safeguards remain mandatory.",
         }
 
@@ -103,3 +115,40 @@ class ComputerMissionRuntime:
         if not recovery:
             return None
         return {"status": str(recovery.get("action") or "REQUEST_REVIEW"), "summary": str(recovery.get("summary") or "A controlled recovery decision requires review.")}
+
+    @staticmethod
+    def _task_decomposition(steps: Sequence[object]) -> list[dict[str, object]]:
+        """Expose an already-planned finite task list, never a hidden executor plan."""
+        result = []
+        for item in steps[:4]:
+            if not isinstance(item, Mapping):
+                continue
+            result.append({
+                "order": item.get("order"), "skill": str(item.get("skill") or "Computer Skill"),
+                "purpose": str(item.get("purpose") or ""),
+                "permission": str(item.get("permission") or ""),
+                "approval_required": bool(item.get("approval_required")),
+                "verification": str(item.get("verification") or "Verification is required before completion."),
+            })
+        return result
+
+    @staticmethod
+    def _artifact(artifacts: Sequence[Mapping[str, object]]) -> dict[str, object] | None:
+        if not artifacts:
+            return None
+        latest = artifacts[0]
+        return {
+            "title": str(latest.get("title") or "Reviewable delivery"),
+            "status": str(latest.get("status") or "DRAFT"),
+            "version": latest.get("version"),
+            "evidence_count": latest.get("evidence_count", 0),
+        }
+
+    @classmethod
+    def _asset_status(cls, artifacts: Sequence[Mapping[str, object]]) -> str:
+        artifact = cls._artifact(artifacts)
+        if artifact is None:
+            return "No reviewable delivery asset has been created by this Mission yet."
+        if artifact["status"] == "APPROVED":
+            return "An approved delivery asset is available."
+        return "A reviewable delivery draft is available and still requires human approval."

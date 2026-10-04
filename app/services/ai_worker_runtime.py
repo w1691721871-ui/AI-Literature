@@ -99,8 +99,12 @@ class AIWorkerRuntime:
         if mission.get("computer_missions"):
             from app.services.computer_task_planner import ComputerTaskPlanner
             from app.services.computer_mission_runtime import ComputerMissionRuntime
+            from app.services.artifact_service import ArtifactService
             computer_plan = ComputerTaskPlanner().plan(mission, context)
-            computer_execution = ComputerMissionRuntime().summarize(mission.get("computer_missions"))
+            artifacts = ArtifactService(self._sessions, initialize=False).list(mission_id)
+            computer_execution = ComputerMissionRuntime().summarize(
+                mission.get("computer_missions"), task_plan=computer_plan, artifacts=artifacts,
+            )
         intelligence = self._mission_intelligence_snapshot(mission)
         return {
             "mission": {

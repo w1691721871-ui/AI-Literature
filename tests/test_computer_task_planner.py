@@ -21,3 +21,13 @@ class ComputerTaskPlannerTests(unittest.TestCase):
         plan = ComputerTaskPlanner().plan(mission, {"workspace": {"id": "w1"}, "knowledge": {}})
         self.assertLessEqual(len(plan["steps"]), ComputerTaskPlanner.MAX_STEPS)
         self.assertIn("evidence_validation", [step["skill_id"] for step in plan["steps"]])
+
+    def test_plan_uses_only_authorized_computer_memory_metadata_and_names_verification(self):
+        mission = {"id": "m1", "workspace_id": "w1", "goal": "Research recent papers"}
+        plan = ComputerTaskPlanner().plan(mission, {
+            "workspace": {"id": "w1"}, "knowledge": {},
+            "computer_memory": [{"memory_type": "WORK_PREFERENCE", "summary": "Use a concise research brief."}],
+        })
+        self.assertEqual(plan["context_basis"]["authorized_computer_memory"], 1)
+        self.assertTrue(all(step.get("verification") for step in plan["steps"]))
+        self.assertNotIn("concise research brief", str(plan))

@@ -13,6 +13,7 @@ from app.models.artifact import Artifact
 from app.models.solution_project import SolutionProject
 from app.models.mission_collaboration import MissionParticipant, MissionReviewComment
 from app.models.identity import User
+from app.models.computer_project_memory import ComputerProjectMemory
 from app.services.database import SessionLocal, initialize_database
 from app.services.context_retrieval_service import ContextRetrievalService
 from app.services.workspace_memory_service import WorkspaceMemoryService
@@ -74,6 +75,15 @@ class WorkspaceContextService:
                 {"author": (session.get(User, row.user_id).display_name if session.get(User, row.user_id) else "Workspace member"), "summary": row.comment[:240], "status": row.status}
                 for row in session.scalars(select(MissionReviewComment).where(MissionReviewComment.mission_id == mission_id, MissionReviewComment.workspace_id == workspace_id).order_by(MissionReviewComment.created_at.desc()).limit(3)).all()
             ]
+            computer_memory = [
+                {"memory_type": row.memory_type, "summary": str(row.content)[:240]}
+                for row in session.scalars(
+                    select(ComputerProjectMemory)
+                    .where(ComputerProjectMemory.workspace_id == workspace_id)
+                    .order_by(ComputerProjectMemory.created_at.desc())
+                    .limit(8)
+                ).all()
+            ]
         finally:
             session.close()
         evidence_refs = mission.get("evidence_refs") if isinstance(mission.get("evidence_refs"), list) else []
@@ -92,6 +102,7 @@ class WorkspaceContextService:
             "knowledge": {"traceable_evidence_refs": evidence_refs[:20], "approved_assets": approved_assets, "approved_decisions": approved_decisions},
             "artifacts": memory_selection["artifact_summaries"],
             "collaboration": {"participants": participants, "recent_review_comments": review_comments, "member_count": member_count},
+            "computer_memory": computer_memory,
             "memory": memory_selection,
             "boundary": "Context contains only authorized workspace metadata, approved knowledge summaries and traceable Evidence references. Prompts, CoT, credentials and source-document bodies are excluded.",
         }
@@ -105,4 +116,5 @@ class WorkspaceContextService:
         selected = memory.get("selected") if isinstance(memory.get("selected"), list) else []
         artifacts = context.get("artifacts") if isinstance(context.get("artifacts"), list) else []
         collaboration = context.get("collaboration") if isinstance(context.get("collaboration"), Mapping) else {}
-        return {"workspace": workspace, "mission": mission, "knowledge": {"traceable_evidence_count": len(knowledge.get("traceable_evidence_refs", [])), "approved_assets": knowledge.get("approved_assets", 0), "approved_decisions": knowledge.get("approved_decisions", 0)}, "memory": {"selected_count": len(selected), "selection_summary": memory.get("selection_summary")}, "artifacts": {"selected_count": len(artifacts)}, "collaboration": {"participant_count": len(collaboration.get("participants", [])), "review_comment_count": len(collaboration.get("recent_review_comments", []))}, "boundary": context.get("boundary")}
+        computer_memory = context.get("computer_memory") if isinstance(context.get("computer_memory"), list) else []
+        return {"workspace": workspace, "mission": mission, "knowledge": {"traceable_evidence_count": len(knowledge.get("traceable_evidence_refs", [])), "approved_assets": knowledge.get("approved_assets", 0), "approved_decisions": knowledge.get("approved_decisions", 0)}, "memory": {"selected_count": len(selected), "selection_summary": memory.get("selection_summary")}, "artifacts": {"selected_count": len(artifacts)}, "collaboration": {"participant_count": len(collaboration.get("participants", [])), "review_comment_count": len(collaboration.get("recent_review_comments", []))}, "computer_memory": {"available_count": len(computer_memory)}, "boundary": context.get("boundary")}

@@ -7,6 +7,21 @@ research goal into a reviewable Mission, traceable Evidence, human-reviewed
 insights, and a governed delivery artifact. It is not an autonomous publishing
 or external-action system.
 
+## Controlled Computer Employee
+
+Computer work uses one finite, Workspace-bound lifecycle: **understand → plan
+→ approval → execution → verification → reviewable delivery**. It reuses the
+existing controlled Computer Mission service rather than creating a parallel
+executor. Available permission-bounded skills are browser research, authorized
+document preparation, authorized data operations and Evidence-linked report
+preparation. Each plan has a user-readable verification condition; no plan
+promises autonomous success. Outputs remain reviewable drafts until the
+existing human approval workflow releases them.
+
+Workspace-scoped Computer Memory contains only approved work preferences and
+safe task learnings. Credentials, tokens, prompts, chain-of-thought, raw file
+content and browser screenshots are excluded.
+
 ## Five-minute demonstration
 
 1. Sign in or choose **Try Demo**. Demo access is an isolated MEMBER-scoped

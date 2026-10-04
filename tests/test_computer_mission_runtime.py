@@ -25,3 +25,22 @@ class ComputerMissionRuntimeTests(unittest.TestCase):
 
     def test_no_mission_has_no_synthesized_execution(self):
         self.assertIsNone(ComputerMissionRuntime().summarize([]))
+
+    def test_runtime_projects_finite_task_decomposition_and_real_delivery_state(self):
+        snapshot = ComputerMissionRuntime().summarize(
+            [{
+                "id": "computer-1", "task": "Prepare a research brief", "status": "COMPLETED",
+                "approval_status": "APPROVED", "action_plan": {},
+                "verification": {"controlled_verification": {"status": "SUCCESS", "summary": "Result verified."}},
+            }],
+            task_plan={"steps": [{
+                "order": 1, "skill": "Browser Research", "purpose": "Find research candidates.",
+                "permission": "KNOWLEDGE_ACCESS", "approval_required": False,
+                "verification": "Validate candidates through the Evidence workflow.",
+            }]},
+            artifacts=[{"title": "Low-carbon materials brief", "status": "NEEDS_REVIEW", "version": 2, "evidence_count": 3}],
+        )
+        self.assertEqual(snapshot["task_decomposition"][0]["skill"], "Browser Research")
+        self.assertIn("Evidence workflow", snapshot["task_decomposition"][0]["verification"])
+        self.assertEqual(snapshot["artifact"]["title"], "Low-carbon materials brief")
+        self.assertIn("requires human approval", snapshot["asset_status"])

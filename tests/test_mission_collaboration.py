@@ -8,6 +8,7 @@ from sqlalchemy.orm import sessionmaker
 from app.models.ai_mission import AIMission, AIMissionEvent
 from app.models.governance import GovernanceWorkspace, WorkspaceUserRole
 from app.models.identity import User
+from app.models.computer_project_memory import ComputerProjectMemory
 from app.services.database import Base
 from app.services.governance_service import GovernanceError, PermissionService
 from app.services.identity_service import IdentityContext
@@ -37,6 +38,8 @@ class MissionCollaborationTests(unittest.TestCase):
             AIMission(id="mission-a", title="Low carbon materials", goal="Research trends", workspace_id="workspace-a", status="PLANNING"),
             AIMission(id="mission-b", title="Other", goal="Other", workspace_id="workspace-b", status="PLANNING"),
             AIMissionEvent(mission_id="mission-a", stage="Evidence", action="Evidence collected", status="WAITING_REVIEW", evidence_count=2, result_summary="Two traceable sources are ready for review."),
+            ComputerProjectMemory(workspace_id="workspace-a", memory_type="WORK_PREFERENCE", content="Prefer a concise research brief for this Workspace."),
+            ComputerProjectMemory(workspace_id="workspace-b", memory_type="WORK_PREFERENCE", content="Other Workspace preference."),
         ])
         session.commit(); session.close()
         self.service = MissionCollaborationService(self.sessions, initialize=False)
@@ -91,6 +94,8 @@ class MissionCollaborationTests(unittest.TestCase):
         collaboration = context["collaboration"]
         self.assertEqual(collaboration["participants"][0]["responsibility"], "Collect recent sources")
         self.assertEqual(collaboration["recent_review_comments"][0]["status"], "REVISION_REQUESTED")
+        self.assertEqual(len(context["computer_memory"]), 1)
+        self.assertIn("concise research brief", context["computer_memory"][0]["summary"])
 
 
 if __name__ == "__main__":
