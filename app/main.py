@@ -1,4 +1,5 @@
 import os
+from contextlib import asynccontextmanager
 
 from pydantic import BaseModel
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
@@ -57,7 +58,14 @@ from app.services.demo_identity_service import DemoIdentitySeeder
 from app.services.database import initialize_database
 
 
-app = FastAPI(title="ResearchOS · AI科研创新决策平台")
+@asynccontextmanager
+async def application_lifespan(_app: FastAPI):
+    """Provision persistence before serving requests in local and production runs."""
+    provision_demo_identity_if_enabled()
+    yield
+
+
+app = FastAPI(title="ResearchOS · AI科研创新决策平台", lifespan=application_lifespan)
 paper_agent = PaperAnalysisAgent()
 app.state.paper_agent = paper_agent
 app.include_router(research_router)
@@ -107,7 +115,6 @@ app.add_middleware(
 )
 
 
-@app.on_event("startup")
 def provision_demo_identity_if_enabled() -> None:
     """Initialize persistence before optionally provisioning demo identities."""
     initialize_database()
