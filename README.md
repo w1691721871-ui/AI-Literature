@@ -52,6 +52,8 @@ search results to Evidence automatically.
   documented in [Deployment](docs/Deployment.md).
 - **Configuration:** use [.env.example](.env.example); provide secrets only
   through the deployment provider.
+- **Enterprise handoff:** Docker, environment categories, architecture and
+  release checks are collected in the [Enterprise Deployment Pack](docs/Enterprise-Deployment-Pack.md).
 - **Governance:** see [Permission Matrix](docs/Permission-Matrix.md) and
   [Risk Boundary](docs/Risk-Boundary.md).
 - **Demo:** use the verified five-minute flow in

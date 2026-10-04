@@ -1621,9 +1621,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .collaboration-activity-list li > span.team_comment { background: #b69cff; box-shadow: 0 0 12px rgba(182, 156, 255, .28); }
 .collaboration-activity-list b { display: block; color: var(--text-primary); font-size: 12px; }
 .collaboration-activity-list p { margin: 5px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.next-best-action-panel { display: flex; align-items: center; justify-content: space-between; gap: 22px; max-width: 1200px; margin: 24px auto; padding: 20px 22px; border: 1px solid rgba(112, 203, 255, .2); border-radius: 18px; background: linear-gradient(120deg, rgba(91, 168, 255, .11), rgba(127, 91, 255, .055)); box-shadow: 0 18px 42px rgba(0, 0, 0, .14); }
+.next-best-action-panel h3 { margin: 4px 0 6px; color: var(--text-primary); font-size: 18px; letter-spacing: -.02em; }
+.next-best-action-panel p { max-width: 720px; margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.next-best-action-panel > span { padding: 7px 10px; border: 1px solid rgba(127, 225, 255, .25); border-radius: 999px; background: rgba(127, 225, 255, .07); color: #c4edff; font-size: 10px; font-weight: 750; letter-spacing: .07em; white-space: nowrap; }
 @media (max-width: 800px) {
   .team-collaboration-panel > header,
   .mission-collaboration-panel > header { align-items: stretch; flex-direction: column; }
   .team-collaboration-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .team-member-list { grid-template-columns: 1fr; }
+  .next-best-action-panel { align-items: flex-start; flex-direction: column; }
 }

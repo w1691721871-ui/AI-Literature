@@ -102,7 +102,7 @@ class ProductExperienceService:
     @staticmethod
     def demo_scenarios() -> list[dict[str, object]]:
         return [
-            {"id": "research", "title": "AI Research Assistant", "steps": ["Research goal", "Workflow", "Evidence", "Review", "Deliverable"], "boundary": "Demo flow only; research results still require indexed sources."},
+            {"id": "research", "title": "Low-Carbon Materials Research", "steps": ["Research goal", "Mission plan", "Candidate sources", "Evidence review", "Research Brief draft"], "boundary": "Demo starts a real Workspace Mission. Candidate sources remain unverified until the Evidence review workflow approves them."},
             {"id": "coding", "title": "AI Coding Assistant", "steps": ["Workspace scan", "Code analysis", "Patch proposal", "Review", "Verification"], "boundary": "Demo flow only; source changes remain pending approval."},
             {"id": "enterprise", "title": "Enterprise Solution Delivery", "steps": ["Customer need", "Solution blueprint", "Delivery package"], "boundary": "Demo scenario only; it is not a customer engagement record."},
         ]

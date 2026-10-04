@@ -30,5 +30,13 @@ class MissionActivityTests(unittest.TestCase):
         self.assertNotIn("reasoning", result["activities"][0])
         with self.assertRaises(PermissionError): self.service.timeline("activity-a", "workspace-b")
 
+    def test_next_best_action_is_derived_from_reviewable_state(self):
+        result = self.service.timeline("activity-a", "workspace-a")
+        recommendation = result["next_best_action"]
+        self.assertEqual(recommendation["action"], "OPEN_REVIEW")
+        self.assertIn("review", recommendation["label"].lower())
+        self.assertNotIn("prompt", recommendation)
+        self.assertNotIn("reasoning", recommendation)
+
 
 if __name__ == "__main__": unittest.main()
