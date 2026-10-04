@@ -1179,6 +1179,70 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .presentation-mode .connection-status, .presentation-mode .research-assistant-launcher { display: none; }
 .presentation-mode .solution-demo-center { padding-top: 12px; }
 
+/* Customer-facing solution narrative. All metrics are rendered only from the
+   workspace-scoped organizational intelligence response. */
+.solution-showcase { display: grid; gap: 16px; }
+.solution-showcase > .dashboard-heading { align-items: center; }
+.solution-showcase > .dashboard-heading > div > .section-kicker { color: var(--accent-cyan); font-size: 10px; }
+.solution-showcase > .dashboard-heading > div > .section-kicker::after { content: none; }
+.solution-showcase > .dashboard-heading > div > p:not(.section-kicker) { color: var(--text-secondary); font-size: 13px; }
+.solution-showcase > .dashboard-heading > div > p:not(.section-kicker)::after { content: none; }
+.showcase-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.solution-showcase-story { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
+.solution-showcase-story > article,
+.solution-showcase-flow,
+.solution-showcase-proof,
+.solution-showcase-demos {
+  border: 1px solid rgba(143, 163, 255, .16);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(124, 145, 255, .08), rgba(255,255,255,.018) 56%, rgba(66, 201, 255, .035));
+  box-shadow: inset 0 1px rgba(255,255,255,.055), 0 18px 38px rgba(0,0,0,.14);
+}
+.solution-showcase-story > article { min-height: 166px; padding: 17px; }
+.solution-showcase-story span,
+.solution-showcase-flow header > span,
+.solution-showcase-proof header span,
+.solution-showcase-demos header > span {
+  color: var(--accent-cyan);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .11em;
+}
+.solution-showcase-story h3 { margin: 10px 0 7px; color: var(--text-primary); font-size: 15px; letter-spacing: -.02em; }
+.solution-showcase-story p { margin: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.6; }
+.solution-showcase-flow { padding: 20px; }
+.solution-showcase-flow header h3,
+.solution-showcase-proof h3,
+.solution-showcase-demos h3 { margin: 7px 0 5px; color: var(--text-primary); font-size: 18px; letter-spacing: -.03em; }
+.solution-showcase-flow header p,
+.solution-showcase-proof header p,
+.solution-showcase-demos header p { max-width: 680px; margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.55; }
+.solution-showcase-flow ol { display: grid; grid-template-columns: repeat(6, minmax(0, 1fr)); gap: 8px; margin: 20px 0 0; padding: 0; list-style: none; }
+.solution-showcase-flow li { min-height: 105px; padding: 12px; border: 1px solid rgba(255,255,255,.07); border-radius: 14px; background: rgba(6, 11, 25, .28); }
+.solution-showcase-flow li b { display: block; color: var(--accent-cyan); font-size: 10px; }
+.solution-showcase-flow li strong { display: block; margin-top: 16px; color: var(--text-primary); font-size: 12px; }
+.solution-showcase-flow li small { display: block; margin-top: 5px; color: var(--text-muted); font-size: 10px; line-height: 1.4; }
+.solution-showcase-proof { padding: 20px; }
+.solution-showcase-proof > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.solution-proof-metrics { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 9px; margin-top: 18px; }
+.solution-proof-metrics article { min-height: 88px; padding: 13px; border: 1px solid rgba(255,255,255,.07); border-radius: 13px; background: rgba(5,10,22,.28); }
+.solution-proof-metrics b { display: block; color: var(--text-primary); font-size: 24px; letter-spacing: -.04em; }
+.solution-proof-metrics small { display: block; margin-top: 5px; color: var(--text-muted); font-size: 10px; line-height: 1.35; }
+.solution-proof-empty { margin: 17px 0 0; padding: 14px; border: 1px dashed rgba(143,163,255,.19); border-radius: 13px; color: var(--text-secondary); font-size: 12px; }
+.solution-showcase-demos { padding: 20px; }
+.solution-showcase-demos > header { margin-bottom: 14px; }
+.presentation-mode .solution-showcase { max-width: 1200px; margin-inline: auto; }
+
+@media (max-width: 1050px) {
+  .solution-showcase-story { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .solution-showcase-flow ol { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 700px) {
+  .solution-showcase > .dashboard-heading, .solution-showcase-proof > header { display: grid; }
+  .solution-showcase-story, .solution-showcase-flow ol, .solution-proof-metrics { grid-template-columns: 1fr; }
+  .solution-showcase-story > article { min-height: 0; }
+}
+
 @media (max-width: 760px) {
   .solution-narrative, .solution-demo-brief { grid-template-columns: 1fr; }
   .solution-narrative ol { grid-row: auto; }
