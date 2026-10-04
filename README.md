@@ -4,6 +4,60 @@
 
 ResearchOS is an enterprise AI operating workspace for governed research, solution delivery and reviewable AI work.
 
+## ResearchOS v2.0: Enterprise AI Research Workspace
+
+ResearchOS helps a research team turn one natural-language objective into a
+controlled, evidence-backed workflow:
+
+```text
+Research goal → Mission → AI Worker plan → controlled research → Candidate Evidence
+              → Human validation → Insight → Research Brief draft → Human release
+```
+
+It is designed for research teams that need the speed of an AI employee without
+giving up source traceability, Workspace isolation, review control or delivery
+governance. Candidate sources are never represented as verified Evidence, and
+AI drafts are never treated as final research conclusions.
+
+### What a first-time user can do
+
+1. Sign in, create a private Workspace, or use the isolated Demo Workspace.
+2. Describe a research goal, for example: *Analyze future research
+   opportunities in low-carbon building materials.*
+3. Follow a user-readable Mission timeline as the AI Worker plans, researches,
+   prepares Evidence candidates and waits at review boundaries.
+4. Review Evidence, collaborate with Workspace members and release an approved
+   Research Brief only when human reviewers confirm it.
+
+### Product architecture
+
+```text
+Identity + Workspace + RBAC
+             ↓
+Mission Contract + authorized Context + Research Memory
+             ↓
+AI Worker Runtime (Research / Computer / Delivery / Review Skills)
+             ↓
+Candidate Evidence → Validation → Human Review → Artifact lifecycle
+```
+
+The Computer Worker uses an explicit, read-only public metadata provider
+interface. The current implementation enables Crossref metadata discovery; it
+does not log in to sites, submit forms, access private networks or promote
+search results to Evidence automatically.
+
+### Production readiness
+
+- **Deployment:** Render FastAPI + Vercel/Static frontend configuration is
+  documented in [Deployment](docs/Deployment.md).
+- **Configuration:** use [.env.example](.env.example); provide secrets only
+  through the deployment provider.
+- **Governance:** see [Permission Matrix](docs/Permission-Matrix.md) and
+  [Risk Boundary](docs/Risk-Boundary.md).
+- **Demo:** use the verified five-minute flow in
+  [Release Candidate](docs/Release-Candidate.md). Demo data and identity remain
+  explicitly isolated from customer Workspaces.
+
 ## Problem and Solution
 
 It connects customer needs to planning, multi-agent execution, evidence, human review, delivery and approved knowledge memory without treating AI drafts as verified enterprise knowledge.
