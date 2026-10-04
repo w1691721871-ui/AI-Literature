@@ -100,11 +100,15 @@ class AIWorkerRuntime:
             from app.services.computer_task_planner import ComputerTaskPlanner
             from app.services.computer_mission_runtime import ComputerMissionRuntime
             from app.services.artifact_service import ArtifactService
+            from app.services.computer_strategy_service import ComputerStrategyService
             computer_plan = ComputerTaskPlanner().plan(mission, context)
             artifacts = ArtifactService(self._sessions, initialize=False).list(mission_id)
             computer_execution = ComputerMissionRuntime().summarize(
                 mission.get("computer_missions"), task_plan=computer_plan, artifacts=artifacts,
             )
+            computer_intelligence = ComputerStrategyService().build(mission, context, computer_execution)
+        else:
+            computer_intelligence = None
         intelligence = self._mission_intelligence_snapshot(mission)
         return {
             "mission": {
@@ -116,6 +120,7 @@ class AIWorkerRuntime:
             "team_plan": self._team.plan_summary(self._registry, mission, context, understanding=understanding),
             "computer_plan": computer_plan,
             "computer_execution": computer_execution,
+            "computer_intelligence": computer_intelligence,
             "context": self._context.presentation(context),
             "timeline": records,
             "execution": execution,
