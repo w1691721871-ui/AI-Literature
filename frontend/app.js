@@ -612,6 +612,21 @@ createApp({
       })),
     ]);
     const aiWorkerSkills = computed(() => aiWorkerCapabilities.value?.skills || []);
+    const demoMissionTimeline = computed(() => {
+      const mission = selectedAIMission.value;
+      const evidenceCount = Array.isArray(mission?.evidence_refs) ? mission.evidence_refs.length : 0;
+      const runtime = mission?.worker_runtime;
+      const hasRuntimeWork = Array.isArray(runtime?.timeline) && runtime.timeline.length > 0;
+      const hasReview = approvalRequests.value.some((item) => item.status === "PENDING" && item.mission_id === mission?.id);
+      const artifacts = Array.isArray(missionArtifacts.value) ? missionArtifacts.value : [];
+      return [
+        { title: "Understand the goal", detail: mission ? "AI Worker has a Workspace-bound Mission." : "Create a Mission to start the AI Employee.", state: mission ? "COMPLETED" : "NEXT" },
+        { title: "Prepare a bounded plan", detail: hasRuntimeWork ? "The AI Worker recorded an approved Skill plan." : "The plan appears after a real AI Worker execution.", state: hasRuntimeWork ? "COMPLETED" : mission ? "CURRENT" : "PENDING" },
+        { title: "Collect candidate Evidence", detail: evidenceCount ? `${evidenceCount} traceable reference${evidenceCount === 1 ? " is" : "s are"} available for review.` : "No Evidence is available yet; no research conclusion will be claimed.", state: evidenceCount ? "COMPLETED" : mission ? "CURRENT" : "PENDING" },
+        { title: "Human Review", detail: hasReview ? "A reviewer decision is required before the next controlled step." : "Review opens only when a real Evidence, Computer, or delivery decision exists.", state: hasReview ? "CURRENT" : "PENDING" },
+        { title: "Research Brief delivery", detail: artifacts.length ? "A persisted Artifact draft is ready for its recorded review state." : "A brief can be drafted only after traceable Evidence is available.", state: artifacts.length ? "COMPLETED" : "PENDING" },
+      ];
+    });
     const evidenceCenterItems = computed(() => {
       const currentItems = [];
       const addSources = (sources, relatedAgent, basis) => {
@@ -3675,6 +3690,7 @@ createApp({
       agentTeamCards,
       aiWorkerCapabilities,
       aiWorkerSkills,
+      demoMissionTimeline,
       workspaceContext,
       workspaceContextLoading,
       workspaceContextError,
@@ -4097,6 +4113,14 @@ createApp({
 
       <section v-if="currentWorkspace?.is_demo" class="demo-workspace-banner" aria-label="Demo Workspace notice">
         <span>DEMO</span><div><b>ResearchOS Demo Environment</b><small>This Workspace is for demonstration only. Customer data and Admin Console are unavailable.</small></div>
+      </section>
+
+      <section v-if="currentWorkspace?.is_demo && activeWorkspaceView === 'dashboard'" class="mission-evaluation-card" aria-label="Demo Mission Room">
+        <span>AI EMPLOYEE MISSION ROOM</span><b>{{ selectedAIMission?.title || 'Start the low-carbon materials research mission' }}</b>
+        <p>{{ selectedAIMission?.goal || 'Create a real, evidence-bound Mission to begin the five-minute demonstration.' }}</p>
+        <ol class="mission-timeline"><li v-for="step in demoMissionTimeline" :key="step.title"><b>{{ step.state === 'COMPLETED' ? '✓' : step.state === 'CURRENT' ? '•' : '○' }}</b><div><strong>{{ step.title }}</strong><p>{{ step.detail }}</p></div><small>{{ step.state === 'NEXT' ? 'Next action' : step.state.replace('_', ' ') }}</small></li></ol>
+        <button v-if="!selectedAIMission" class="primary-card-action" type="button" @click="researchOsGoal = 'Analyze future research opportunities in low-carbon building materials using traceable evidence.'">Use Golden Demo goal</button>
+        <button v-else class="outline-button" type="button" @click="openWorkspaceView('mission-center')">Open Mission Room</button>
       </section>
 
       <section v-if="activeWorkspaceView === 'dashboard'" class="home-workspace" aria-label="ResearchOS Home">

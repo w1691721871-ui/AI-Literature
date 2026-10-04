@@ -163,6 +163,14 @@ class IdentityExperienceTests(unittest.TestCase):
         self.assertLess(establish.index("activeWorkspaceView.value = destination"), establish.index("void initializeAuthorizedWorkspace()"))
         self.assertIn("void initializeApplication();", source)
 
+    def test_demo_mission_room_uses_persisted_workspace_signals(self):
+        source = (Path(__file__).resolve().parents[1] / "frontend" / "app.js").read_text(encoding="utf-8")
+        timeline = source[source.index("const demoMissionTimeline"):source.index("const evidenceCenterItems")]
+        self.assertIn("selectedAIMission.value", timeline)
+        self.assertIn("approvalRequests.value", timeline)
+        self.assertIn("missionArtifacts.value", timeline)
+        self.assertIn("no research conclusion will be claimed", timeline)
+
 
 if __name__ == "__main__":
     unittest.main()
