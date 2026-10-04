@@ -6,7 +6,7 @@ from app.services.computer_strategy_service import ComputerStrategyService
 class ComputerStrategyServiceTests(unittest.TestCase):
     def setUp(self):
         self.service = ComputerStrategyService()
-        self.mission = {"id": "mission-a", "workspace_id": "workspace-a", "goal": "Organize research papers and prepare a report", "evidence_refs": ["e-1"]}
+        self.mission = {"id": "mission-a", "workspace_id": "workspace-a", "goal": "Organize research papers and prepare a report", "evidence_refs": ["e-1"], "source_materials": [{"id": "file-a"}]}
         self.context = {
             "workspace": {"id": "workspace-a"},
             "knowledge": {"traceable_evidence_refs": ["e-1"]},
@@ -21,6 +21,11 @@ class ComputerStrategyServiceTests(unittest.TestCase):
         self.assertEqual(result["workspace_state"]["available_resources"]["authorized_computer_memory"], 1)
         self.assertEqual(result["employee_summary"]["quality_status"], "IN_PROGRESS")
         self.assertNotIn("concise brief", str(result))
+
+    def test_strategy_does_not_claim_authorized_material_when_none_is_attached(self):
+        mission = {key: value for key, value in self.mission.items() if key != "source_materials"}
+        result = self.service.build(mission, self.context, {"status": "READY", "observation": {}})
+        self.assertEqual(result["strategy"]["id"], "PUBLIC_DISCOVERY")
 
     def test_existing_review_boundary_cannot_be_bypassed(self):
         result = self.service.build(self.mission, self.context, {"status": "WAITING_APPROVAL", "observation": {}})

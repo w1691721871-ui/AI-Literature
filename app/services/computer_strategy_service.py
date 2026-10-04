@@ -22,7 +22,7 @@ class ComputerStrategyService:
         goal = str(mission.get("goal") or mission.get("title") or "").strip()
         environment = self._environment(computer_execution)
         state = self._workspace_state(mission, context, computer_execution)
-        options = self._options(goal, context, environment)
+        options = self._options(mission, context, environment)
         selected = self._select(options, computer_execution)
         decision = self._decision(selected, computer_execution)
         quality = self._quality(mission, computer_execution)
@@ -69,12 +69,16 @@ class ComputerStrategyService:
         }
 
     @staticmethod
-    def _options(goal: str, context: Mapping[str, object], environment: Mapping[str, object]) -> list[dict[str, object]]:
+    def _options(mission: Mapping[str, object], context: Mapping[str, object], environment: Mapping[str, object]) -> list[dict[str, object]]:
+        goal = str(mission.get("goal") or mission.get("title") or "")
         lowered = goal.lower()
         evidence = len(((context.get("knowledge") or {}).get("traceable_evidence_refs") or [])) if isinstance(context.get("knowledge"), Mapping) else 0
+        source_materials = mission.get("source_materials")
+        has_authorized_material = isinstance(source_materials, Sequence) and not isinstance(source_materials, (str, bytes)) and bool(source_materials)
         options = []
         if any(term in lowered for term in ("paper", "research", "literature", "论文", "研究", "资料")):
-            options.append({"id": "AUTHORIZED_MATERIAL", "label": "Analyze authorized material", "reason": "Use already authorized Workspace material before requesting additional public sources.", "requires_approval": False})
+            if has_authorized_material:
+                options.append({"id": "AUTHORIZED_MATERIAL", "label": "Analyze authorized material", "reason": "Use already authorized Workspace material before requesting additional public sources.", "requires_approval": False})
             options.append({"id": "PUBLIC_DISCOVERY", "label": "Collect public research candidates", "reason": "Public candidates can fill an Evidence gap but remain candidates until validated.", "requires_approval": False})
         if any(term in lowered for term in ("data", "table", "dataset", "数据", "表格")):
             options.append({"id": "READ_ONLY_DATA", "label": "Prepare a read-only data summary", "reason": "Authorized data can be summarized without modifying the source.", "requires_approval": True})
