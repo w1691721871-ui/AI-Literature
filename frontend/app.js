@@ -153,6 +153,10 @@ createApp({
     const workspaceContext = ref(null);
     const workspaceContextLoading = ref(false);
     const workspaceContextError = ref("");
+    const teamDashboard = ref(null);
+    const teamDashboardError = ref("");
+    const missionCollaboration = ref(null);
+    const missionCollaborationError = ref("");
     const researchMemory = ref([]);
     const selectedResearchMemory = ref(null);
     const researchMemoryActionError = ref("");
@@ -841,7 +845,7 @@ createApp({
       if (view === "dashboard" || view === "tasks" || view === "agents") {
         await loadResearchOsData();
       }
-      if (view === "dashboard") await loadWorkspaceExperience();
+      if (view === "dashboard") await Promise.all([loadWorkspaceExperience(), loadTeamDashboard()]);
       if (view === "dashboard" || view === "artifact-center" || view === "demo-center") await loadProductExperience();
       if (view === "workflow-studio") await loadResearchWorkflows();
       if (view === "dashboard") await loadResearchWorkspaces();
@@ -869,7 +873,7 @@ createApp({
       if (view === "governance") await loadGovernance();
       if (view === "benchmarks") await loadBenchmarks();
       if (view === "scenario-center") await loadScenarios();
-      if (view === "ai-workspace") await Promise.all([loadWorkspaceExperience(), loadUnifiedWorkspaceContext()]);
+      if (view === "ai-workspace") await Promise.all([loadWorkspaceExperience(), loadUnifiedWorkspaceContext(), loadTeamDashboard()]);
       if (view === "memory-center") await loadKnowledgeMemory();
       if (["showcase","architecture","capabilities","business-dashboard","release-center"].includes(view)) await loadProductShowcase();
       if (view === "solution-delivery") await loadSolutionDelivery();
@@ -1172,7 +1176,7 @@ createApp({
       try { selectedAIMission.value.agent_traces = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/agent-traces/${missionId}`)); } catch (_) { selectedAIMission.value.agent_traces = []; }
       try { selectedAIMission.value.planner_plan = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/plan`)); } catch (_) { selectedAIMission.value.planner_plan = null; }
       try { selectedAIMission.value.adaptive_iterations = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/iterations`)); selectedAIMission.value.graph_history = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/graph-history`)); } catch (_) { selectedAIMission.value.adaptive_iterations = []; selectedAIMission.value.graph_history = []; }
-      await loadMissionArtifacts(missionId);
+      await Promise.all([loadMissionArtifacts(missionId), loadMissionCollaboration(missionId)]);
     }
 
     async function loadMissionArtifacts(missionId = selectedAIMission.value?.id) {
@@ -1272,6 +1276,26 @@ createApp({
       } catch (error) {
         workspaceExperience.value = null;
         workspaceExperienceError.value = error.message || "Workspace temporarily unavailable.";
+      }
+    }
+    async function loadTeamDashboard() {
+      if (!identityProfile.value?.workspace?.id) return;
+      try {
+        teamDashboardError.value = "";
+        teamDashboard.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/workspace/team-dashboard`));
+      } catch (error) {
+        teamDashboard.value = null;
+        teamDashboardError.value = error.message || "Team collaboration details are temporarily unavailable.";
+      }
+    }
+    async function loadMissionCollaboration(missionId = selectedAIMission.value?.id) {
+      if (!missionId) { missionCollaboration.value = null; return; }
+      try {
+        missionCollaborationError.value = "";
+        missionCollaboration.value = await readResponse(await fetchWithTimeout(`${API_BASE_URL}/api/missions/${missionId}/collaboration`));
+      } catch (error) {
+        missionCollaboration.value = null;
+        missionCollaborationError.value = error.message || "Mission collaboration details are temporarily unavailable.";
       }
     }
     async function loadKnowledgeMemory() {
@@ -3163,6 +3187,7 @@ createApp({
       if (!identityProfile.value?.workspace?.id) return;
       const workspaceLoaders = [
         ["workspace overview", loadWorkspaceExperience],
+        ["team collaboration", loadTeamDashboard],
         ["missions", loadAIMissions],
         ["knowledge", loadLibraryPapers],
         ["deliveries", loadProductExperience],
@@ -3655,6 +3680,10 @@ createApp({
       workspaceContext,
       workspaceContextLoading,
       workspaceContextError,
+      teamDashboard,
+      teamDashboardError,
+      missionCollaboration,
+      missionCollaborationError,
       researchMemory,
       selectedResearchMemory,
       researchMemoryActionError,
@@ -3819,6 +3848,8 @@ createApp({
       loadScenarios,
       runScenario,
       loadWorkspaceExperience,
+      loadTeamDashboard,
+      loadMissionCollaboration,
       loadUnifiedWorkspaceContext,
       explainResearchMemory,
       manageResearchMemory,
@@ -4930,6 +4961,10 @@ createApp({
         <header><div><p class="section-kicker">MISSION INTELLIGENCE</p><h3>Mission understanding</h3><p>{{ selectedAIMission.worker_runtime.mission_intelligence.understanding.goal_summary }}</p></div><span>{{ selectedAIMission.worker_runtime.mission_intelligence.quality.quality }}</span></header>
         <div class="mission-intelligence-grid"><article><b>Current phase</b><strong>{{ selectedAIMission.worker_runtime.mission_intelligence.current_phase }}</strong><small>{{ selectedAIMission.worker_runtime.mission_intelligence.quality.confidence }}</small></article><article><b>Completed tasks</b><strong>{{ selectedAIMission.worker_runtime.mission_intelligence.completed_tasks.length }}</strong><small>Only completed, user-reviewable tasks are counted.</small></article><article><b>Remaining tasks</b><ul><li v-for="task in selectedAIMission.worker_runtime.mission_intelligence.pending_tasks" :key="task.task_id">{{ task.required_skill }} · {{ task.status }}</li><li v-if="!selectedAIMission.worker_runtime.mission_intelligence.pending_tasks.length">No remaining task is available.</li></ul></article><article><b>Quality status</b><strong>{{ selectedAIMission.worker_runtime.mission_intelligence.quality.quality }}</strong><small>{{ selectedAIMission.worker_runtime.mission_intelligence.quality.next_action }}</small></article></div>
       </section>
+      <section v-if="activeWorkspaceView === 'dashboard' && teamDashboard" class="team-collaboration-panel" aria-label="Team Workspace"><header><div><p class="section-kicker">TEAM WORKSPACE</p><h3>People and AI work from shared research context</h3><p>Membership, review needs and current work remain inside this authorized Workspace.</p></div><button class="text-button" type="button" @click="loadTeamDashboard">Refresh team view</button></header><div class="team-collaboration-metrics"><article><b>{{ teamDashboard.members?.length || 0 }}</b><small>Workspace members</small></article><article><b>{{ teamDashboard.active_missions || 0 }}</b><small>Active missions</small></article><article><b>{{ teamDashboard.pending_reviews || 0 }}</b><small>Awaiting review</small></article><article><b>{{ teamDashboard.artifacts || 0 }}</b><small>Shared deliverables</small></article></div><ol v-if="teamDashboard.members?.length" class="team-member-list"><li v-for="member in teamDashboard.members.slice(0, 6)" :key="member.user_id"><span>{{ member.display_name.slice(0, 1) }}</span><div><b>{{ member.display_name }}</b><small>{{ member.role_label }}</small></div><em>{{ member.can_review ? 'Can review' : member.can_edit ? 'Can contribute' : 'View access' }}</em></li></ol></section>
+      <p v-else-if="activeWorkspaceView === 'dashboard' && teamDashboardError" class="quiet-note">Team collaboration details are temporarily unavailable. Existing Workspace data remains unchanged.</p>
+      <section v-if="activeWorkspaceView === 'mission-center' && missionCollaboration" class="mission-collaboration-panel" aria-label="Mission collaboration"><header><div><p class="section-kicker">MISSION COLLABORATION</p><h3>People and AI share one work history</h3><p>Only authorized member feedback and user-readable AI activity are shown.</p></div><button class="text-button" type="button" @click="loadMissionCollaboration">Refresh activity</button></header><div class="mission-participant-list" v-if="missionCollaboration.participants?.length"><article v-for="participant in missionCollaboration.participants" :key="participant.id"><span>{{ participant.display_name.slice(0, 1) }}</span><div><b>{{ participant.display_name }}</b><small>{{ participant.role }} · {{ participant.responsibility }}</small></div></article></div><ol class="collaboration-activity-list" v-if="missionCollaboration.activity?.length"><li v-for="item in missionCollaboration.activity" :key="item.kind + item.created_at + item.summary"><span :class="item.kind.toLowerCase()"></span><div><b>{{ item.actor }} · {{ item.action }}</b><p>{{ item.summary }}</p></div></li></ol><p v-else class="quiet-note">No shared activity has been recorded for this Mission yet.</p></section>
+      <p v-else-if="activeWorkspaceView === 'mission-center' && missionCollaborationError" class="quiet-note">Mission collaboration details are temporarily unavailable. Existing Mission data remains unchanged.</p>
     </main>
     <section v-else class="login-shell" aria-label="ResearchOS sign in">
       <div class="login-ambient" aria-hidden="true"></div>
