@@ -95,7 +95,28 @@ from app.schemas.workspace import DeliveryExportRequest, TaskCreate, WorkspaceCr
 from app.memory.research_memory_service import ResearchMemoryService
 
 
-router = APIRouter(prefix="/researchos", tags=["researchos"])
+_legacy_permissions = PermissionMiddleware()
+
+
+def require_legacy_compatibility_admin(
+    context: IdentityContext = Depends(_legacy_permissions.current),
+) -> IdentityContext:
+    """Keep historic ResearchOS routes out of the enterprise user surface.
+
+    New product traffic uses the Session- and Workspace-bound ``/api`` routes.
+    Historic routes are retained only for an explicitly authorised admin
+    compatibility console; this dependency is intentionally router-wide so a
+    newly added legacy endpoint cannot accidentally become public.
+    """
+    _legacy_permissions.admin_console(context)
+    return context
+
+
+router = APIRouter(
+    prefix="/researchos",
+    tags=["researchos-compatibility"],
+    dependencies=[Depends(require_legacy_compatibility_admin)],
+)
 master_agent = ResearchMasterAgent()
 research_brain = ResearchBrain(master_agent=master_agent)
 research_worker = ResearchWorker()

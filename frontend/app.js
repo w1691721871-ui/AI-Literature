@@ -3192,10 +3192,6 @@ createApp({
         ["team collaboration", loadTeamDashboard],
         ["missions", loadAIMissions],
         ["knowledge", loadLibraryPapers],
-        ["deliveries", loadProductExperience],
-        ["research data", loadResearchOsData],
-        ["research workspaces", loadResearchWorkspaces],
-        ["research overview", loadResearchOverview],
         ["workspace context", loadUnifiedWorkspaceContext],
       ];
       const results = await Promise.allSettled(workspaceLoaders.map(([, load]) => load()));

@@ -17,6 +17,7 @@ from app.services.governance_service import GovernanceError, PermissionService
 from app.services.identity_service import IdentityError, IdentityService
 from app.services.permission_middleware import PermissionMiddleware
 from app.services.workspace_experience_service import WorkspaceExperienceService
+from app.routes import researchos as legacy_routes
 
 
 class IdentityExperienceTests(unittest.TestCase):
@@ -93,6 +94,30 @@ class IdentityExperienceTests(unittest.TestCase):
             self.middleware.current(None)
         self.assertEqual(denied.exception.status_code, 401)
 
+    def test_legacy_compatibility_gate_requires_authorized_admin_session(self):
+        owner = self.identity.register_workspace(
+            "legacy-owner@identity-experience.test", "Owner", "a-safe-test-password", "Compatibility Workspace"
+        )
+        outsider = self.identity.register_workspace(
+            "legacy-outsider@identity-experience.test", "Outsider", "a-safe-test-password", "Other Workspace"
+        )
+        owner_context = self.identity.context_for_token(owner["session_token"])
+        outsider_context = self.identity.context_for_token(outsider["session_token"])
+        original = legacy_routes._legacy_permissions
+        legacy_routes._legacy_permissions = self.middleware
+        try:
+            self.assertIs(legacy_routes.require_legacy_compatibility_admin(owner_context), owner_context)
+            with self.assertRaises(HTTPException) as denied:
+                legacy_routes.require_legacy_compatibility_admin(self.identity.context_for_token(self.identity.create_demo_session()["session_token"]))
+            self.assertEqual(denied.exception.status_code, 403)
+            # A different Workspace owner cannot use this Workspace's resources;
+            # the compatibility gate plus normal resource checks preserve this boundary.
+            with self.assertRaises(HTTPException) as denied:
+                self.middleware._assert_workspace(outsider_context, owner_context.workspace_id, "MISSION_VIEW")
+            self.assertEqual(denied.exception.status_code, 403)
+        finally:
+            legacy_routes._legacy_permissions = original
+
     def test_unassigned_user_is_forbidden_from_workspace_permissions(self):
         unassigned = self.identity.register("unassigned@identity-experience.test", "Unassigned", "a-safe-test-password")
         demo = self.identity.create_demo_session()
@@ -121,6 +146,8 @@ class IdentityExperienceTests(unittest.TestCase):
         self.assertIn("const results = await Promise.allSettled", initialize)
         self.assertIn("[\"workspace overview\", loadWorkspaceExperience]", initialize)
         self.assertIn("[\"missions\", loadAIMissions]", initialize)
+        self.assertNotIn("loadResearchOsData", initialize)
+        self.assertNotIn("loadResearchWorkspaces", initialize)
         self.assertIn("const identityRestored = await loadIdentityProfile();", source)
         establish = source[source.index("async function establishIdentitySession"):source.index("async function registerWorkspace")]
         self.assertLess(establish.index("activeWorkspaceView.value = destination"), establish.index("void initializeAuthorizedWorkspace()"))
