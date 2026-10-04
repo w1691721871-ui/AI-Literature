@@ -78,12 +78,14 @@ class ComputerSkillAdapter(SkillAdapter):
     def required_permission(self) -> str | None:
         return "COMPUTER_EXECUTE"
 
-    def __init__(self, observation_service=None, action_planner=None):
+    def __init__(self, observation_service=None, action_planner=None, enterprise_worker=None):
         from app.services.computer_action_planner import ComputerActionPlanner
         from app.services.computer_observation_service import ComputerObservationService
 
         self._observation = observation_service or ComputerObservationService()
         self._planner = action_planner or ComputerActionPlanner()
+        from app.services.enterprise_computer_worker_service import EnterpriseComputerWorkerService
+        self._enterprise_worker = enterprise_worker or EnterpriseComputerWorkerService()
 
     def capability_metadata(self) -> dict[str, object]:
         from app.services.computer_skill_registry import ComputerSkillRegistry
@@ -102,6 +104,12 @@ class ComputerSkillAdapter(SkillAdapter):
         waiting = next((item for item in tasks if str(item.get("approval_status", "")).upper() != "APPROVED"), None)
         if waiting or bool(plan["requires_approval"]):
             return SkillResult("WAITING_REVIEW", "Environment observed and a controlled action is awaiting human approval.", "Computer Skill stopped before modification; Diff approval and verification remain required.", "REQUEST_APPROVAL")
+        # Document, data and report work is available only after the same
+        # Computer-Mission approval boundary.  The worker itself limits reads
+        # to Mission-linked sources and returns reviewable results only.
+        if mission.get("source_materials"):
+            work = self._enterprise_worker.execute(mission)
+            return SkillResult(str(work["status"]), str(work["observation"]), str(work["summary"]), "VERIFY")
         return SkillResult("WAITING_REVIEW", "A low-risk controlled action was observed; verification remains required.", "Computer Skill will not bypass existing verification or rollback safeguards.", "VERIFY")
 
 
