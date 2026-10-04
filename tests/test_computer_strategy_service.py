@@ -19,6 +19,7 @@ class ComputerStrategyServiceTests(unittest.TestCase):
         self.assertEqual(result["strategy"]["id"], "AUTHORIZED_MATERIAL")
         self.assertEqual(result["decision"]["action"], "EXECUTE")
         self.assertEqual(result["workspace_state"]["available_resources"]["authorized_computer_memory"], 1)
+        self.assertEqual(result["employee_summary"]["quality_status"], "IN_PROGRESS")
         self.assertNotIn("concise brief", str(result))
 
     def test_existing_review_boundary_cannot_be_bypassed(self):
