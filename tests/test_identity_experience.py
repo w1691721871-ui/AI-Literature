@@ -171,6 +171,16 @@ class IdentityExperienceTests(unittest.TestCase):
         self.assertIn("missionArtifacts.value", timeline)
         self.assertIn("no research conclusion will be claimed", timeline)
 
+    def test_solution_demo_reuses_real_workspace_paths_without_synthetic_execution(self):
+        source = (Path(__file__).resolve().parents[1] / "frontend" / "app.js").read_text(encoding="utf-8")
+        self.assertIn("const SOLUTION_DEMO_SCENARIOS", source)
+        self.assertIn("productDemos.value.length ? productDemos.value : SOLUTION_DEMO_SCENARIOS", source)
+        demo_start = source[source.index("async function startProductDemo"):source.index("async function generateResearchWorkflow")]
+        self.assertIn("selectedAIMission.value?.id ? \"mission-center\" : \"dashboard\"", demo_start)
+        self.assertNotIn("await startCopilotMission()", demo_start)
+        self.assertIn("activeWorkspaceView.value = \"artifact-center\"", demo_start)
+        self.assertIn("presentationMode", source)
+
 
 if __name__ == "__main__":
     unittest.main()

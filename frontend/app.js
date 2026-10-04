@@ -27,6 +27,11 @@ const DEMO_KNOWLEDGE_ASSETS = [
   { title: "Demo · 低碳建筑材料制备工艺专利", type: "专利资料", status: "Demo资料", detail: "用于展示成果规划与专利方向的资料卡。" },
   { title: "Demo · 建筑材料企业合作项目需求", type: "项目资料", status: "Demo资料", detail: "用于展示企业需求分析与项目交付流程。" },
 ];
+const SOLUTION_DEMO_SCENARIOS = [
+  { id: "research", title: "Materials Innovation Research", steps: ["Customer research goal", "AI Worker plan", "Candidate Evidence", "Human Review", "Research Brief draft"], boundary: "Uses the current Workspace Mission and never treats candidates as approved Evidence." },
+  { id: "coding", title: "Controlled Computer Work", steps: ["Bounded task", "Controlled plan", "Human approval", "Verification", "Reviewable result"], boundary: "No external login, upload, or unapproved change is performed." },
+  { id: "enterprise", title: "Enterprise Delivery", steps: ["Business problem", "Evidence-bound analysis", "Review", "Artifact draft", "Release approval"], boundary: "A delivery is not released until an authorized human reviewer approves it." },
+];
 
 function loadTaskHistory() {
   try {
@@ -131,6 +136,7 @@ createApp({
     const asking = ref(false);
     const errorMessage = ref("");
     const activeWorkspaceView = ref("dashboard");
+    const presentationMode = ref(false);
     const connectionState = ref("CONNECTING");
     const connectionMessage = ref("Connecting workspace");
     const sessionToken = ref(window.localStorage.getItem("researchos_session_token") || "");
@@ -627,6 +633,7 @@ createApp({
         { title: "Research Brief delivery", detail: artifacts.length ? "A persisted Artifact draft is ready for its recorded review state." : "A brief can be drafted only after traceable Evidence is available.", state: artifacts.length ? "COMPLETED" : "PENDING" },
       ];
     });
+    const solutionDemoScenarios = computed(() => productDemos.value.length ? productDemos.value : SOLUTION_DEMO_SCENARIOS);
     const evidenceCenterItems = computed(() => {
       const currentItems = [];
       const addSources = (sources, relatedAgent, basis) => {
@@ -927,14 +934,16 @@ createApp({
     async function startProductDemo(item) {
       if (item.id === "research") {
         researchOsGoal.value = "Analyze future research opportunities in low-carbon building materials using traceable evidence.";
-        await startCopilotMission();
-        if (selectedAIMission.value?.id) activeWorkspaceView.value = "mission-center";
+        // A demo never creates a synthetic result. Reuse the current Mission when
+        // one exists; otherwise leave the real goal in the Mission launcher for
+        // the user to confirm before any execution begins.
+        activeWorkspaceView.value = selectedAIMission.value?.id ? "mission-center" : "dashboard";
       } else if (item.id === "coding") {
-        computerGoal.value = "Optimize my frontend";
+        computerGoal.value = "Organize approved research materials and prepare a reviewable summary.";
         computerPlanPreview.value = null;
         activeWorkspaceView.value = "computer";
       } else {
-        activeWorkspaceView.value = "solution-delivery";
+        activeWorkspaceView.value = "artifact-center";
       }
     }
 
@@ -3691,6 +3700,8 @@ createApp({
       aiWorkerCapabilities,
       aiWorkerSkills,
       demoMissionTimeline,
+      solutionDemoScenarios,
+      presentationMode,
       workspaceContext,
       workspaceContextLoading,
       workspaceContextError,
@@ -4091,8 +4102,12 @@ createApp({
     };
   },
   template: `
-    <main v-if="identityProfile" class="app-shell">
-      <header class="workspace-header">
+    <main v-if="identityProfile" class="app-shell" :class="{ 'presentation-mode': presentationMode }">
+      <div v-if="presentationMode" class="presentation-controls">
+        <span>ResearchOS · Solution Presentation</span>
+        <button class="outline-button" type="button" @click="presentationMode = false">Exit presentation</button>
+      </div>
+      <header v-if="!presentationMode" class="workspace-header">
         <nav class="top-navigation" aria-label="主导航">
            <button class="brand-button" type="button" @click="openWorkspaceView('dashboard')"><span class="brand-orb" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 2.8 14.4 9.6 21.2 12l-6.8 2.4L12 21.2l-2.4-6.8L2.8 12l6.8-2.4L12 2.8Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/></svg></span><span><b>ResearchOS</b><small>AI Research Workspace</small></span></button>
           <div class="top-navigation-links product-navigation">
@@ -4125,7 +4140,8 @@ createApp({
 
       <section v-if="activeWorkspaceView === 'dashboard'" class="home-workspace" aria-label="ResearchOS Home">
           <div class="home-hero workspace-home-hero"><p class="section-kicker">RESEARCHOS · EVIDENCE-DRIVEN AI WORKSPACE</p><h1>Your AI Worker<br />is ready to work.</h1><p>Transform research goals into evidence-backed decisions and enterprise deliverables.</p><div class="home-research-input"><textarea v-model="researchOsGoal" rows="3" aria-label="Describe your research goal or task" placeholder="Describe your research or business goal..."></textarea><button type="button" class="primary-card-action" :disabled="entryCopilotLoading" @click="startCopilotMission">{{ entryCopilotLoading ? 'Planning mission…' : 'Start Mission' }}</button></div><div class="enterprise-upload-strip"><button class="outline-button" type="button" @click="openWorkspaceView('demo-center')">Try Demo</button><label class="outline-button"><input type="file" accept=".pdf,.docx,.xlsx,.pptx,.png,.jpg,.jpeg,.txt" @change="uploadEnterpriseFile" hidden />{{ enterpriseFileLoading ? 'Analyzing material…' : 'Add material' }}</label></div><small>AI drafts remain reviewable. Customer material never becomes Knowledge Evidence automatically.</small><p v-if="entryCopilotResult" class="quiet-note">{{ entryCopilotResult.summary }} · Mission 已创建。</p><p v-if="enterpriseFileError" class="error-alert"><span>!</span>{{ enterpriseFileError }}</p></div>
-          <div class="home-quick-grid product-capability-grid" aria-label="AI Worker capabilities"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><span class="capability-mark">01</span><b>Research Intelligence</b><small>Discover insights from trusted evidence.</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Review my project code'; computerPlanPreview = null"><span class="capability-mark">02</span><b>Controlled Computer</b><small>Execute approved digital workflows safely.</small></button><button type="button" @click="openWorkspaceView('artifact-center')"><span class="capability-mark">03</span><b>Enterprise Delivery</b><small>Generate reviewed business artifacts.</small></button></div>
+          <section class="solution-narrative" aria-label="How ResearchOS creates value"><span>AI RESEARCH EMPLOYEE</span><h2>From a business question to a trusted research delivery.</h2><p>Describe the outcome. Your AI Worker prepares a governed workflow, builds an Evidence foundation, and produces an Artifact that stays reviewable until release.</p><ol><li><b>01</b><div><strong>Set the goal</strong><small>Start with a customer question or research outcome.</small></div></li><li><b>02</b><div><strong>Verify Evidence</strong><small>Human review keeps sources separate from conclusions.</small></div></li><li><b>03</b><div><strong>Deliver with confidence</strong><small>Artifacts remain traceable and approval-aware.</small></div></li></ol></section>
+          <div class="home-quick-grid product-capability-grid" aria-label="AI Worker capabilities"><button type="button" @click="beginResearchFromHome('Analyze the indexed research materials and prepare an evidence-backed research workflow.')"><span class="capability-mark">01</span><b>Research Intelligence</b><small>Discover insights from trusted evidence.</small></button><button type="button" @click="openWorkspaceView('computer'); computerGoal = 'Organize approved research materials and prepare a reviewable summary.'; computerPlanPreview = null"><span class="capability-mark">02</span><b>Controlled Computer</b><small>Execute approved digital workflows safely.</small></button><button type="button" @click="openWorkspaceView('artifact-center')"><span class="capability-mark">03</span><b>Enterprise Delivery</b><small>Generate reviewed business artifacts.</small></button></div>
           <section class="home-focus-grid home-missions-panel" :class="'connection-' + connectionState.toLowerCase()" aria-label="Active missions">
             <article class="home-focus-card">
               <header><span class="focus-dot mission-dot"></span><p class="section-kicker">ACTIVE MISSIONS</p></header>
@@ -4207,9 +4223,9 @@ createApp({
 
       <section v-if="activeWorkspaceView === 'artifact-center'" class="product-experience-center" aria-label="AI Delivery Room"><header class="dashboard-heading"><div><p class="section-kicker">AI DELIVERY ROOM</p><h2>Outputs stay linked to review.</h2><p>Research drafts and Computer artifacts remain versioned, evidence-aware and ready for a human decision.</p></div><button class="outline-button" type="button" @click="openWorkspaceView('dashboard')">Back to Command Center</button></header><div v-if="artifactGallery.length" class="product-artifact-grid"><article v-for="item in artifactGallery" :key="item.category + item.id"><span>{{ item.category }}</span><h3>{{ item.title }}</h3><p>{{ item.type }} · {{ item.status }}</p><small>Reference · {{ item.reference }}</small><button class="text-button" type="button" @click="item.category === 'Computer' ? openWorkspaceView('computer') : openWorkspaceView('outcome-center')">Open & review →</button></article></div><div v-else class="product-empty-state"><b>Your first delivery starts with a mission</b><p>Run a controlled research or Computer workflow to create an output ready for review.</p><button class="primary-card-action" type="button" @click="openWorkspaceView('dashboard')">Start a mission</button></div></section>
 
-      <section v-if="activeWorkspaceView === 'demo-center'" class="product-experience-center" aria-label="Demo Scenario Center"><header class="dashboard-heading"><div><p class="section-kicker">DEMO SCENARIO CENTER</p><h2>Three bounded ways to experience ResearchOS.</h2><p>所有入口均标记为 Demo；不会生成假 Evidence、研究结论或未经批准的源码修改。</p></div></header><div class="product-demo-grid"><article v-for="item in productDemos" :key="item.id"><span>DEMO</span><h3>{{ item.title }}</h3><ol><li v-for="step in item.steps" :key="step">{{ step }}</li></ol><p>{{ item.boundary }}</p><button class="primary-card-action" type="button" @click="startProductDemo(item)">Open demo</button></article></div></section>
+      <section v-if="activeWorkspaceView === 'demo-center'" class="product-experience-center solution-demo-center" aria-label="Demo Scenario Center"><header class="dashboard-heading"><div><p class="section-kicker">SOLUTION DEMO MODE</p><h2>See an AI Research Employee solve governed work.</h2><p>Customer problem → AI execution → Evidence → Review → Delivery. Every stage is explained through the current Workspace state.</p></div><button class="outline-button" type="button" @click="presentationMode = !presentationMode">{{ presentationMode ? 'Exit presentation' : 'Presentation mode' }}</button></header><section class="solution-demo-brief"><div><span>CUSTOMER SCENARIO</span><b>Building materials R&amp;D team</b><p>Innovation research takes too long to collect, verify, and turn into a decision-ready brief.</p></div><div><span>RESEARCHOS APPROACH</span><b>AI Worker + Evidence + Human Review</b><p>ResearchOS keeps discovery, source validation, review, and delivery in one accountable workflow.</p></div><div><span>EXPECTED RESULT</span><b>Research Brief ready for review</b><p>Conclusions remain linked to the Evidence and cannot be released without an authorized decision.</p></div></section><div class="product-demo-grid"><article v-for="item in solutionDemoScenarios" :key="item.id"><span>DEMO</span><h3>{{ item.title }}</h3><ol><li v-for="step in item.steps" :key="step">{{ step }}</li></ol><p>{{ item.boundary }}</p><button class="primary-card-action" type="button" @click="startProductDemo(item)">Explore scenario</button></article></div></section>
 
-      <aside v-if="onboardingOpen" class="product-onboarding-layer" aria-label="ResearchOS welcome"><div><p class="section-kicker">WELCOME TO RESEARCHOS</p><h2>AI Research Operating System</h2><p>From Research Question to Evidence-backed Decision</p><div class="onboarding-choice-grid"><button type="button" @click="completeOnboarding('research'); beginResearchFromHome('Explore a research goal with evidence-backed workflow.')"><b>Explore Research</b><small>输入并探索研究目标</small></button><button type="button" @click="completeOnboarding('workflow'); openWorkspaceView('workflow-studio')"><b>Build Research Workflow</b><small>创建可审阅研究流程</small></button><button type="button" @click="completeOnboarding('computer'); openWorkspaceView('computer')"><b>Use Computer Skill</b><small>分析项目和受控改动</small></button></div><button class="text-button" type="button" @click="completeOnboarding('welcome')">Explore later</button></div></aside>
+      <aside v-if="onboardingOpen" class="product-onboarding-layer" aria-label="ResearchOS welcome"><div><p class="section-kicker">WELCOME TO RESEARCHOS</p><h2>Meet your AI Research Employee</h2><p>Turn a research goal into Evidence-backed work that stays understandable, reviewable, and ready to deliver.</p><div class="onboarding-choice-grid"><button type="button" @click="completeOnboarding('research'); beginResearchFromHome('Explore a research goal with an evidence-backed workflow.')"><b>1. Create a research mission</b><small>Give the AI Worker a clear outcome to investigate.</small></button><button type="button" @click="completeOnboarding('review'); openWorkspaceView('mission-center')"><b>2. Review trusted Evidence</b><small>Keep human decisions at the points that matter.</small></button><button type="button" @click="completeOnboarding('delivery'); openWorkspaceView('artifact-center')"><b>3. Deliver a traceable Artifact</b><small>Follow results from source to reviewable delivery.</small></button></div><button class="text-button" type="button" @click="completeOnboarding('welcome')">Explore later</button></div></aside>
 
        <button class="research-assistant-launcher" type="button" @click="assistantPanelOpen = !assistantPanelOpen" :aria-expanded="assistantPanelOpen"><svg viewBox="0 0 24 24" fill="none" aria-hidden="true"><path d="M12 3.5 14 10l6.5 2-6.5 2-2 6.5-2-6.5-6.5-2 6.5-2 2-6.5Z" stroke="currentColor" stroke-width="1.6" stroke-linejoin="round"/></svg>Research Assistant</button>
       <aside v-if="assistantPanelOpen" class="research-assistant-panel" aria-label="Research Assistant"><header><div><span>Research Copilot</span><h3>从研究问题开始</h3></div><button type="button" @click="assistantPanelOpen = false" aria-label="关闭 Research Assistant">×</button></header><p>我可以帮你创建研究任务、推荐研究策略，或恢复已有 Workspace。</p><div class="copilot-suggestions"><button type="button" @click="beginResearchFromHome('比较当前已索引资料中的研究方法与适用条件。')">创建研究任务</button><button type="button" @click="beginResearchFromHome('根据当前 Evidence 推荐合适的研究策略。')">推荐研究策略</button><button type="button" @click="openWorkspaceView('research-workspace'); assistantPanelOpen = false">打开 Workspace</button></div><textarea v-model="assistantDraft" rows="4" placeholder="例如：比较当前资料中 RAG 方法的适用条件"></textarea><button type="button" class="primary-card-action" @click="sendAssistantToResearch">进入 Research</button><small v-if="!readyPaperCount">当前知识库没有足够资料支持该研究，请先上传并完成索引。</small><small v-else>这是已有 Research Command 的任务入口，不会创建独立聊天记录或虚构结论。</small></aside>
