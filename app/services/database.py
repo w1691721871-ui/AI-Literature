@@ -118,6 +118,7 @@ def initialize_database() -> None:
     from app.models.mission_control import MissionControlState  # noqa: F401
     from app.models.computer_environment import ComputerEnvironmentState  # noqa: F401
     from app.models.workspace_memory import WorkspaceMemory  # noqa: F401
+    from app.models.mission_collaboration import MissionParticipant, MissionReviewComment  # noqa: F401
 
     Base.metadata.create_all(bind=engine)
     _apply_lightweight_migrations()

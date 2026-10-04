@@ -51,6 +51,7 @@ from app.routes.identity import router as identity_router
 from app.routes.approval import router as approval_router
 from app.routes.audit import router as audit_router
 from app.routes.workspace_context import router as workspace_context_router
+from app.routes.mission_collaboration import router as mission_collaboration_router
 from app.services.runtime_monitor_service import RuntimeMonitor
 from app.services.demo_identity_service import DemoIdentitySeeder
 from app.services.database import initialize_database
@@ -86,6 +87,7 @@ app.include_router(identity_router)
 app.include_router(approval_router)
 app.include_router(audit_router)
 app.include_router(workspace_context_router)
+app.include_router(mission_collaboration_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 def _cors_allowed_origins() -> list[str]:
