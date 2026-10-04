@@ -14,6 +14,7 @@ from app.models.file_asset import FileAsset
 from app.models.mission_file_source import MissionFileSource
 from app.services.database import Base, PROJECT_ROOT
 from app.services.enterprise_computer_worker_service import EnterpriseComputerWorkerService
+from app.services.skill_registry import ComputerSkillAdapter
 
 
 class EnterpriseComputerWorkerTests(unittest.TestCase):
@@ -71,6 +72,12 @@ class EnterpriseComputerWorkerTests(unittest.TestCase):
         result = self.worker.execute({"id": "mission-doc", "goal": "Create a research report", "status": "PLANNING", "evidence_refs": [{"paper_id": "p", "chunk_id": "c"}]})
         self.assertEqual(result["status"], "WAITING_REVIEW")
         self.assertIn("approval", result["summary"].lower())
+
+    def test_attached_material_requires_a_controlled_computer_mission(self):
+        adapter = ComputerSkillAdapter(enterprise_worker=self.worker)
+        result = adapter.execute({"id": "mission-doc", "goal": "Summarize this document", "source_materials": [{"file_id": "doc"}], "computer_missions": []})
+        self.assertEqual(result.status, "WAITING_REVIEW")
+        self.assertIn("approve", result.result_summary.lower())
 
 
 if __name__ == "__main__":

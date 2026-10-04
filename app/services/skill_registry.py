@@ -95,6 +95,8 @@ class ComputerSkillAdapter(SkillAdapter):
         tasks = mission.get("computer_missions", [])
         tasks = tasks if isinstance(tasks, list) else []
         if not tasks:
+            if mission.get("source_materials"):
+                return SkillResult("WAITING_REVIEW", "Authorized source material is attached, but controlled Computer work has not been approved.", "Create and approve a controlled Computer Mission before the AI Worker reads the attached document or spreadsheet.", "REQUEST_APPROVAL")
             return SkillResult("SUCCESS", "No controlled computer action is attached.", "Computer Skill was not required for this mission.")
         current = tasks[-1] if isinstance(tasks[-1], Mapping) else {}
         observation = self._observation.observe_environment({
