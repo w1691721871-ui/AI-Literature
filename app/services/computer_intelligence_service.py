@@ -20,10 +20,12 @@ class ComputerIntelligenceService:
         try:return [self._activity(r) for r in s.scalars(select(ComputerActivitySummary).where(ComputerActivitySummary.task_id==task_id).order_by(ComputerActivitySummary.created_at.asc())).all()]
         finally:s.close()
     def remember(self, workspace_id, memory_type, content):
-        if memory_type not in {"PROJECT_STYLE","TECH_STACK","TEST_COMMAND","USER_PREFERENCE"}: raise ValueError("不支持的项目记忆类型。")
+        if memory_type not in {"PROJECT_STYLE","TECH_STACK","TEST_COMMAND","USER_PREFERENCE","TASK_EXPERIENCE","FAILURE_LEARNING"}: raise ValueError("不支持的项目记忆类型。")
         if any(word in content.lower() for word in ("token","password","secret",".env","api_key")): raise ValueError("禁止写入敏感或凭据类记忆。")
         s=self._session_factory()
         try:
+            existing=s.scalar(select(ComputerProjectMemory).where(ComputerProjectMemory.workspace_id==workspace_id,ComputerProjectMemory.memory_type==memory_type,ComputerProjectMemory.content==content[:1000]).order_by(ComputerProjectMemory.created_at.desc()))
+            if existing is not None: return self._memory(existing)
             r=ComputerProjectMemory(workspace_id=workspace_id,memory_type=memory_type,content=content[:1000]);s.add(r);s.commit();s.refresh(r);return self._memory(r)
         finally:s.close()
     def memories(self, workspace_id):

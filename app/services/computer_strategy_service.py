@@ -32,8 +32,20 @@ class ComputerStrategyService:
             "decision": decision,
             "workspace_state": state,
             "quality": quality,
+            "experience_guidance": self._experience_guidance(context),
             "employee_summary": self._summary(goal, selected, decision, quality),
             "boundary": "Strategy uses only current Workspace metadata, authorized Computer Memory summaries and controlled-Mission state. It never exposes prompts, secrets, source bodies or internal reasoning.",
+        }
+
+    @staticmethod
+    def _experience_guidance(context: Mapping[str, object]) -> dict[str, object]:
+        memories = context.get("computer_memory") if isinstance(context.get("computer_memory"), list) else []
+        task_experiences = sum(1 for item in memories if isinstance(item, Mapping) and item.get("memory_type") == "TASK_EXPERIENCE")
+        failure_learnings = sum(1 for item in memories if isinstance(item, Mapping) and item.get("memory_type") == "FAILURE_LEARNING")
+        return {
+            "available": task_experiences + failure_learnings,
+            "summary": "Prior Workspace experience is available as a safe planning signal." if task_experiences + failure_learnings else "No relevant prior Computer experience is available for this Workspace.",
+            "boundary": "Historical experience can suggest a route but never grants a new permission or bypasses review.",
         }
 
     @staticmethod

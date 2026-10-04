@@ -101,14 +101,17 @@ class AIWorkerRuntime:
             from app.services.computer_mission_runtime import ComputerMissionRuntime
             from app.services.artifact_service import ArtifactService
             from app.services.computer_strategy_service import ComputerStrategyService
+            from app.services.computer_reflection_service import ComputerReflectionService
             computer_plan = ComputerTaskPlanner().plan(mission, context)
             artifacts = ArtifactService(self._sessions, initialize=False).list(mission_id)
             computer_execution = ComputerMissionRuntime().summarize(
                 mission.get("computer_missions"), task_plan=computer_plan, artifacts=artifacts,
             )
             computer_intelligence = ComputerStrategyService().build(mission, context, computer_execution)
+            computer_reflection = ComputerReflectionService().reflect(mission, computer_intelligence)
         else:
             computer_intelligence = None
+            computer_reflection = None
         intelligence = self._mission_intelligence_snapshot(mission)
         return {
             "mission": {
@@ -121,6 +124,7 @@ class AIWorkerRuntime:
             "computer_plan": computer_plan,
             "computer_execution": computer_execution,
             "computer_intelligence": computer_intelligence,
+            "computer_reflection": computer_reflection,
             "context": self._context.presentation(context),
             "timeline": records,
             "execution": execution,
@@ -212,7 +216,20 @@ class AIWorkerRuntime:
             self._sync_contract(mission, self._worker.contract_for_mission(mission), "COMPLETED")
             self._state(mission_id, "COMPLETED", "AI Worker", "All bounded Skill steps completed.", "The Mission has reached its recorded completion boundary.", "Review the completed delivery", "")
         self._workspace_memory.record_mission_summary(mission, owner_id=getattr(actor, "user_id", None))
+        snapshot = self.snapshot(mission_id, actor=actor)
+        self._remember_computer_reflection(mission, snapshot)
         return self.snapshot(mission_id, actor=actor)
+
+    def _remember_computer_reflection(self, mission: Mapping[str, Any], snapshot: Mapping[str, object]) -> None:
+        """Persist a terminal Computer learning via existing safe Workspace Memory."""
+        execution = snapshot.get("computer_execution") if isinstance(snapshot.get("computer_execution"), Mapping) else {}
+        reflection = snapshot.get("computer_reflection") if isinstance(snapshot.get("computer_reflection"), Mapping) else {}
+        workspace_id = str(mission.get("workspace_id") or "")
+        if not workspace_id or not execution or str(execution.get("status") or "") not in {"COMPLETED", "NEEDS_REVIEW"}:
+            return
+        from app.services.computer_intelligence_service import ComputerIntelligenceService
+        from app.services.computer_reflection_service import ComputerReflectionService
+        ComputerReflectionService().remember(workspace_id, reflection, ComputerIntelligenceService(self._sessions, initialize=False))
 
     def _sync_contract(self, mission, contract, execution_state: str, stop_reason: str = "") -> None:
         """Persist a contract only for a workspace-bound Mission; legacy data stays readable."""

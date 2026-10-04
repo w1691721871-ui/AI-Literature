@@ -37,6 +37,12 @@ class ComputerStrategyServiceTests(unittest.TestCase):
         self.assertEqual(result["quality"]["status"], "REVIEWABLE")
         self.assertIn("review", result["quality"]["summary"].lower())
 
+    def test_experience_guidance_reports_only_safe_memory_metadata(self):
+        self.context["computer_memory"].append({"memory_type": "FAILURE_LEARNING", "summary": "No raw detail."})
+        result = self.service.build(self.mission, self.context, {"status": "READY", "observation": {}})
+        self.assertEqual(result["experience_guidance"]["available"], 1)
+        self.assertNotIn("No raw detail", str(result))
+
 
 if __name__ == "__main__":
     unittest.main()
