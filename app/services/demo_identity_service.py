@@ -45,11 +45,17 @@ class DemoIdentitySeeder:
         )
         session = self._sessions()
         try:
-            workspace = session.scalar(select(GovernanceWorkspace).where(GovernanceWorkspace.name == "Demo Workspace"))
+            workspace = session.scalar(select(GovernanceWorkspace).where(
+                GovernanceWorkspace.name == IdentityService.demo_workspace_name
+            ))
             if not workspace:
                 organization = Organization(name="ResearchOS Demo Organization")
                 session.add(organization); session.flush()
-                workspace = GovernanceWorkspace(organization_id=organization.id, name="Demo Workspace", owner_id=owner["id"])
+                workspace = GovernanceWorkspace(
+                    organization_id=organization.id,
+                    name=IdentityService.demo_workspace_name,
+                    owner_id=owner["id"],
+                )
                 session.add(workspace); session.flush()
             for user, role in ((owner, "OWNER"), (reviewer, "REVIEWER")):
                 membership = session.scalar(select(WorkspaceUserRole).where(

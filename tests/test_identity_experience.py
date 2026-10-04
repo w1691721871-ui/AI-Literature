@@ -17,6 +17,7 @@ from app.services.governance_service import GovernanceError, PermissionService
 from app.services.identity_service import IdentityError, IdentityService
 from app.services.permission_middleware import PermissionMiddleware
 from app.services.workspace_experience_service import WorkspaceExperienceService
+from app.services.demo_identity_service import DemoIdentitySeeder
 from app.routes import researchos as legacy_routes
 
 
@@ -71,6 +72,15 @@ class IdentityExperienceTests(unittest.TestCase):
         self.assertEqual(profile["workspace"]["name"], "ResearchOS Demo Workspace")
         with self.assertRaises(GovernanceError):
             self.permissions.check(context.workspace_id, context.user_id, "MISSION_APPROVE")
+
+    def test_deployment_demo_seeder_and_demo_session_use_the_same_workspace(self):
+        # Deployment credentials are deliberately not supplied in this unit
+        # test. The production seeder must nevertheless share the one canonical
+        # name used by the public Demo Session path.
+        self.assertEqual(DemoIdentitySeeder.__module__, "app.services.demo_identity_service")
+        self.assertEqual(self.identity.demo_workspace_name, "ResearchOS Demo Workspace")
+        source = (Path(__file__).resolve().parents[1] / "app" / "services" / "demo_identity_service.py").read_text(encoding="utf-8")
+        self.assertIn("IdentityService.demo_workspace_name", source)
 
     def test_demo_session_is_denied_from_admin_console(self):
         demo = self.identity.create_demo_session()
