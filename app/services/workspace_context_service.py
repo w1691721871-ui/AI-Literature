@@ -76,7 +76,7 @@ class WorkspaceContextService:
                 for row in session.scalars(select(MissionReviewComment).where(MissionReviewComment.mission_id == mission_id, MissionReviewComment.workspace_id == workspace_id).order_by(MissionReviewComment.created_at.desc()).limit(3)).all()
             ]
             computer_memory = [
-                {"memory_type": row.memory_type, "summary": str(row.content)[:240]}
+                {"memory_type": row.memory_type, "summary": str(row.content)[:240], "strategy_hint": row.strategy_hint, "confidence": row.confidence, "validation_count": row.validation_count}
                 for row in session.scalars(
                     select(ComputerProjectMemory)
                     .where(ComputerProjectMemory.workspace_id == workspace_id)

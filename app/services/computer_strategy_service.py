@@ -23,6 +23,7 @@ class ComputerStrategyService:
         environment = self._environment(computer_execution)
         state = self._workspace_state(mission, context, computer_execution)
         options = self._options(mission, context, environment)
+        options = self._apply_experience_hint(options, context)
         selected = self._select(options, computer_execution)
         decision = self._decision(selected, computer_execution)
         quality = self._quality(mission, computer_execution)
@@ -42,11 +43,26 @@ class ComputerStrategyService:
         memories = context.get("computer_memory") if isinstance(context.get("computer_memory"), list) else []
         task_experiences = sum(1 for item in memories if isinstance(item, Mapping) and item.get("memory_type") == "TASK_EXPERIENCE")
         failure_learnings = sum(1 for item in memories if isinstance(item, Mapping) and item.get("memory_type") == "FAILURE_LEARNING")
+        reusable = [item for item in memories if isinstance(item, Mapping) and str(item.get("confidence") or "LOW") in {"MEDIUM", "HIGH"} and item.get("strategy_hint")]
         return {
             "available": task_experiences + failure_learnings,
-            "summary": "Prior Workspace experience is available as a safe planning signal." if task_experiences + failure_learnings else "No relevant prior Computer experience is available for this Workspace.",
+            "summary": "A repeatedly validated Workspace experience can suggest a safe route." if reusable else "No repeatedly validated Computer experience is available for this Workspace.",
+            "suggested_strategy": str(reusable[0].get("strategy_hint") or "") if reusable else "",
             "boundary": "Historical experience can suggest a route but never grants a new permission or bypasses review.",
         }
+
+    @staticmethod
+    def _apply_experience_hint(options: Sequence[Mapping[str, object]], context: Mapping[str, object]) -> list[dict[str, object]]:
+        """Prefer only repeatedly validated advice that still matches today's safe options."""
+        memories = context.get("computer_memory") if isinstance(context.get("computer_memory"), list) else []
+        hints = {
+            str(item.get("strategy_hint") or "")
+            for item in memories
+            if isinstance(item, Mapping) and str(item.get("confidence") or "LOW") in {"MEDIUM", "HIGH"}
+        }
+        ranked = [dict(option) for option in options]
+        ranked.sort(key=lambda option: 0 if str(option.get("id") or "") in hints else 1)
+        return ranked
 
     @staticmethod
     def _environment(execution: Mapping[str, object] | None) -> dict[str, object]:

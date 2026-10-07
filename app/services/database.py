@@ -231,6 +231,16 @@ def _apply_lightweight_migrations() -> None:
         if name not in memory_columns:
             with engine.begin() as connection:
                 connection.execute(text(f"ALTER TABLE workspace_memories ADD COLUMN {name} {definition}"))
+    computer_memory_columns = {column["name"] for column in inspect(engine).get_columns("computer_project_memory")}
+    computer_memory_additions = {
+        "strategy_hint": "VARCHAR(80) NOT NULL DEFAULT ''",
+        "confidence": "VARCHAR(20) NOT NULL DEFAULT 'LOW'",
+        "validation_count": "INTEGER NOT NULL DEFAULT 0",
+    }
+    for name, definition in computer_memory_additions.items():
+        if name not in computer_memory_columns:
+            with engine.begin() as connection:
+                connection.execute(text(f"ALTER TABLE computer_project_memory ADD COLUMN {name} {definition}"))
     computer_mission_columns = {column["name"] for column in inspect(engine).get_columns("computer_missions")}
     computer_mission_additions = {
         "mission_id": "VARCHAR(36)", "task": "TEXT NOT NULL DEFAULT ''", "reason": "TEXT NOT NULL DEFAULT ''",

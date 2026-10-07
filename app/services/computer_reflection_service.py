@@ -18,6 +18,7 @@ class ComputerReflectionService:
         return {
             "task_goal": str(mission.get("goal") or mission.get("title") or "")[:240],
             "strategy": str(strategy.get("label") or "Safe controlled route"),
+            "strategy_id": str(strategy.get("id") or ""),
             "result": result,
             "issue": issue,
             "resolution": str(decision.get("reason") or "Continue only through the existing controlled workflow."),
@@ -45,4 +46,14 @@ class ComputerReflectionService:
             f"Outcome: {str(reflection.get('result') or '')[:180]}",
             f"Future: {str(reflection.get('future_advice') or '')[:180]}",
         ])
-        return memory_service.remember(workspace_id, str(reflection.get("memory_type") or "TASK_EXPERIENCE"), content)
+        try:
+            return memory_service.remember(
+                workspace_id,
+                str(reflection.get("memory_type") or "TASK_EXPERIENCE"),
+                content,
+                strategy_hint=str(reflection.get("strategy_id") or ""),
+            )
+        except TypeError:
+            # Preserve compatibility with the narrow recorder used by legacy
+            # integrations; the persisted implementation accepts the hint.
+            return memory_service.remember(workspace_id, str(reflection.get("memory_type") or "TASK_EXPERIENCE"), content)

@@ -19,14 +19,22 @@ class ComputerIntelligenceService:
         s=self._session_factory()
         try:return [self._activity(r) for r in s.scalars(select(ComputerActivitySummary).where(ComputerActivitySummary.task_id==task_id).order_by(ComputerActivitySummary.created_at.asc())).all()]
         finally:s.close()
-    def remember(self, workspace_id, memory_type, content):
+    def remember(self, workspace_id, memory_type, content, *, strategy_hint=""):
         if memory_type not in {"PROJECT_STYLE","TECH_STACK","TEST_COMMAND","USER_PREFERENCE","TASK_EXPERIENCE","FAILURE_LEARNING"}: raise ValueError("不支持的项目记忆类型。")
         if any(word in content.lower() for word in ("token","password","secret",".env","api_key")): raise ValueError("禁止写入敏感或凭据类记忆。")
         s=self._session_factory()
         try:
             existing=s.scalar(select(ComputerProjectMemory).where(ComputerProjectMemory.workspace_id==workspace_id,ComputerProjectMemory.memory_type==memory_type,ComputerProjectMemory.content==content[:1000]).order_by(ComputerProjectMemory.created_at.desc()))
-            if existing is not None: return self._memory(existing)
-            r=ComputerProjectMemory(workspace_id=workspace_id,memory_type=memory_type,content=content[:1000]);s.add(r);s.commit();s.refresh(r);return self._memory(r)
+            if existing is not None:
+                # Repeated controlled outcomes are the only automatic signal
+                # that can lift an experience above LOW confidence. A single
+                # task never turns into an organizational rule.
+                existing.validation_count += 1
+                existing.confidence = "HIGH" if existing.validation_count >= 3 else "MEDIUM" if existing.validation_count >= 2 else "LOW"
+                if strategy_hint:
+                    existing.strategy_hint = strategy_hint[:80]
+                s.commit(); s.refresh(existing); return self._memory(existing)
+            r=ComputerProjectMemory(workspace_id=workspace_id,memory_type=memory_type,content=content[:1000],strategy_hint=strategy_hint[:80],confidence="LOW",validation_count=1);s.add(r);s.commit();s.refresh(r);return self._memory(r)
         finally:s.close()
     def memories(self, workspace_id):
         s=self._session_factory()
@@ -54,4 +62,4 @@ class ComputerIntelligenceService:
     @staticmethod
     def _activity(r): return {"id":r.id,"task_id":r.task_id,"stage":r.stage,"title":r.title,"description":r.description,"status":r.status,"created_at":r.created_at}
     @staticmethod
-    def _memory(r): return {"id":r.id,"workspace_id":r.workspace_id,"memory_type":r.memory_type,"content":r.content,"created_at":r.created_at}
+    def _memory(r): return {"id":r.id,"workspace_id":r.workspace_id,"memory_type":r.memory_type,"content":r.content,"strategy_hint":r.strategy_hint,"confidence":r.confidence,"validation_count":r.validation_count,"created_at":r.created_at}

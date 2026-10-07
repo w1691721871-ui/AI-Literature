@@ -76,8 +76,10 @@ Workspace Context selects only relevant, authorized Workspace Memory and
 approved Artifact summaries. Selection records use so it is traceable and
 never retrieves a hidden global memory. Computer reflection only saves compact,
 non-sensitive task experience when an existing controlled Computer outcome is
-available. Historical experience is a planning signal only: it cannot grant a
-permission, bypass Human Review, or turn a candidate into Evidence.
+available. Repeated matching controlled outcomes increment a validation count;
+only medium- or high-confidence experience can suggest a currently available
+safe strategy. Historical experience is a planning signal only: it cannot
+grant a permission, bypass Human Review, or turn a candidate into Evidence.
 
 Organizational learning remains anchored in the existing Mission → Evidence →
 Review → Artifact → Workspace Memory lifecycle. A memory is not promoted to a
