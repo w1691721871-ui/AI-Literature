@@ -67,10 +67,13 @@ FRONTEND_RELEASE = "v169"
 def _release_identity() -> dict[str, str]:
     """Expose a minimal deploy identity without operational configuration."""
     return {
+        "service": "researchos-api",
         "release": os.getenv("RESEARCHOS_RELEASE", "local-unlabeled"),
         "commit": os.getenv("RESEARCHOS_COMMIT", "not-configured"),
         "frontend_version": os.getenv("RESEARCHOS_FRONTEND_VERSION", FRONTEND_RELEASE),
         "backend_version": os.getenv("RESEARCHOS_BACKEND_VERSION", "api-2026.10"),
+        "environment": os.getenv("RESEARCHOS_ENVIRONMENT", "unlabeled"),
+        "status": "ok",
     }
 
 

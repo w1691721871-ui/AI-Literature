@@ -52,6 +52,7 @@ RESEARCHOS_RELEASE=release-closure-v169
 RESEARCHOS_COMMIT=<the deployed Git commit>
 RESEARCHOS_FRONTEND_VERSION=v169
 RESEARCHOS_BACKEND_VERSION=api-2026.10
+RESEARCHOS_ENVIRONMENT=production
 ```
 
 Use the actual frontend origin in `CORS_ALLOWED_ORIGINS`. Add a second comma-separated origin only when another deployed frontend must call this API.

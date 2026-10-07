@@ -55,10 +55,16 @@ class ReleaseClosureTests(unittest.TestCase):
         self.assertEqual(snapshot["overall"], "BLOCKED")
 
     def test_version_endpoint_declares_no_secret_configuration(self):
-        from app.main import _release_identity
-        identity = _release_identity()
-        self.assertEqual(set(identity), {"release", "commit", "frontend_version", "backend_version"})
+        from app.main import version_identity
+        identity = version_identity()
+        self.assertEqual(set(identity), {"service", "release", "commit", "frontend_version", "backend_version", "environment", "status"})
+        self.assertEqual(identity["service"], "researchos-api")
+        self.assertEqual(identity["status"], "ok")
         self.assertEqual(identity["frontend_version"], "v169")
+        rendered = str(identity).lower()
+        self.assertNotIn("secret", rendered)
+        self.assertNotIn("password", rendered)
+        self.assertNotIn("token", rendered)
 
 
 if __name__ == "__main__":

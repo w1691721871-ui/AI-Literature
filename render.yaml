@@ -45,3 +45,5 @@ services:
         value: v169
       - key: RESEARCHOS_BACKEND_VERSION
         value: api-2026.10
+      - key: RESEARCHOS_ENVIRONMENT
+        value: production
