@@ -153,10 +153,11 @@ class AIWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(review.calls, 1)
 
     def test_computer_skill_waits_for_approval(self):
+        research = FakeSkill("Research Skill", SkillResult("SUCCESS", "Research state observed.", "No separate research action was needed."))
         computer = FakeSkill("Computer Skill", SkillResult("WAITING_REVIEW", "Diff awaits approval.", "No modification applied."))
         review = FakeSkill("Review Skill", SkillResult("WAITING_REVIEW", "Unused", "Unused"))
-        mission = {**self.mission, "status": "WAITING_REVIEW", "computer_missions": [{"approval_status": "PENDING"}]}
-        result = self.runtime({"computer": computer, "review": review}, mission=mission).execute("mission-p53")
+        mission = {**self.mission, "status": "PLANNING", "computer_missions": [{"approval_status": "PENDING"}]}
+        result = self.runtime({"research": research, "computer": computer, "review": review}, mission=mission).execute("mission-p53")
         self.assertEqual(computer.calls, 1)
         self.assertEqual(review.calls, 0)
         self.assertEqual(result["timeline"][-1]["skill"], "Computer Skill")
@@ -185,6 +186,11 @@ class AIWorkerRuntimeTests(unittest.TestCase):
         result = self.runtime({"research": research, "review": review}).execute("mission-p53")
         self.assertEqual(review.calls, 0)
         self.assertEqual(len(result["timeline"]), 1)
+
+    def test_review_boundary_cannot_be_reexecuted_directly(self):
+        mission = {**self.mission, "status": "WAITING_REVIEW"}
+        with self.assertRaisesRegex(ValueError, "review"):
+            self.runtime({"research": FakeSkill("Research Skill", SkillResult("SUCCESS", "", ""))}, mission=mission).execute("mission-p53")
 
     def test_bounded_adaptive_replan_remains_a_runnable_research_skill(self):
         research = FakeSkill("Research Skill", SkillResult("SUCCESS", "Replanned evidence pass completed.", "A bounded retry completed."))

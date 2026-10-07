@@ -21,9 +21,10 @@ class PersistentMissionExecutionService:
     """Persists bounded progress; restart recovery never replays unknown actions."""
 
     ACTIVE_PHASES = {"UNDERSTANDING", "PLANNING", "EXECUTING", "OBSERVING", "EVALUATING", "REPLANNING", "RECOVERING"}
-    TERMINAL_PHASES = {"COMPLETED", "WAITING_REVIEW", "FAILED", "STOPPED"}
+    TERMINAL_PHASES = {"COMPLETED", "WAITING_REVIEW", "FAILED", "STOPPED", "PAUSED"}
     READ_ONLY_ACTIONS = {"RESEARCH", "COLLECT_EVIDENCE", "RETRIEVE_EVIDENCE", "SEARCH", "NAVIGATE", "EXTRACT", "VERIFY", "PLAN"}
     MAX_RECOVERY = 2
+    MAX_TOTAL_STEPS = 5
     LEASE_SECONDS = 90
 
     def __init__(self, sessions=SessionLocal, *, initialize=True, worker_id: str | None = None):
@@ -61,6 +62,12 @@ class PersistentMissionExecutionService:
         try:
             row = self._row(session, str(mission["id"]), workspace_id, mission)
             action_key = f"{mission['id']}:{row.id}:{step_id}:{action_type}"
+            completed = self._decode(row.completed_steps_summary)
+            if len(completed) >= self.MAX_TOTAL_STEPS and step_id not in completed:
+                row.phase = "WAITING_REVIEW"; row.resume_policy = "NEEDS_REVIEW"
+                row.waiting_reason = "AI Employee reached the safe execution limit for this Mission and needs human direction."
+                session.commit()
+                return {"execute": False, "action_key": action_key, "reason": row.waiting_reason}
             if row.action_key == action_key and row.action_status == "ACTION_VERIFIED":
                 return {"execute": False, "action_key": action_key, "reason": "This bounded action was already verified."}
             if row.action_status == "ACTION_STARTED":
@@ -129,13 +136,55 @@ class PersistentMissionExecutionService:
         finally:
             session.close()
 
+    def authorize_reviewed_continuation(self, mission: dict[str, object]) -> dict[str, object] | None:
+        """Open a new bounded action only after the Mission's existing review approves it."""
+        workspace_id = str(mission.get("workspace_id") or "")
+        if not workspace_id or str(mission.get("status") or "").upper() != "APPROVED":
+            return None
+        session = self._sessions()
+        try:
+            row = session.scalar(select(MissionExecutionCheckpoint).where(MissionExecutionCheckpoint.mission_id == mission["id"]))
+            if row is None or row.workspace_id != workspace_id:
+                return None
+            if row.resume_policy != "NEEDS_REVIEW":
+                return self._data(row)
+            # Approval never certifies an interrupted action as successful.
+            # It only authorizes a *new* bounded action after the reviewer has
+            # considered the uncertainty.
+            row.phase = "PLANNING"; row.resume_policy = "RESUME_ELIGIBLE"
+            row.action_key = ""; row.action_status = "ACTION_REVIEWED"; row.action_safety = ""
+            row.waiting_reason = ""; row.next_action = "Run the next approved bounded step."
+            session.commit(); return self._data(row)
+        finally:
+            session.close()
+
     def recovery_scan(self) -> dict[str, int]:
         """Run at startup: classify interrupted work but never auto-execute it."""
         session = self._sessions()
         recovered = review = 0
         try:
-            rows = session.scalars(select(MissionExecutionCheckpoint).where(MissionExecutionCheckpoint.phase.in_(self.ACTIVE_PHASES))).all()
+            rows = session.scalars(select(MissionExecutionCheckpoint)).all()
             for row in rows:
+                mission = session.get(AIMission, row.mission_id)
+                mission_status = str(mission.status or "").upper() if mission else ""
+                # The Mission lifecycle remains authoritative: a restart must
+                # not turn a deliberately paused, completed, or review-bound
+                # Mission into runnable work merely because an older
+                # checkpoint recorded an active phase.
+                if mission_status == "PAUSED":
+                    row.phase = "PAUSED"; row.resume_policy = "PAUSED"
+                    row.next_action = "An authorized Workspace member must resume this Mission."
+                    continue
+                if mission_status in {"COMPLETED", "DELIVERY_READY"}:
+                    row.phase = "COMPLETED"; row.resume_policy = "TERMINAL"
+                    continue
+                if mission_status in {"WAITING_REVIEW", "WAITING_ADAPTIVE_REVIEW", "FAILED", "REJECTED"}:
+                    row.phase = "WAITING_REVIEW"; row.resume_policy = "NEEDS_REVIEW"
+                    if not row.waiting_reason:
+                        row.waiting_reason = "The Mission already has a human review or recorded failure boundary."
+                    continue
+                if row.phase not in self.ACTIVE_PHASES:
+                    continue
                 if row.action_status == "ACTION_STARTED":
                     row.phase = "WAITING_REVIEW"; row.resume_policy = "NEEDS_REVIEW"
                     row.waiting_reason = "The service restarted while an action result was unknown. Human review is required before any retry."
@@ -199,4 +248,4 @@ class PersistentMissionExecutionService:
         return datetime.now(timezone.utc)
 
     def _data(self, row: MissionExecutionCheckpoint) -> dict[str, object]:
-        return {"phase": row.phase, "goal_summary": row.goal_summary, "current_objective": row.current_objective, "next_action": row.next_action, "completed_steps": self._decode(row.completed_steps_summary), "last_observation": row.last_observation_summary, "last_evaluation": row.last_evaluation_summary, "action_status": row.action_status, "retry_count": row.retry_count, "recovery_count": row.recovery_count, "waiting_reason": row.waiting_reason, "resume_policy": row.resume_policy, "updated_at": row.updated_at}
+        return {"phase": row.phase, "goal_summary": row.goal_summary, "current_objective": row.current_objective, "next_action": row.next_action, "completed_steps": self._decode(row.completed_steps_summary), "max_total_steps": self.MAX_TOTAL_STEPS, "last_observation": row.last_observation_summary, "last_evaluation": row.last_evaluation_summary, "action_status": row.action_status, "retry_count": row.retry_count, "recovery_count": row.recovery_count, "waiting_reason": row.waiting_reason, "resume_policy": row.resume_policy, "updated_at": row.updated_at}

@@ -51,6 +51,7 @@ class AIWorkerRuntime:
         "CREATED", "UNDERSTANDING", "PLANNING", "EXECUTING", "OBSERVING",
         "EVALUATING", "REPLANNING", "WAITING_REVIEW", "COMPLETED",
     }
+    RUNNABLE_MISSION_STATES = {"CREATED", "PLANNING", "NEEDS_REVISION", "ADAPTIVE_REPLANNING", "APPROVED"}
 
     def __init__(
         self,
@@ -149,14 +150,19 @@ class AIWorkerRuntime:
 
     def execute(self, mission_id: str, *, actor=None) -> dict[str, object]:
         mission = self._mission(mission_id)
-        if str(mission.get("status") or "").upper() == "PAUSED":
+        mission_status = str(mission.get("status") or "").upper()
+        if mission_status == "PAUSED":
             raise ValueError("Mission is paused. An authorized Workspace member must resume it before AI Worker execution.")
+        if mission_status not in self.RUNNABLE_MISSION_STATES:
+            raise ValueError("Mission is at a recorded review, failure, or completion boundary and cannot be executed again without the existing governed transition.")
         if not self._persistence.claim(mission):
             raise ValueError("This Mission is already being handled by another bounded worker.")
         checkpoint = self._persistence.snapshot(mission_id, str(mission.get("workspace_id") or ""))
         if checkpoint and checkpoint.get("resume_policy") == "NEEDS_REVIEW":
-            self._persistence.release(mission_id)
-            raise ValueError("This Mission needs human review before its interrupted action can continue.")
+            checkpoint = self._persistence.authorize_reviewed_continuation(mission)
+            if not checkpoint or checkpoint.get("resume_policy") == "NEEDS_REVIEW":
+                self._persistence.release(mission_id)
+                raise ValueError("This Mission needs human review before its interrupted action can continue.")
         self._persistence.checkpoint(mission, phase="PLANNING", objective="Prepare the next authorized bounded step", next_action="Build the approved Skill plan")
         context = self._context.build(mission, actor=actor)
         mission = {**mission, "ai_context": context}

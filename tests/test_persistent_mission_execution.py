@@ -10,6 +10,7 @@ from sqlalchemy.orm import sessionmaker
 from app.services.database import Base
 from app.services.persistent_mission_execution_service import PersistentMissionExecutionService
 from app.models.mission_execution_checkpoint import MissionExecutionLease
+from app.models.ai_mission import AIMission
 
 
 class PersistentMissionExecutionTests(unittest.TestCase):
@@ -54,6 +55,23 @@ class PersistentMissionExecutionTests(unittest.TestCase):
         self.assertEqual(result, {"resume_eligible": 0, "waiting_review": 0})
         self.assertEqual(checkpoint["phase"], "COMPLETED")
 
+    def test_lifecycle_paused_or_reviewed_state_wins_over_stale_active_checkpoint(self):
+        session = self.sessions()
+        try:
+            session.add_all([
+                AIMission(id="durable-mission", title="Paused", goal="Goal", workspace_id="durable-workspace", status="PAUSED"),
+                AIMission(id="review-mission", title="Review", goal="Goal", workspace_id="durable-workspace", status="WAITING_REVIEW"),
+            ])
+            session.commit()
+        finally:
+            session.close()
+        service = PersistentMissionExecutionService(self.sessions, initialize=False)
+        service.checkpoint(self.mission, phase="EXECUTING", objective="Do not resume")
+        service.checkpoint({"id": "review-mission", "workspace_id": "durable-workspace", "goal": "Goal"}, phase="EXECUTING")
+        service.recovery_scan()
+        self.assertEqual(service.snapshot("durable-mission", "durable-workspace")["phase"], "PAUSED")
+        self.assertEqual(service.snapshot("review-mission", "durable-workspace")["resume_policy"], "NEEDS_REVIEW")
+
     def test_duplicate_active_worker_cannot_claim_mission(self):
         first = PersistentMissionExecutionService(self.sessions, initialize=False, worker_id="one")
         second = PersistentMissionExecutionService(self.sessions, initialize=False, worker_id="two")
@@ -88,6 +106,47 @@ class PersistentMissionExecutionTests(unittest.TestCase):
         service = PersistentMissionExecutionService(self.sessions, initialize=False)
         service.checkpoint(self.mission, phase="PLANNING")
         self.assertIsNone(service.snapshot(self.mission["id"], "another-workspace"))
+
+    def test_total_step_limit_persists_and_cannot_be_bypassed_by_resume(self):
+        service = PersistentMissionExecutionService(self.sessions, initialize=False)
+        service.checkpoint(self.mission, phase="PLANNING")
+        for number in range(service.MAX_TOTAL_STEPS):
+            started = service.begin_action(self.mission, f"step-{number}", "SKILL", objective="Bounded work")
+            self.assertTrue(started["execute"])
+            service.verify_action(self.mission["id"], step_id=f"step-{number}", observation="Done", evaluation="Verified", success=True)
+        blocked = PersistentMissionExecutionService(self.sessions, initialize=False).begin_action(self.mission, "step-next", "SKILL", objective="Must not run")
+        checkpoint = service.snapshot(self.mission["id"], self.mission["workspace_id"])
+        self.assertFalse(blocked["execute"])
+        self.assertEqual(checkpoint["resume_policy"], "NEEDS_REVIEW")
+
+    def test_explicit_mission_approval_can_authorize_new_step_without_certifying_unknown_action(self):
+        service = PersistentMissionExecutionService(self.sessions, initialize=False)
+        service.checkpoint(self.mission, phase="EXECUTING")
+        service.begin_action(self.mission, "research-1", "SKILL", objective="Collect evidence")
+        service.recovery_scan()
+        approved = service.authorize_reviewed_continuation({**self.mission, "status": "APPROVED"})
+        self.assertEqual(approved["resume_policy"], "RESUME_ELIGIBLE")
+        self.assertEqual(approved["action_status"], "ACTION_REVIEWED")
+        self.assertEqual(approved["completed_steps"], [])
+
+    def test_startup_recovery_keeps_ten_mission_boundaries_isolated(self):
+        statuses = ["PLANNING", "PAUSED", "WAITING_REVIEW", "COMPLETED", "FAILED"] * 2
+        session = self.sessions()
+        try:
+            for index, status in enumerate(statuses):
+                session.add(AIMission(id=f"stress-{index}", title=f"Mission {index}", goal="Bounded goal", workspace_id="durable-workspace", status=status))
+            session.commit()
+        finally:
+            session.close()
+        service = PersistentMissionExecutionService(self.sessions, initialize=False)
+        for index in range(len(statuses)):
+            service.checkpoint({"id": f"stress-{index}", "workspace_id": "durable-workspace", "goal": "Bounded goal"}, phase="EXECUTING")
+        service.recovery_scan()
+        phases = [service.snapshot(f"stress-{index}", "durable-workspace")["phase"] for index in range(len(statuses))]
+        self.assertEqual(phases.count("PAUSED"), 2)
+        self.assertEqual(phases.count("COMPLETED"), 2)
+        self.assertEqual(phases.count("WAITING_REVIEW"), 4)
+        self.assertEqual(phases.count("RECOVERING"), 2)
 
 
 if __name__ == "__main__":
