@@ -1,6 +1,6 @@
 # Managed Deployment Rehearsal
 
-**Date:** 2026-10-07  
+**Date:** 2026-10-07
 **Scope:** deployment, persistence, interruption, and Golden Demo verification.
 
 ## Deployment environment
