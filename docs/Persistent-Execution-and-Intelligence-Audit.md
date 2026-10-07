@@ -118,3 +118,31 @@ Do not add more Agent types. Validate this durable boundary in a deployment
 rehearsal: interruption during a read-only action, review-bound recovery, and
 an authorized user continuation. Only after that should the team make an
 infrastructure decision about unattended worker ownership.
+
+## Competitive capability assessment
+
+| Dimension | Assessment | Evidence in this release |
+| --- | --- | --- |
+| Goal understanding | Strong, bounded | Mission contract and Workspace Context prepare an authorized objective. |
+| Context | Strong | Relevant Workspace-only Memory, Evidence, collaboration, and approved delivery summaries are selected. |
+| Planning | Strong, bounded | Existing Skill planning remains finite and policy-controlled. |
+| Execution | Moderate | Authorized Skills execute bounded work; external writes stay review-bound. |
+| Persistence | Strong | Mission contract, Runtime state, records, checkpoints, and control state persist in SQLite. |
+| Observation and evaluation | Strong | User-readable action observations and quality checks are saved without hidden reasoning. |
+| Recovery and replanning | Strong, bounded | One safe evidence follow-up and capped recovery are recorded; uncertain actions stop for review. |
+| Browser | Moderate | Level 2 public HTTPS structured extraction, not visual control or authenticated browsing. |
+| Memory learning | Moderate, governed | Repeated validated Computer experience can suggest a safe route; a single outcome cannot create a rule. |
+| Evidence and review | Strong | Candidate/Evidence separation and human gates remain unchanged. |
+| Artifact and organizational learning | Strong | Existing Artifact and Workspace Memory flows retain approved work as traceable organizational assets. |
+| Security and governance | Strong | Workspace isolation, RBAC, leases, and review boundaries remain authoritative. |
+| User experience | Strong | The Mission Room exposes work, recovery, and next action without checkpoint IDs, raw logs, prompts, or model traces. |
+
+### Release conclusion
+
+ResearchOS now meets the **Durable AI Employee** boundary for its declared
+execution model: it persists what it was doing, refuses to duplicate verified
+work, treats uncertain interrupted work as a human decision, and uses only
+repeated, validated Workspace experience as a non-authoritative planning hint.
+It should not yet be marketed as an unattended multi-day worker or a visual
+browser operator. Those require an explicit infrastructure and safety product
+decision rather than another application-level abstraction.
