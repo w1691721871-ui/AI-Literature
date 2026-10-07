@@ -57,12 +57,16 @@ from app.routes.organization_intelligence import router as organization_intellig
 from app.services.runtime_monitor_service import RuntimeMonitor
 from app.services.demo_identity_service import DemoIdentitySeeder
 from app.services.database import initialize_database
+from app.services.persistent_mission_execution_service import PersistentMissionExecutionService
 
 
 @asynccontextmanager
 async def application_lifespan(_app: FastAPI):
     """Provision persistence before serving requests in local and production runs."""
     provision_demo_identity_if_enabled()
+    # Restart recovery only classifies durable checkpoints. It intentionally
+    # never executes a Mission without a fresh authenticated Workspace actor.
+    _app.state.mission_recovery = PersistentMissionExecutionService().recovery_scan()
     yield
 
 

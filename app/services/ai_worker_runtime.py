@@ -24,6 +24,7 @@ from app.services.ai_team_orchestrator import AITeamOrchestrator
 from app.services.workspace_context_service import WorkspaceContextService
 from app.services.workspace_memory_service import WorkspaceMemoryService
 from app.services.ai_employee_report_service import AIEmployeeReportService
+from app.services.persistent_mission_execution_service import PersistentMissionExecutionService
 
 
 class ResearchOrchestrator:
@@ -67,6 +68,7 @@ class AIWorkerRuntime:
         context_service=None,
         team_orchestrator=None,
         workspace_memory_service=None,
+        persistence_service=None,
     ):
         if initialize:
             initialize_database()
@@ -84,6 +86,7 @@ class AIWorkerRuntime:
         self._team = team_orchestrator or AITeamOrchestrator()
         self._workspace_memory = workspace_memory_service or WorkspaceMemoryService(session_factory, initialize=False)
         self._employee_report = AIEmployeeReportService()
+        self._persistence = persistence_service or PersistentMissionExecutionService(session_factory, initialize=False)
 
     def snapshot(self, mission_id: str, *, actor=None) -> dict[str, object]:
         mission = self._mission(mission_id)
@@ -93,6 +96,7 @@ class AIWorkerRuntime:
         self._sync_contract(mission, contract, "CREATED")
         records = self._records(mission_id)
         execution = self._execution_state(mission_id)
+        checkpoint = self._persistence.snapshot(mission_id, str(mission.get("workspace_id") or ""))
         waiting_action = next((record["result_summary"] for record in reversed(records) if record["status"] == "WAITING_REVIEW"), None)
         computer_plan = None
         computer_execution = None
@@ -128,6 +132,7 @@ class AIWorkerRuntime:
             "context": self._context.presentation(context),
             "timeline": records,
             "execution": execution,
+            "checkpoint": checkpoint,
             "research_insight": self._orchestrator.research_insight(mission),
             "mission_intelligence": intelligence,
             "autonomous_progress": self._autonomous.progress(mission, records),
@@ -136,6 +141,7 @@ class AIWorkerRuntime:
                 records,
                 quality=intelligence.get("quality") if isinstance(intelligence, Mapping) else None,
                 execution=execution,
+                checkpoint=checkpoint,
             ),
             "status": execution["state"] if execution else (records[-1]["status"] if records else str(mission.get("status") or "CREATED")),
             "waiting_action": waiting_action,
@@ -145,6 +151,13 @@ class AIWorkerRuntime:
         mission = self._mission(mission_id)
         if str(mission.get("status") or "").upper() == "PAUSED":
             raise ValueError("Mission is paused. An authorized Workspace member must resume it before AI Worker execution.")
+        if not self._persistence.claim(mission):
+            raise ValueError("This Mission is already being handled by another bounded worker.")
+        checkpoint = self._persistence.snapshot(mission_id, str(mission.get("workspace_id") or ""))
+        if checkpoint and checkpoint.get("resume_policy") == "NEEDS_REVIEW":
+            self._persistence.release(mission_id)
+            raise ValueError("This Mission needs human review before its interrupted action can continue.")
+        self._persistence.checkpoint(mission, phase="PLANNING", objective="Prepare the next authorized bounded step", next_action="Build the approved Skill plan")
         context = self._context.build(mission, actor=actor)
         mission = {**mission, "ai_context": context}
         contract = self._worker.contract_for_mission(mission)
@@ -158,6 +171,11 @@ class AIWorkerRuntime:
         self._state(mission_id, "PLANNING", "AI Worker", "Authorized Workspace context is ready.", "Identity, Workspace, Mission, Knowledge and approved Memory are available.", "Plan approved Skills", "")
         for index, (skill_id, adapter) in enumerate(self._team.plan(self._registry, mission, context, understanding=understanding), start=1):
             step_id = f"{skill_id}-{index}"
+            action = self._persistence.begin_action(mission, step_id, "SKILL", objective=f"Run the authorized {adapter.name} step")
+            if not action.get("execute"):
+                self._state(mission_id, "WAITING_REVIEW", adapter.name, str(action.get("reason") or "A prior action needs review."), "The action will not be replayed automatically.", "Review the saved Mission state", str(action.get("reason") or ""))
+                self._sync_contract(mission, contract, "WAITING_REVIEW", str(action.get("reason") or ""))
+                break
             adapter.validate(mission)
             record_id = self._record(mission_id, step_id, adapter.name, "PLAN", "PLANNED", "Skill added to the controlled AI Worker plan.", "")
             self._update(record_id, "RUNNING", "Skill execution started within existing service boundaries.", "")
@@ -167,6 +185,8 @@ class AIWorkerRuntime:
                 result = adapter.execute(mission)
             except Exception as error:
                 result = SkillResult("FAILED", "A controlled Skill action failed.", self._safe_error(error), "EXECUTE")
+
+            self._persistence.observe_action(mission_id, adapter.observe(result))
 
             self._state(mission_id, "OBSERVING", adapter.name, adapter.observe(result), "The result is being checked against the Mission goal.", "Evaluate the result", "")
             status = "WAITING_REVIEW" if result.status in {"WAITING_REVIEW", "NEEDS_EVIDENCE"} else result.status
@@ -259,6 +279,11 @@ class AIWorkerRuntime:
                 status = "WAITING_REVIEW" if autonomous["decision"] == "REQUEST_REVIEW" else "FAILED"
                 summary = f"{summary} {autonomous['reason']}".strip()
             self._update(record_id, status, observation, summary, result.action_type)
+            self._persistence.verify_action(
+                mission_id, step_id=step_id, observation=observation,
+                evaluation=adapter.evaluate(result), success=status == "SUCCESS",
+                waiting_reason="" if status == "SUCCESS" else summary,
+            )
             execution_state = "WAITING_REVIEW" if status in {"WAITING_REVIEW", "FAILED"} else "EXECUTING"
             next_action = "Human review required" if status == "WAITING_REVIEW" else str(autonomous["action"])
             self._state(mission_id, execution_state, adapter.name, observation, adapter.evaluate(result), next_action, str(autonomous["stop_reason"]))
@@ -271,6 +296,19 @@ class AIWorkerRuntime:
         self._workspace_memory.record_mission_summary(mission, owner_id=getattr(actor, "user_id", None))
         snapshot = self.snapshot(mission_id, actor=actor)
         self._remember_computer_reflection(mission, snapshot)
+        final_execution = snapshot.get("execution") if isinstance(snapshot.get("execution"), Mapping) else {}
+        final_phase = "COMPLETED" if final_execution.get("state") == "COMPLETED" else "WAITING_REVIEW" if final_execution.get("state") == "WAITING_REVIEW" else "EVALUATING"
+        self._persistence.checkpoint(
+            mission,
+            phase=final_phase,
+            objective=str(final_execution.get("skill") or "AI Worker"),
+            next_action=str(final_execution.get("next_action") or "Review the recorded Mission result"),
+            observation=str(final_execution.get("observation") or ""),
+            evaluation=str(final_execution.get("evaluation") or ""),
+            waiting_reason=str(final_execution.get("stop_reason") or ""),
+            resume_policy="NEEDS_REVIEW" if final_phase == "WAITING_REVIEW" else "RESUME_ELIGIBLE",
+        )
+        self._persistence.release(mission_id)
         return self.snapshot(mission_id, actor=actor)
 
     def resume(self, mission_id: str, *, actor=None) -> dict[str, object]:

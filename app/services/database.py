@@ -59,6 +59,7 @@ def initialize_database() -> None:
     from app.models.runtime_task import RuntimeTask  # noqa: F401
     from app.models.runtime_execution import RuntimeExecution  # noqa: F401
     from app.models.mission_contract import MissionContract, RuntimeExecutionState  # noqa: F401
+    from app.models.mission_execution_checkpoint import MissionExecutionCheckpoint, MissionExecutionLease  # noqa: F401
     from app.models.approval import ApprovalRequest  # noqa: F401
     from app.models.audit import AuditEvent  # noqa: F401
     from app.models.identity import User, UserSession  # noqa: F401

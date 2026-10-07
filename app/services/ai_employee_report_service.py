@@ -20,6 +20,7 @@ class AIEmployeeReportService:
         *,
         quality: Mapping[str, object] | None = None,
         execution: Mapping[str, object] | None = None,
+        checkpoint: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
         evidence_refs = mission.get("evidence_refs")
         evidence_count = len(evidence_refs) if isinstance(evidence_refs, list) else 0
@@ -45,7 +46,7 @@ class AIEmployeeReportService:
             },
             "artifacts": artifacts,
             "daily_work": self._daily_work(records, evidence_count, review_needed),
-            "work_state": self._work_state(execution_data),
+            "work_state": self._work_state(execution_data, dict(checkpoint or {})),
             "completion": completion,
             "next_step": self._next_step(status, review_needed, evidence_count, quality_data, completion),
             "boundary": "This report is derived only from saved Mission status, approved workflow records and Evidence references. It excludes prompts, chain-of-thought, secrets and raw external content.",
@@ -102,7 +103,19 @@ class AIEmployeeReportService:
         return results[:4]
 
     @staticmethod
-    def _work_state(execution: Mapping[str, object]) -> dict[str, str]:
+    def _work_state(execution: Mapping[str, object], checkpoint: Mapping[str, object]) -> dict[str, str]:
+        if checkpoint.get("resume_policy") == "NEEDS_REVIEW":
+            return {
+                "current": "AI Employee safely preserved its last work state after an interrupted action.",
+                "next": "Review the saved work before asking AI Employee to continue.",
+                "issue": str(checkpoint.get("waiting_reason") or "Human review is required before this action can continue."),
+            }
+        if checkpoint.get("phase") == "RECOVERING":
+            return {
+                "current": "AI Employee restored its saved Mission context after a service restart.",
+                "next": str(checkpoint.get("next_action") or "Continue the next bounded authorized step."),
+                "issue": "",
+            }
         if not execution:
             return {"current": "The AI Worker is ready to begin an authorized step.", "next": "Prepare the first bounded task.", "issue": ""}
         return {
