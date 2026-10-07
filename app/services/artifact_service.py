@@ -11,14 +11,14 @@ from app.models.mission_file_source import MissionFileSource
 from app.models.paper import Paper
 from app.models.paper_chunk import PaperChunk
 from app.models.connector import ArtifactDataSource, DataSource, MissionDataSource
-from app.services.database import PROJECT_ROOT,SessionLocal,initialize_database
+from app.services.database import WORK_DIRECTORY,SessionLocal,initialize_database
 
 class ArtifactError(ValueError):pass
 class ArtifactService:
     TYPES={"RESEARCH_BRIEF":"pdf","SOLUTION_DOCUMENT":"pdf","PRESENTATION":"pptx","DATA_REPORT":"xlsx","DELIVERY_PACKAGE":"pdf"}
     def __init__(self,session_factory=SessionLocal,*,initialize=True,root=None):
         if initialize:initialize_database()
-        self.s=session_factory;self.root=root or PROJECT_ROOT/"work"/"artifacts"
+        self.s=session_factory;self.root=root or WORK_DIRECTORY/"artifacts"
     def generate(self,mission_id,artifact_type):
         if artifact_type not in self.TYPES:raise ArtifactError("不支持的 Artifact 类型。")
         s=self.s()
