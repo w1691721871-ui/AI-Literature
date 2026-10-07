@@ -172,6 +172,54 @@ class AIWorkerRuntime:
                 observation = f"{observation} Adaptive decision: {decision.get('decision', 'REQUEST_REVIEW')}."
                 summary = f"{summary} {decision.get('summary', '')}".strip()
                 status = "WAITING_REVIEW" if decision.get("decision") == "REQUEST_REVIEW" else "FAILED" if result.status == "FAILED" else "WAITING_REVIEW"
+                # A successful evidence-retrieval decision is the one safe
+                # continuation that can happen without another human action:
+                # it is read-only, remains inside the existing Research Skill,
+                # and runs at most once in this execution window.  Everything
+                # else (including failed actions, Computer work, and a second
+                # insufficient result) stays at the established review gate.
+                if (
+                    result.status == "NEEDS_EVIDENCE"
+                    and decision.get("decision") == "CONTINUE"
+                    and skill_id == "research"
+                ):
+                    self._update(
+                        record_id,
+                        "REPLANNING",
+                        observation,
+                        f"{summary} One bounded evidence follow-up is now running.",
+                        result.action_type,
+                    )
+                    self._state(
+                        mission_id,
+                        "REPLANNING",
+                        adapter.name,
+                        "The first evidence pass was insufficient; the AI Worker is running one approved read-only follow-up.",
+                        "The existing adaptive policy recovered traceable candidate references.",
+                        "Verify the follow-up result",
+                        "",
+                    )
+                    mission = self._mission(mission_id)
+                    context = self._context.build(mission, actor=actor)
+                    mission = {**mission, "ai_context": context}
+                    retry_id = self._record(
+                        mission_id,
+                        f"{step_id}-replan",
+                        adapter.name,
+                        "REPLAN",
+                        "PLANNED",
+                        "One bounded, read-only evidence follow-up was authorized by the existing adaptive policy.",
+                        "",
+                    )
+                    self._update(retry_id, "RUNNING", "Bounded evidence follow-up started.", "")
+                    try:
+                        result = adapter.execute(mission)
+                    except Exception as error:
+                        result = SkillResult("FAILED", "A bounded evidence follow-up did not complete.", self._safe_error(error), "RETRIEVE_EVIDENCE")
+                    record_id = retry_id
+                    observation = adapter.observe(result)
+                    summary = result.result_summary
+                    status = "WAITING_REVIEW" if result.status in {"WAITING_REVIEW", "NEEDS_EVIDENCE"} else result.status
             # Mission state can change inside an adapter. It is reloaded only
             # after the action, never synthesized from an internal trace.
             mission = self._mission(mission_id)

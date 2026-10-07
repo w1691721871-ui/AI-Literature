@@ -45,6 +45,18 @@ class FakeSkill(SkillAdapter):
         return self.result
 
 
+class SequenceSkill(FakeSkill):
+    """Deterministic finite results for an adaptive follow-up test."""
+
+    def __init__(self, name, results):
+        super().__init__(name, results[-1])
+        self.results = list(results)
+
+    def execute(self, mission):
+        self.calls += 1
+        return self.results[min(self.calls - 1, len(self.results) - 1)]
+
+
 class FakeContextService:
     """Preserves the legacy runtime fixtures while Context behavior is tested separately."""
     def build(self, mission, *, actor=None):
@@ -117,6 +129,20 @@ class AIWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(review.calls, 0)
         self.assertEqual(result["timeline"][-1]["status"], "WAITING_REVIEW")
         self.assertIn("Adaptive decision", result["timeline"][-1]["observation_summary"])
+
+    def test_recovered_evidence_runs_one_bounded_read_only_follow_up(self):
+        adaptive = FakeAdaptiveService("CONTINUE")
+        research = SequenceSkill("Research Skill", [
+            SkillResult("NEEDS_EVIDENCE", "No Evidence observed.", "Evidence required.", "COLLECT_EVIDENCE"),
+            SkillResult("WAITING_REVIEW", "Traceable Evidence is ready.", "Evidence is ready for human review.", "COLLECT_EVIDENCE"),
+        ])
+        review = FakeSkill("Review Skill", SkillResult("WAITING_REVIEW", "Unused", "Unused"))
+        result = self.runtime({"research": research, "review": review}, adaptive).execute("mission-p53")
+        self.assertEqual(research.calls, 2)
+        self.assertEqual(adaptive.calls, ["mission-p53"])
+        self.assertEqual(result["timeline"][-2]["status"], "REPLANNING")
+        self.assertEqual(result["timeline"][-1]["status"], "WAITING_REVIEW")
+        self.assertEqual(review.calls, 0)
 
     def test_computer_skill_waits_for_approval(self):
         computer = FakeSkill("Computer Skill", SkillResult("WAITING_REVIEW", "Diff awaits approval.", "No modification applied."))
