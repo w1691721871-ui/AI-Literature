@@ -4,7 +4,7 @@
 
 | Item | Status | Verified value |
 |---|---|---|
-| Local / GitHub commit | PASS | `9c2cbbd` matched `origin/main` during this validation. |
+| Local / GitHub commit | PASS | `main` matched `origin/main` during this validation; use the deployed Git commit value when configuring Render. |
 | Frontend release | PASS | Public frontend serves `v169` assets, `release-info.json`, and `researchos-workspace-v169`. |
 | Backend endpoint availability | PASS | Public API serves `/api/version` and `/api/release/demo-readiness`. |
 | Backend release identity | NOT VERIFIED | Public `/api/version` reports `local-unlabeled`, `not-configured`, and `unlabeled`; Render release variables are not configured. |
@@ -31,7 +31,7 @@
 
 ## Pre-release manual steps
 
-1. In the Render API service, set `RESEARCHOS_RELEASE`, `RESEARCHOS_COMMIT=9c2cbbd`, and the documented production environment variables.
+1. In the Render API service, set `RESEARCHOS_RELEASE`, `RESEARCHOS_COMMIT=<deployed Git commit>`, and the documented production environment variables.
 2. Attach a paid Render Persistent Disk at `/var/data`, then redeploy the API service.
 3. Create a Demo Session and seed the approved real corpus with `python scripts/seed_demo_corpus.py`.
 4. Confirm `python scripts/check_demo_corpus.py` reports at least five papers, non-zero chunks and embeddings, and `faiss: PASS`.
