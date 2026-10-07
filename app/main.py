@@ -58,6 +58,20 @@ from app.services.runtime_monitor_service import RuntimeMonitor
 from app.services.demo_identity_service import DemoIdentitySeeder
 from app.services.database import initialize_database
 from app.services.persistent_mission_execution_service import PersistentMissionExecutionService
+from app.services.demo_readiness_service import DemoReadinessService
+
+
+FRONTEND_RELEASE = "v169"
+
+
+def _release_identity() -> dict[str, str]:
+    """Expose a minimal deploy identity without operational configuration."""
+    return {
+        "release": os.getenv("RESEARCHOS_RELEASE", "local-unlabeled"),
+        "commit": os.getenv("RESEARCHOS_COMMIT", "not-configured"),
+        "frontend_version": os.getenv("RESEARCHOS_FRONTEND_VERSION", FRONTEND_RELEASE),
+        "backend_version": os.getenv("RESEARCHOS_BACKEND_VERSION", "api-2026.10"),
+    }
 
 
 @asynccontextmanager
@@ -150,6 +164,18 @@ def health_check() -> dict[str, object]:
     components = RuntimeMonitor().health_components()
     overall = "ok" if all(item["status"] != "FAILED" for item in components.values()) else "warning"
     return {"status": overall, "components": components}
+
+
+@app.get("/api/version")
+def version_identity() -> dict[str, str]:
+    """Public, non-sensitive release identity for frontend/backend parity checks."""
+    return _release_identity()
+
+
+@app.get("/api/release/demo-readiness")
+def demo_readiness() -> dict[str, object]:
+    """Public, read-only readiness signal; no seed or workflow is initiated."""
+    return DemoReadinessService().snapshot()
 
 
 @app.post("/analyze-paper")

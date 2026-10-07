@@ -35,3 +35,13 @@ services:
         value: text-embedding-v4
       - key: EMBEDDING_DIMENSIONS
         value: "1024"
+      # Set these non-secret values in the managed service before a release.
+      # They allow /api/version to prove backend/frontend deployment parity.
+      - key: RESEARCHOS_RELEASE
+        sync: false
+      - key: RESEARCHOS_COMMIT
+        sync: false
+      - key: RESEARCHOS_FRONTEND_VERSION
+        value: v169
+      - key: RESEARCHOS_BACKEND_VERSION
+        value: api-2026.10

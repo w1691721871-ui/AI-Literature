@@ -2,9 +2,13 @@
 
 from pathlib import Path
 
+from app.services.database import WORK_DIRECTORY
 
-PROJECT_ROOT = Path(__file__).resolve().parents[2]
-PAPER_DIRECTORY = PROJECT_ROOT / "work" / "papers"
+
+# Source PDFs must live beside SQLite, FAISS and generated artifacts.  A
+# managed deployment can then mount one explicit volume and persist the whole
+# evidence chain together instead of retaining only database metadata.
+PAPER_DIRECTORY = WORK_DIRECTORY / "papers"
 
 
 def save_pdf_file(file_content: bytes, paper_id: str) -> str:
