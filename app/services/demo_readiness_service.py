@@ -5,8 +5,11 @@ never downloads papers, creates Evidence, invokes a model, or changes state.
 """
 from __future__ import annotations
 
+import json
+import os
 from pathlib import Path
 
+import faiss
 from sqlalchemy import func, select
 
 from app.models.ai_mission import AIMission
@@ -35,6 +38,22 @@ class DemoReadinessService:
     def _state(passed: bool) -> str:
         return "PASS" if passed else "BLOCKED"
 
+    def _faiss_is_readable(self, expected_embeddings: int) -> bool:
+        """Verify index and mapping can actually be opened, not merely found."""
+        if not self._index_path.exists() or not self._mapping_path.exists():
+            return False
+        try:
+            index = faiss.read_index(str(self._index_path))
+            mapping = json.loads(self._mapping_path.read_text(encoding="utf-8"))
+            chunk_ids = mapping.get("chunk_ids", [])
+            return bool(index.ntotal > 0 and index.ntotal == len(chunk_ids) == expected_embeddings)
+        except Exception:
+            return False
+
+    @staticmethod
+    def _release_is_configured() -> bool:
+        return bool(os.getenv("RESEARCHOS_RELEASE", "").strip() and os.getenv("RESEARCHOS_COMMIT", "").strip())
+
     def snapshot(self) -> dict[str, object]:
         session = self._sessions()
         try:
@@ -62,9 +81,12 @@ class DemoReadinessService:
         finally:
             session.close()
 
-        faiss_ready = self._index_path.exists() and self._mapping_path.exists()
+        faiss_ready = self._faiss_is_readable(embeddings)
         corpus_ready = papers >= self.MINIMUM_PAPERS and chunks > 0 and embeddings > 0 and faiss_ready
+        release_ready = self._release_is_configured()
         checks = [
+            {"id": "database", "status": "PASS", "detail": "Database records were read successfully."},
+            {"id": "release_identity", "status": "PASS" if release_ready else "NOT VERIFIED", "detail": "Release and commit identifiers are configured." if release_ready else "Release/commit environment identifiers are not configured."},
             {"id": "demo_workspace", "status": self._state(bool(workspace_id)), "detail": "Demo Workspace is provisioned." if workspace_id else "Demo Workspace is not provisioned."},
             {"id": "demo_members", "status": self._state(members > 0), "detail": f"{members} persisted Demo member(s)." if members else "No Demo membership is available."},
             {"id": "demo_corpus", "status": self._state(corpus_ready), "detail": f"{papers} real paper(s), {chunks} chunk(s), {embeddings} embedded chunk(s); FAISS {'available' if faiss_ready else 'missing'}."},
@@ -74,7 +96,8 @@ class DemoReadinessService:
             {"id": "computer", "status": "NOT VERIFIED" if computer else "BLOCKED", "detail": "Requires a controlled Computer Mission; no task is created by readiness checks."},
         ]
         return {
-            "overall": "PASS" if all(item["status"] == "PASS" for item in checks[:4]) else "BLOCKED",
+            "readiness": "READY" if all(item["status"] == "PASS" for item in checks[:6]) else "NOT_READY",
+            "overall": "PASS" if all(item["status"] == "PASS" for item in checks[:6]) else "BLOCKED",
             "demo_workspace_id": workspace_id,
             "counts": {"members": members, "papers": papers, "chunks": chunks, "embeddings": embeddings, "artifact_backed_missions": mission_count, "reviews": reviews, "computer_missions": computer},
             "corpus_scope": "The current paper library is deployment-level. Only authorized material may be seeded; no synthetic Evidence, approval, insight or Artifact is created.",

@@ -30,8 +30,9 @@ class ReleaseClosureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             snapshot = DemoReadinessService(self.sessions, index_path=Path(directory) / "index.faiss", mapping_path=Path(directory) / "mapping.json").snapshot()
         self.assertEqual(snapshot["overall"], "BLOCKED")
+        self.assertEqual(snapshot["readiness"], "NOT_READY")
         self.assertEqual(snapshot["counts"]["papers"], 0)
-        self.assertEqual(snapshot["checks"][0]["status"], "BLOCKED")
+        self.assertEqual(next(item for item in snapshot["checks"] if item["id"] == "demo_workspace")["status"], "BLOCKED")
 
     def test_real_counts_remain_blocked_without_persisted_faiss(self):
         session = self.sessions()
@@ -51,7 +52,7 @@ class ReleaseClosureTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory:
             snapshot = DemoReadinessService(self.sessions, index_path=Path(directory) / "index.faiss", mapping_path=Path(directory) / "mapping.json").snapshot()
         self.assertEqual(snapshot["counts"]["papers"], 5)
-        self.assertEqual(snapshot["checks"][2]["status"], "BLOCKED")
+        self.assertEqual(next(item for item in snapshot["checks"] if item["id"] == "demo_corpus")["status"], "BLOCKED")
         self.assertEqual(snapshot["overall"], "BLOCKED")
 
     def test_version_endpoint_declares_no_secret_configuration(self):
