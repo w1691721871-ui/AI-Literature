@@ -41,6 +41,16 @@ class AIEmployeeReportTests(unittest.TestCase):
         self.assertNotIn("input_prompt", serialized)
         self.assertNotIn("reasoning_trace", serialized)
 
+    def test_non_crash_review_boundary_does_not_claim_interrupted_recovery(self):
+        report = self.service.build(
+            {"id": "mission-review", "status": "WAITING_REVIEW", "evidence_refs": []},
+            [],
+            execution={"observation": "Evidence needs review.", "next_action": "Human review required", "stop_reason": "INSUFFICIENT_EVIDENCE"},
+            checkpoint={"resume_policy": "NEEDS_REVIEW", "action_status": "ACTION_FAILED", "waiting_reason": "INSUFFICIENT_EVIDENCE"},
+        )
+        self.assertEqual(report["work_state"]["current"], "Evidence needs review.")
+        self.assertNotIn("interrupted", report["work_state"]["current"].lower())
+
 
 if __name__ == "__main__":
     unittest.main()

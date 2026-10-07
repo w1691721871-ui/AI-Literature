@@ -104,7 +104,7 @@ class AIEmployeeReportService:
 
     @staticmethod
     def _work_state(execution: Mapping[str, object], checkpoint: Mapping[str, object]) -> dict[str, str]:
-        if checkpoint.get("resume_policy") == "NEEDS_REVIEW":
+        if checkpoint.get("resume_policy") == "NEEDS_REVIEW" and checkpoint.get("action_status") == "ACTION_STARTED":
             return {
                 "current": "AI Employee safely preserved its last work state after an interrupted action.",
                 "next": "Review the saved work before asking AI Employee to continue.",
