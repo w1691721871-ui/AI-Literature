@@ -131,7 +131,12 @@ class AIWorkerRuntime:
             "research_insight": self._orchestrator.research_insight(mission),
             "mission_intelligence": intelligence,
             "autonomous_progress": self._autonomous.progress(mission, records),
-            "employee_report": self._employee_report.build(mission, records, quality=intelligence.get("quality") if isinstance(intelligence, Mapping) else None),
+            "employee_report": self._employee_report.build(
+                mission,
+                records,
+                quality=intelligence.get("quality") if isinstance(intelligence, Mapping) else None,
+                execution=execution,
+            ),
             "status": execution["state"] if execution else (records[-1]["status"] if records else str(mission.get("status") or "CREATED")),
             "waiting_action": waiting_action,
         }
@@ -267,6 +272,47 @@ class AIWorkerRuntime:
         snapshot = self.snapshot(mission_id, actor=actor)
         self._remember_computer_reflection(mission, snapshot)
         return self.snapshot(mission_id, actor=actor)
+
+    def resume(self, mission_id: str, *, actor=None) -> dict[str, object]:
+        """Continue from persisted, authorized state instead of restarting a Mission.
+
+        Pause/resume is only observable between bounded Skill actions because
+        execution is synchronous.  The method therefore reloads the saved
+        Mission, current runtime state, and fresh Workspace Context before it
+        makes a continuation decision.  Review and security boundaries are
+        never resumed automatically.
+        """
+        mission = self._mission(mission_id)
+        context = self._context.build(mission, actor=actor)
+        previous = self._execution_state(mission_id) or {}
+        status = str(mission.get("status") or "").upper()
+        if status in {"WAITING_REVIEW", "WAITING_ADAPTIVE_REVIEW", "FAILED", "REJECTED", "COMPLETED"}:
+            self._state(
+                mission_id,
+                "WAITING_REVIEW" if status.startswith("WAITING") else "COMPLETED" if status == "COMPLETED" else "EVALUATING",
+                str(previous.get("skill") or "AI Worker"),
+                str(previous.get("observation") or "The Mission was resumed from its saved state."),
+                "The existing review, failure, or completion boundary remains in effect.",
+                "Review the saved Mission state before any further work.",
+                str(previous.get("stop_reason") or status),
+            )
+            return self.snapshot(mission_id, actor=actor)
+        if status not in {"CREATED", "PLANNING", "NEEDS_REVISION", "ADAPTIVE_REPLANNING", "APPROVED"}:
+            return self.snapshot(mission_id, actor=actor)
+        self._state(
+            mission_id,
+            "PLANNING",
+            str(previous.get("skill") or "AI Worker"),
+            "The AI Worker restored the saved Mission context, latest observation, and next authorized step.",
+            "The saved Workspace boundary and current approval requirements were checked again.",
+            "Continue the next bounded authorized Skill",
+            "",
+        )
+        # Context is rebuilt above rather than reused from a prior request;
+        # this protects a resumed Mission from stale membership or workspace
+        # state. ``execute`` rebuilds it again immediately before the Skill.
+        del context
+        return self.execute(mission_id, actor=actor)
 
     def _remember_computer_reflection(self, mission: Mapping[str, Any], snapshot: Mapping[str, object]) -> None:
         """Persist a terminal Computer learning via existing safe Workspace Memory."""

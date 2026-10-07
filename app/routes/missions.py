@@ -68,8 +68,9 @@ def resume_mission(mission_id: str, context: IdentityContext = Depends(permissio
     permissions.mission(context, mission_id, "MISSION_EXECUTE")
     try:
         result = lifecycle.resume(mission_id, context.workspace_id, context.user_id)
+        worker = ai_worker_runtime.resume(mission_id, actor=context)
         audit.record_event(context.workspace_id, context.user_id, "MISSION_RESUMED", "Mission", mission_id, mission_id, "Mission resumed within existing approval boundaries.")
-        return result
+        return {**result, "worker": worker}
     except MissionLifecycleError as error:
         raise HTTPException(status_code=400, detail=str(error)) from error
 

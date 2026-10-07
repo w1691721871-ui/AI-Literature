@@ -1725,7 +1725,6 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .mission-center .mission-stream-surface .mission-requirements > span { color: var(--accent-cyan); }
 .mission-center .mission-stream-surface .mission-review-panel > span { color: var(--warning); }
 .mission-source-material,
-.mission-control-surface,
 .mission-context-surface,
 .context-retrieval-surface,
 .ai-team-plan-surface,
@@ -1735,6 +1734,41 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .mission-center .mission-evaluation-card,
 .mission-center .computer-mission-center,
 .mission-center .computer-execution-runtime { display: none !important; }
+
+/* A Mission pause, continuation, or recovery is a product-level employee
+   status—not a runtime diagnostic. Keep it visible beside the work flow. */
+.mission-control-surface {
+  max-width: 1200px;
+  margin: 20px auto;
+  border-color: rgba(126, 177, 255, .25);
+  background: linear-gradient(145deg, rgba(93, 137, 240, .11), rgba(255,255,255,.022));
+}
+.mission-control-surface .section-kicker { color: var(--accent-cyan); }
+.mission-control-surface header > small {
+  padding: 8px 10px;
+  border: 1px solid rgba(137, 192, 255, .2);
+  border-radius: 999px;
+  background: rgba(115, 165, 255, .08);
+}
+.employee-work-state {
+  max-width: 1200px;
+  margin: 20px auto;
+  padding: 22px;
+  border: 1px solid rgba(111, 202, 223, .22);
+  border-radius: 20px;
+  background: linear-gradient(145deg, rgba(61, 177, 192, .1), rgba(255,255,255,.022));
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.055), 0 18px 44px rgba(0,0,0,.18);
+}
+.employee-work-state > header { display: flex; justify-content: space-between; align-items: flex-start; gap: 16px; }
+.employee-work-state h3 { margin: 4px 0 6px; color: var(--text-primary); font-size: 22px; letter-spacing: -.03em; }
+.employee-work-state header p { max-width: 680px; margin: 0; color: var(--text-secondary); line-height: 1.55; }
+.employee-work-state > header > span { padding: 7px 10px; border: 1px solid rgba(110,220,205,.25); border-radius: 999px; color: #9cecdf; background: rgba(62,189,171,.09); font-size: 10px; font-weight: 800; letter-spacing: .09em; text-transform: uppercase; }
+.employee-work-state-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.employee-work-state-grid article { min-height: 112px; padding: 15px; border: 1px solid rgba(255,255,255,.075); border-radius: 14px; background: rgba(3,9,20,.25); }
+.employee-work-state-grid small { display: block; color: var(--accent-cyan); font-size: 9px; font-weight: 800; letter-spacing: .1em; text-transform: uppercase; }
+.employee-work-state-grid b { display: block; margin-top: 9px; color: var(--text-primary); font-size: 14px; line-height: 1.4; }
+.employee-work-state-grid p { margin: 7px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+@media (max-width: 760px) { .employee-work-state > header { display: grid; } .employee-work-state-grid { grid-template-columns: 1fr; } }
 .ai-activity-surface,
 .next-best-action-panel { max-width: 1200px; margin: 20px auto; }
 .ai-activity-surface { padding: 20px; border-radius: var(--product-radius); background: var(--dark-card); }

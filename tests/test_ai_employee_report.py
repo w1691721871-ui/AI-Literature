@@ -24,6 +24,17 @@ class AIEmployeeReportTests(unittest.TestCase):
         self.assertIn("cannot make a grounded", report["evidence"]["summary"])
         self.assertIn("Evidence", report["next_step"])
 
+    def test_report_explains_persisted_work_and_completion_boundary(self):
+        report = self.service.build(
+            {"id": "mission-4", "status": "WAITING_REVIEW", "evidence_refs": [{"paper_id": "p1"}]},
+            [{"skill": "Research Skill", "status": "SUCCESS", "result_summary": "Evidence collected."}],
+            execution={"observation": "The AI Worker collected a reviewable source set.", "next_action": "Ask a reviewer to confirm the sources."},
+        )
+        self.assertEqual(report["completion"]["status"], "WAITING_REVIEW")
+        self.assertIn("collected", report["work_state"]["current"].lower())
+        self.assertNotIn("input_prompt", str(report).lower())
+        self.assertNotIn("reasoning_trace", str(report).lower())
+
     def test_report_excludes_internal_reasoning_fields(self):
         report = self.service.build({"id": "mission-3", "status": "CREATED", "evidence_refs": []}, [])
         serialized = str(report).lower()

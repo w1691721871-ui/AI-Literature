@@ -144,6 +144,14 @@ class AIWorkerRuntimeTests(unittest.TestCase):
         self.assertEqual(result["timeline"][-1]["status"], "WAITING_REVIEW")
         self.assertEqual(review.calls, 0)
 
+    def test_resume_rebuilds_context_then_continues_only_a_runnable_mission(self):
+        research = FakeSkill("Research Skill", SkillResult("SUCCESS", "Evidence observed.", "Research complete."))
+        review = FakeSkill("Review Skill", SkillResult("WAITING_REVIEW", "Review pending.", "Human review required."))
+        result = self.runtime({"research": research, "review": review}).resume("mission-p53")
+        self.assertEqual(research.calls, 1)
+        self.assertEqual(result["execution"]["state"], "WAITING_REVIEW")
+        self.assertEqual(review.calls, 1)
+
     def test_computer_skill_waits_for_approval(self):
         computer = FakeSkill("Computer Skill", SkillResult("WAITING_REVIEW", "Diff awaits approval.", "No modification applied."))
         review = FakeSkill("Review Skill", SkillResult("WAITING_REVIEW", "Unused", "Unused"))

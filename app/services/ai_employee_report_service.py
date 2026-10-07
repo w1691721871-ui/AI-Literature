@@ -19,6 +19,7 @@ class AIEmployeeReportService:
         records: Sequence[Mapping[str, object]],
         *,
         quality: Mapping[str, object] | None = None,
+        execution: Mapping[str, object] | None = None,
     ) -> dict[str, object]:
         evidence_refs = mission.get("evidence_refs")
         evidence_count = len(evidence_refs) if isinstance(evidence_refs, list) else 0
@@ -26,7 +27,9 @@ class AIEmployeeReportService:
         review_needed = any(str(record.get("status") or "").upper() == "WAITING_REVIEW" for record in records)
         status = str(mission.get("status") or "CREATED").upper()
         quality_data = dict(quality or {})
+        execution_data = dict(execution or {})
         artifacts = self._artifacts(mission)
+        completion = self._completion(status, evidence_count, review_needed, artifacts, quality_data, execution_data)
         return {
             "mission_id": str(mission.get("id") or ""),
             "title": str(mission.get("title") or "Untitled mission"),
@@ -42,7 +45,9 @@ class AIEmployeeReportService:
             },
             "artifacts": artifacts,
             "daily_work": self._daily_work(records, evidence_count, review_needed),
-            "next_step": self._next_step(status, review_needed, evidence_count, quality_data),
+            "work_state": self._work_state(execution_data),
+            "completion": completion,
+            "next_step": self._next_step(status, review_needed, evidence_count, quality_data, completion),
             "boundary": "This report is derived only from saved Mission status, approved workflow records and Evidence references. It excludes prompts, chain-of-thought, secrets and raw external content.",
         }
 
@@ -97,7 +102,33 @@ class AIEmployeeReportService:
         return results[:4]
 
     @staticmethod
-    def _next_step(status: str, review_needed: bool, evidence_count: int, quality: Mapping[str, object]) -> str:
+    def _work_state(execution: Mapping[str, object]) -> dict[str, str]:
+        if not execution:
+            return {"current": "The AI Worker is ready to begin an authorized step.", "next": "Prepare the first bounded task.", "issue": ""}
+        return {
+            "current": str(execution.get("observation") or "The AI Worker restored the latest saved work state."),
+            "next": str(execution.get("next_action") or "Evaluate the next authorized step."),
+            "issue": str(execution.get("stop_reason") or ""),
+        }
+
+    @staticmethod
+    def _completion(status: str, evidence_count: int, review_needed: bool, artifacts: Sequence[Mapping[str, str]], quality: Mapping[str, object], execution: Mapping[str, object]) -> dict[str, str]:
+        if status in {"COMPLETED", "DELIVERY_READY"} and artifacts and not execution.get("stop_reason"):
+            return {"status": "COMPLETED", "reason": "The Mission has a recorded delivery outcome and no unresolved runtime issue."}
+        if review_needed or status in {"WAITING_REVIEW", "WAITING_ADAPTIVE_REVIEW"}:
+            return {"status": "WAITING_REVIEW", "reason": "A human decision is required before this Mission can advance."}
+        if evidence_count == 0 or str(quality.get("quality") or "") == "NEEDS_EVIDENCE":
+            return {"status": "PARTIALLY_COMPLETED", "reason": "The Mission cannot claim a grounded research outcome until traceable Evidence is available."}
+        if status in {"FAILED", "REJECTED"} or execution.get("stop_reason"):
+            return {"status": "NEEDS_REVIEW", "reason": "A recorded issue or boundary needs human direction before work can continue."}
+        return {"status": "IN_PROGRESS", "reason": "Bounded work remains before the existing review and delivery boundaries."}
+
+    @staticmethod
+    def _next_step(status: str, review_needed: bool, evidence_count: int, quality: Mapping[str, object], completion: Mapping[str, str]) -> str:
+        if completion.get("status") == "COMPLETED":
+            return "Review the completed delivery and reuse it only within its recorded evidence boundary."
+        if completion.get("status") == "NEEDS_REVIEW":
+            return "Review the recorded issue and decide whether to revise the Mission or stop it."
         if status in {"COMPLETED", "DELIVERY_READY"}:
             return "Review the completed delivery and reuse it only within its recorded evidence boundary."
         if status in {"FAILED", "REJECTED"}:
