@@ -36,6 +36,18 @@ logs/
 
 # User-provided autonomous Research Workspace assets
 research_workspace/
+uploads/
+data/
+storage/
+artifacts/
+papers/
+vector_index/
+embeddings/
+
+# Local historical interview material; only the public index below is tracked.
+docs/interview/*
+!docs/interview/
+!docs/interview/README.md
 
 # Deployment client metadata is local to the operator account.
 .vercel/

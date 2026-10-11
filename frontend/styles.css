@@ -753,7 +753,7 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 
 .product-experience-center .dashboard-heading h2 { font-size: clamp(30px, 3.2vw, 42px); letter-spacing: -.04em; }
 .product-artifact-grid article { min-height: 200px; border-radius: 18px; background: linear-gradient(145deg, rgba(142, 119, 255, .075), rgba(255,255,255,.022)); }
-.product-demo-grid::before { grid-column: 1 / -1; padding: 11px 14px; border: 1px solid rgba(123,228,255,.15); border-radius: 12px; background: rgba(123,228,255,.045); color: var(--text-secondary); content: "Guided Demo · Research Demo, Computer Demo and Delivery Demo open existing, bounded product workflows without creating new data."; font-size: 11px; line-height: 1.45; }
+.product-demo-grid::before { grid-column: 1 / -1; padding: 11px 14px; border: 1px solid rgba(123,228,255,.15); border-radius: 12px; background: rgba(123,228,255,.045); color: var(--text-secondary); content: "Guided path · Open a Research Mission, show AI Employee assistance, then explain its reviewable Delivery. No new data is created."; font-size: 11px; line-height: 1.45; }
 
 @media (max-width: 1120px) {
   .workspace-context-selector { min-width: 150px; }
@@ -875,20 +875,17 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .rag-source-card > div > strong { display: none; }
 .rag-source-card blockquote { display: -webkit-box; overflow: hidden; -webkit-box-orient: vertical; -webkit-line-clamp: 3; margin-bottom: 0; color: var(--text-secondary); }
 
-/* Computer — expose a controlled journey rather than implementation detail. */
-.computer-studio .computer-operator-heading > div > .section-kicker { font-size: 0; }
-.computer-studio .computer-operator-heading > div > .section-kicker::after { color: var(--accent-cyan); content: "CONTROLLED AI OPERATOR CONSOLE"; font-size: 10px; font-weight: 750; letter-spacing: .13em; }
-.computer-studio .computer-operator-heading > div > p:not(.section-kicker) { max-width: 570px; color: transparent; font-size: 0; }
-.computer-studio .computer-operator-heading > div > p:not(.section-kicker)::after { color: var(--text-secondary); content: "A secure workspace for approved computer tasks with verification and rollback."; font-size: 13px; line-height: 1.6; }
+/* Computer — a business-facing assistant workspace, never a tool console. */
+.computer-studio .computer-operator-heading > div > .section-kicker { color: var(--accent-cyan); font-size: 10px; font-weight: 750; letter-spacing: .13em; }
+.computer-studio .computer-operator-heading > div > p:not(.section-kicker) { max-width: 570px; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
 .computer-studio .operator-status { color: var(--warning); border-color: rgba(255,201,120,.24); background: rgba(255,201,120,.07); }
 .computer-studio .operator-status::before { background: var(--warning); box-shadow: 0 0 9px var(--warning); }
 .computer-studio .computer-studio-grid { grid-template-columns: minmax(240px,.72fr) minmax(410px,1.36fr) minmax(230px,.72fr); gap: var(--product-gap); }
 .computer-studio .operator-task-surface, .computer-studio .operator-timeline-surface, .computer-studio .operator-artifact-surface { padding: 20px; border-color: var(--dark-card-border); border-radius: 20px; background: var(--dark-card); }
 .computer-studio .computer-command-surface { position: relative; }
-.computer-studio .computer-command-surface > h3 { font-size: 0; }
-.computer-studio .computer-command-surface > h3::after { color: var(--text-primary); content: "Set a controlled task"; font-size: 17px; }
-.computer-studio .computer-command-surface:has(textarea:placeholder-shown)::after { position: absolute; top: 111px; left: 33px; pointer-events: none; color: var(--text-muted); content: "Describe the task you want completed"; font-size: 12px; }
-.computer-studio .computer-command-surface textarea:placeholder-shown { color: transparent; }
+.computer-studio .computer-command-surface > h3 { color: var(--text-primary); font-size: 17px; }
+.computer-studio .computer-command-surface:has(textarea:placeholder-shown)::after { display: none; }
+.computer-studio .computer-command-surface textarea:placeholder-shown { color: var(--text-muted); }
 .computer-studio .computer-command-surface .computer-mode-label, .computer-studio .computer-command-surface .operator-template-list { display: none; }
 .computer-studio .computer-command-surface .analyze-button, .computer-studio .computer-command-surface .computer-start-button { width: 100%; margin-top: 12px; }
 .computer-studio .operator-timeline-surface > header h3 { max-width: 470px; font-size: 18px; line-height: 1.32; }
@@ -896,16 +893,14 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
 .computer-studio .operator-plan-list li { min-height: 62px; padding: 10px 0; border: 0; border-bottom: 1px solid rgba(255,255,255,.07); border-radius: 0; background: transparent; }
 .computer-studio .operator-plan-list li p, .computer-studio .operator-plan-list li small { display: none; }
 .computer-studio .operator-plan-list li span { width: 26px; height: 26px; border-radius: 50%; }
-.computer-studio .operator-empty-state b { font-size: 0; }
-.computer-studio .operator-empty-state b::after { color: var(--text-primary); content: "Observe · Plan · Approval · Execute · Verify"; font-size: 13px; }
-.computer-studio .operator-empty-state p { color: transparent; font-size: 0; }
-.computer-studio .operator-empty-state p::after { color: var(--text-secondary); content: "Sensitive actions remain blocked until an authorized human approves them."; font-size: 11px; line-height: 1.55; }
+.computer-studio .operator-empty-state b { color: var(--text-primary); font-size: 13px; }
+.computer-studio .operator-empty-state p { color: var(--text-secondary); font-size: 11px; line-height: 1.55; }
 .computer-studio .operator-artifact-surface { min-height: 0; padding-top: 104px; }
 .computer-studio .operator-artifact-surface > .section-kicker, .computer-studio .operator-artifact-surface > h3,
 .computer-studio .operator-artifact-surface .operator-artifact-list, .computer-studio .operator-artifact-surface .operator-evidence,
 .computer-studio .operator-artifact-surface .computer-memory { display: none; }
 .computer-studio .operator-artifact-surface .operator-artifact-empty { margin: 0; padding-top: 14px; border-top: 1px solid rgba(255,255,255,.08); }
-.computer-studio .operator-artifact-surface .operator-artifact-empty::before { display: block; margin-bottom: 7px; color: var(--accent-cyan); content: "CURRENT ACTION"; font-size: 10px; font-weight: 750; letter-spacing: .10em; }
+.computer-studio .operator-artifact-surface .operator-artifact-empty::before { display: block; margin-bottom: 7px; color: var(--accent-cyan); content: "REVIEWABLE OUTCOME"; font-size: 10px; font-weight: 750; letter-spacing: .10em; }
 .computer-studio .operator-artifact-surface .operator-artifact-empty p { margin: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.55; }
 .computer-studio .computer-environment-timeline { margin-top: var(--product-gap); padding: 18px 20px; border-radius: 20px; background: var(--dark-card); }
 .computer-studio .computer-control-timeline { grid-template-columns: repeat(5, minmax(0,1fr)); gap: 8px; }
@@ -2007,4 +2002,2005 @@ button:focus-visible, input:focus-visible, textarea:focus-visible, select:focus-
   .team-collaboration-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
   .team-member-list { grid-template-columns: 1fr; }
   .next-best-action-panel { align-items: flex-start; flex-direction: column; }
+}
+
+/* UI Championship upgrade — a calm, outcome-first product layer over the
+   existing Workspace data.  This deliberately changes no live state or
+   permissions; it only gives Mission, Evidence, Review and Delivery a single
+   visual grammar. */
+:root {
+  --champion-surface: linear-gradient(145deg, rgba(255,255,255,.058), rgba(255,255,255,.022) 58%, rgba(71,105,197,.055));
+  --champion-border: rgba(214,225,255,.105);
+  --champion-shadow: 0 24px 60px rgba(0,0,0,.25), inset 0 1px 0 rgba(255,255,255,.06);
+  --champion-gap: clamp(16px, 2vw, 28px);
+}
+
+.app-shell { max-width: 1320px; }
+.dashboard-heading h2,
+.operator-studio-heading h2,
+.library-header h2,
+.research-intelligence-heading h2 {
+  max-width: 720px;
+  font-size: clamp(28px, 3.4vw, 46px);
+  line-height: 1.05;
+  letter-spacing: -.05em;
+}
+.dashboard-heading > div > p:not(.section-kicker),
+.operator-studio-heading p,
+.library-header p { max-width: 660px; font-size: 15px; line-height: 1.6; }
+.section-kicker { color: var(--accent-cyan); font-weight: 800; letter-spacing: .13em; }
+
+/* Ordinary users see dependable work summaries, not implementation traces. */
+.mission-internal-trace,
+.computer-internal-details { display: none !important; }
+
+/* Home begins with a single decision: describe the outcome to achieve. */
+.home-workspace { display: grid; gap: var(--champion-gap); }
+.home-workspace .workspace-home-hero {
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
+  min-height: 360px;
+  padding: clamp(30px, 5vw, 64px);
+  border: 1px solid rgba(151,183,255,.18);
+  border-radius: 28px;
+  background: linear-gradient(135deg, rgba(90,127,235,.16), rgba(255,255,255,.038) 45%, rgba(68,202,208,.055));
+  box-shadow: var(--champion-shadow);
+}
+.home-workspace .workspace-home-hero::before {
+  position: absolute; z-index: -1; inset: -55% -18% auto auto; width: 390px; height: 390px;
+  border: 1px solid rgba(128,201,255,.16); border-radius: 50%; content: "";
+  box-shadow: 0 0 0 46px rgba(122,156,255,.035), 0 0 0 94px rgba(122,156,255,.02);
+}
+.home-workspace .workspace-home-hero h1 { max-width: 760px; margin: 10px 0 12px; font-size: clamp(42px, 6vw, 68px); }
+.home-workspace .workspace-home-hero > p:not(.section-kicker):not(.quiet-note):not(.error-alert) { max-width: 590px; font-size: 17px; }
+.home-research-input { max-width: 740px; margin-top: 28px; padding: 8px; border: 1px solid rgba(184,205,255,.14); border-radius: 18px; background: rgba(4,8,18,.36); box-shadow: inset 0 1px 0 rgba(255,255,255,.04); }
+.home-research-input textarea { min-height: 82px; border: 0; background: transparent; }
+.home-research-input textarea:focus { box-shadow: none; }
+.home-research-input .primary-card-action { margin: 4px; }
+.enterprise-upload-strip { margin-top: 12px; }
+.solution-narrative,
+.organization-learning-surface,
+.team-collaboration-panel,
+.product-experience-center,
+.connector-center,
+.library-workspace,
+.computer-studio { border-color: var(--champion-border); box-shadow: var(--champion-shadow); }
+.solution-narrative { padding: clamp(24px, 3vw, 38px); border-radius: 24px; background: var(--champion-surface); }
+.solution-narrative h2 { max-width: 620px; margin: 6px 0 10px; font-size: clamp(24px, 3vw, 38px); line-height: 1.12; letter-spacing: -.04em; }
+.solution-narrative > p { max-width: 650px; }
+.solution-narrative ol { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.solution-narrative li { min-height: 108px; border-color: rgba(255,255,255,.09); background: rgba(3,8,19,.22); }
+.product-capability-grid { gap: 14px; }
+.product-capability-grid > button { min-height: 160px; padding: 22px; border-radius: 18px; background: var(--champion-surface); }
+.product-capability-grid > button b { margin-top: 26px; font-size: 20px; }
+.organization-learning-surface { padding: 26px; border-radius: 22px; background: linear-gradient(135deg, rgba(114,89,223,.105), rgba(255,255,255,.022) 56%); }
+.home-focus-grid { gap: 14px; }
+.home-focus-card { min-height: 210px; padding: 22px; border-radius: 18px; background: var(--champion-surface); }
+.home-focus-card h3 { margin-top: 22px; font-size: 18px; line-height: 1.25; }
+.home-recent-workspaces { padding: 24px; border: 1px solid var(--champion-border); border-radius: 22px; background: rgba(255,255,255,.026); }
+
+/* Workspace and Mission Room organise real records as human work, not data tables. */
+.connector-center[aria-label="AI Employee Workspace"] { padding: clamp(24px, 3vw, 38px); border-radius: 24px; }
+.connector-center[aria-label="AI Employee Workspace"]::before { font-size: 11px; }
+.workspace-context-panel { gap: 14px; margin: 8px 0 22px; }
+.workspace-context-panel article { min-height: 118px; padding: 20px; border-radius: 16px; background: var(--champion-surface); }
+.connector-metrics { gap: 12px; }
+.connector-metrics article { min-height: 112px; padding: 18px; border-radius: 16px; background: rgba(255,255,255,.028); }
+.mission-center { display: grid; gap: var(--champion-gap); }
+.mission-center .dashboard-heading { margin-bottom: 0; padding: clamp(24px, 3vw, 38px); border: 1px solid rgba(128,175,255,.2); border-radius: 24px; background: linear-gradient(135deg, rgba(89,128,239,.13), rgba(255,255,255,.025)); box-shadow: var(--champion-shadow); }
+.mission-center .mission-stage-strip { margin: 0; padding: 8px; border: 1px solid var(--champion-border); border-radius: 18px; background: rgba(255,255,255,.022); }
+.mission-center .mission-stage-strip > * { min-height: 92px; border-radius: 13px; }
+.mission-center .mission-stage-strip .active { background: linear-gradient(145deg, rgba(105,157,255,.15), rgba(88,218,204,.05)); }
+.mission-center .mission-stream-surface,
+.mission-center .mission-control-surface,
+.mission-center .employee-work-state,
+.mission-center .ai-activity-surface,
+.mission-center .next-best-action-panel,
+.mission-center .mission-collaboration-panel { margin: 0; border-radius: 20px; }
+.mission-center .ai-activity-surface { padding: 24px; background: var(--champion-surface); }
+.mission-center .ai-activity-surface li { padding: 15px 16px; border: 1px solid rgba(255,255,255,.065); }
+.mission-center .next-best-action-panel { align-items: center; background: linear-gradient(125deg, rgba(65,154,234,.14), rgba(117,96,236,.09)); }
+
+/* Computer Employee stays intentionally small: purpose, journey, safety, and result. */
+.computer-studio { display: grid; gap: var(--champion-gap); padding: 0; border: 0; background: transparent; box-shadow: none; }
+.computer-studio .computer-operator-heading { padding: clamp(26px, 4vw, 48px); border: 1px solid rgba(90,210,197,.2); border-radius: 26px; background: linear-gradient(135deg, rgba(40,176,174,.13), rgba(255,255,255,.028) 54%, rgba(92,119,238,.08)); box-shadow: var(--champion-shadow); }
+.computer-studio .computer-operator-heading h2 { max-width: 620px; }
+.computer-studio .computer-capability-overview { display: grid; grid-template-columns: minmax(0, 1.1fr) minmax(0, 1.4fr); gap: 22px; align-items: start; padding: 26px; border-radius: 22px; background: var(--champion-surface); }
+.computer-capability-overview > div > span { color: var(--accent-cyan); font-size: 10px; font-weight: 800; letter-spacing: .11em; }
+.computer-capability-overview h3 { margin: 6px 0 8px; font-size: 24px; letter-spacing: -.035em; }
+.computer-capability-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.computer-capability-grid article { min-height: 106px; padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 15px; background: rgba(4,13,22,.28); }
+.computer-capability-grid b { display: block; color: var(--text-primary); font-size: 13px; }
+.computer-capability-grid small { display: block; margin-top: 7px; color: var(--text-secondary); line-height: 1.45; }
+.computer-capability-overview ul { grid-column: 1 / -1; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; padding: 0; }
+.computer-capability-overview li { display: grid; gap: 5px; min-height: 88px; padding: 14px; border: 1px solid rgba(114,216,203,.13); border-radius: 14px; background: rgba(65,175,169,.05); }
+.computer-capability-overview li b { font-size: 12px; color: #b4f2e6; }
+.computer-studio-grid { gap: 14px; }
+.computer-studio .operator-task-surface,
+.computer-studio .operator-timeline-surface,
+.computer-studio .operator-artifact-surface,
+.computer-intelligence-panel { border-color: var(--champion-border); border-radius: 20px; background: var(--champion-surface); box-shadow: 0 16px 42px rgba(0,0,0,.16); }
+.computer-studio .operator-task-surface { min-height: 420px; }
+.computer-studio .operator-timeline-surface { min-height: 420px; }
+.computer-studio .operator-artifact-surface { min-height: 420px; }
+.computer-studio .operator-plan-list small { color: var(--text-muted); }
+.computer-studio .computer-environment-timeline { padding: 24px; }
+.computer-studio .computer-control-timeline { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.computer-studio .computer-control-timeline li:last-child { display: none; }
+.computer-studio .computer-intelligence-panel { padding: 24px; }
+.computer-studio .computer-diff-summary,
+.computer-studio .computer-intelligence-meta { display: none; }
+.computer-studio .operator-approval-bar { border-radius: 18px; }
+
+/* Knowledge and delivery use calm asset cards instead of file-manager density. */
+.library-workspace { padding: clamp(24px, 3vw, 38px); border-radius: 24px; background: rgba(255,255,255,.02); }
+.library-workspace .library-header { gap: 18px; }
+.library-workspace .paper-library-card { min-height: 250px; border-radius: 18px; background: var(--champion-surface); }
+.library-workspace .knowledge-tags span:nth-last-child(-n+1),
+.library-workspace .paper-filename { color: var(--text-muted); }
+.product-experience-center { padding: clamp(26px, 4vw, 44px); border-radius: 26px; background: rgba(255,255,255,.02); }
+.product-experience-center .product-artifact-grid article { min-height: 220px; padding: 22px; border-radius: 18px; background: var(--champion-surface); }
+
+/* Solution presentation reads left-to-right as an FDE story. */
+.solution-showcase .dashboard-heading { padding: clamp(28px, 4vw, 52px); border: 1px solid rgba(151,183,255,.18); border-radius: 26px; background: linear-gradient(135deg, rgba(111,103,231,.16), rgba(255,255,255,.025)); }
+.solution-showcase-story { gap: 14px; }
+.solution-showcase-story > article { min-height: 192px; padding: 22px; border-radius: 18px; background: var(--champion-surface); }
+.solution-showcase-flow { padding: 28px; border: 1px solid var(--champion-border); border-radius: 22px; background: rgba(255,255,255,.025); }
+.solution-showcase-flow ol { gap: 8px; }
+.solution-showcase-flow li { border-radius: 14px; }
+.presentation-mode .app-shell { padding-top: 70px; }
+.presentation-mode .solution-showcase .dashboard-heading { min-height: 320px; align-content: center; }
+
+/* Clear, non-alarming product states. */
+.product-empty-state,
+.home-empty-state,
+.library-empty-state,
+.operator-empty-state { border-style: dashed; border-color: rgba(157,185,255,.2); border-radius: 18px; background: rgba(104,132,220,.045); }
+.error-alert { border-radius: 14px; border-color: rgba(255,190,122,.25); color: #ffd8a7; background: rgba(180,117,46,.1); }
+.loading-state, .home-card-skeleton { border-radius: 16px; background: linear-gradient(90deg, rgba(255,255,255,.03), rgba(255,255,255,.08), rgba(255,255,255,.03)); background-size: 200% 100%; animation: championship-shimmer 2s ease-in-out infinite; }
+@keyframes championship-shimmer { 0% { background-position: 180% 0; } 100% { background-position: -80% 0; } }
+
+@media (max-width: 960px) {
+  .computer-studio .computer-capability-overview { grid-template-columns: 1fr; }
+  .computer-capability-overview ul { grid-template-columns: 1fr; }
+  .computer-studio .computer-control-timeline { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .app-shell { width: min(100% - 24px, 1320px); padding-top: 90px; }
+  .top-navigation { top: 10px; width: calc(100% - 24px); min-height: 56px; gap: 8px; padding: 7px 9px; }
+  .brand-button { min-width: 42px; max-width: 42px; }
+  .brand-button > span:last-child { display: none !important; }
+  .nav-utilities .workspace-context-selector,
+  .nav-utilities .system-link { display: none; }
+  .nav-utilities { margin-left: auto; }
+  .demo-mode-button { display: none; }
+  .top-navigation-links.product-navigation { max-width: calc(100vw - 126px); gap: 1px; }
+  .top-navigation-links button { min-height: 32px; padding: 6px 8px; font-size: 11px; }
+  .home-workspace .workspace-home-hero { min-height: 0; padding: 28px 22px; border-radius: 22px; }
+  .home-workspace .workspace-home-hero h1 { font-size: clamp(38px, 13vw, 50px); }
+  .home-workspace .workspace-home-hero > p:not(.section-kicker):not(.quiet-note):not(.error-alert) { font-size: 15px; }
+  .solution-narrative ol,
+  .computer-capability-grid { grid-template-columns: 1fr; }
+  .solution-narrative li { min-height: 0; }
+  .home-focus-grid,
+  .organization-learning-grid,
+  .workspace-context-panel,
+  .connector-metrics { grid-template-columns: 1fr; }
+  .mission-center .dashboard-heading { padding: 24px 20px; }
+  .mission-center .mission-stage-strip { grid-template-columns: repeat(4, minmax(118px, 1fr)); overflow-x: auto; }
+  .mission-center .mission-stage-strip > * { min-height: 82px; }
+  .computer-studio .computer-operator-heading,
+  .computer-studio .computer-capability-overview,
+  .library-workspace,
+  .product-experience-center { padding: 22px; border-radius: 20px; }
+  .computer-studio-grid { grid-template-columns: 1fr; }
+  .computer-studio .operator-task-surface,
+  .computer-studio .operator-timeline-surface,
+  .computer-studio .operator-artifact-surface { min-height: 0; }
+  .computer-studio .computer-control-timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .solution-showcase .dashboard-heading { padding: 28px 22px; min-height: 0; }
+  .solution-showcase-story { grid-template-columns: 1fr; }
+  .product-capability-grid > button { min-height: 126px; }
+}
+
+/* Premium SaaS refinement — visual elevation only. Existing product data,
+   actions, and approval semantics remain unchanged. */
+:root {
+  --premium-radius: 22px;
+  --premium-radius-sm: 16px;
+  --premium-border: rgba(222, 231, 255, .11);
+  --premium-shadow: 0 18px 48px rgba(0, 0, 0, .2), inset 0 1px 0 rgba(255, 255, 255, .055);
+  --premium-shadow-hover: 0 28px 68px rgba(0, 0, 0, .3), inset 0 1px 0 rgba(255, 255, 255, .09);
+}
+
+/* Shared card behaviour: one visual family across Workspace, Mission, Knowledge,
+   Computer and Delivery without changing their underlying component semantics. */
+.home-focus-card,
+.workspace-context-panel article,
+.connector-metrics article,
+.connector-grid > article,
+.product-artifact-grid > article,
+.paper-library-card,
+.solution-showcase-story > article,
+.computer-capability-grid article,
+.mission-center .mission-stream-surface,
+.mission-center .mission-review-panel,
+.mission-center .mission-evidence-list,
+.mission-center .mission-delivery-package {
+  border-color: var(--premium-border);
+  border-radius: var(--premium-radius-sm);
+  box-shadow: var(--premium-shadow);
+}
+.home-focus-card,
+.connector-grid > article,
+.product-artifact-grid > article,
+.paper-library-card,
+.solution-showcase-story > article,
+.computer-capability-grid article {
+  transition: transform 180ms ease, border-color 180ms ease, box-shadow 180ms ease, background 180ms ease;
+}
+@media (hover: hover) {
+  .home-focus-card:hover,
+  .connector-grid > article:hover,
+  .product-artifact-grid > article:hover,
+  .paper-library-card:hover,
+  .solution-showcase-story > article:hover,
+  .computer-capability-grid article:hover {
+    transform: translateY(-2px);
+    border-color: rgba(151, 192, 255, .28);
+    box-shadow: var(--premium-shadow-hover);
+  }
+}
+
+/* Hero: prominent, but not a decorative landing page detached from the work. */
+.home-workspace .workspace-home-hero {
+  min-height: 400px;
+  border-radius: 30px;
+  background:
+    radial-gradient(560px 330px at 96% 12%, rgba(106, 220, 235, .12), transparent 67%),
+    linear-gradient(135deg, rgba(85,122,233,.19), rgba(255,255,255,.04) 46%, rgba(92,74,190,.08));
+}
+.home-workspace .workspace-home-hero .section-kicker { color: #a8ddff; }
+.home-workspace .workspace-home-hero h1 { max-width: 800px; font-weight: 730; }
+.home-workspace .workspace-home-hero > small { display: block; max-width: 560px; color: var(--text-secondary); line-height: 1.55; }
+.home-research-input { border-radius: 20px; background: rgba(4, 9, 22, .48); }
+.home-research-input .primary-card-action { min-height: 42px; padding-inline: 18px; }
+.enterprise-upload-strip .outline-button { border-radius: 12px; }
+
+/* Statuses use neutral, explainable product language and a consistent visual
+   hierarchy. Values remain supplied by the existing Runtime / Mission state. */
+.operator-status,
+.status-badge,
+.paper-status,
+.review-status,
+.mission-review-panel > span,
+.mission-delivery-package > span {
+  min-height: 27px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.mission-center .mission-review-panel { border-color: rgba(246, 194, 103, .28); }
+.mission-center .mission-delivery-package { border-color: rgba(121, 215, 181, .22); }
+.connection-status.offline,
+.connection-status.failed { color: #ffd3a0; border-color: rgba(255, 190, 122, .24); background: rgba(179, 117, 47, .11); }
+.connection-status.connecting { color: #c5e5ff; border-color: rgba(126, 187, 255, .22); background: rgba(83, 147, 220, .1); }
+.connection-status.connected { color: #b9f2d8; border-color: rgba(121, 215, 181, .22); background: rgba(58, 159, 119, .1); }
+
+/* Mission Room: goal and current human decision lead; lower panels support it. */
+.mission-center .dashboard-heading > div { max-width: 760px; }
+.mission-center .mission-stream-surface { padding: clamp(22px, 3vw, 32px); background: linear-gradient(145deg, rgba(103, 142, 242, .11), rgba(255,255,255,.022)); }
+.mission-center .mission-stream-surface > header { gap: 18px; padding-bottom: 18px; border-bottom: 1px solid rgba(255,255,255,.075); }
+.mission-center .mission-stream-surface > header h3 { margin: 4px 0 6px; font-size: clamp(21px, 2.5vw, 30px); letter-spacing: -.035em; }
+.mission-center .mission-stream-surface > header small { color: var(--text-secondary); }
+.mission-center .mission-requirements { margin-top: 20px; padding: 18px; border: 1px solid rgba(129, 181, 255, .16); border-radius: var(--premium-radius-sm); background: rgba(85, 128, 218, .07); }
+.mission-center .mission-requirements > span,
+.mission-center .mission-evidence-list > span,
+.mission-center .mission-delivery-package > span { color: var(--accent-cyan); font-size: 10px; font-weight: 780; letter-spacing: .11em; }
+.mission-center .mission-timeline { gap: 10px; margin-top: 20px; }
+.mission-center .mission-timeline li { padding: 15px 16px; border-left-color: rgba(120, 206, 226, .45); border-radius: 0 14px 14px 0; background: rgba(255,255,255,.024); }
+.mission-center .mission-evidence-list,
+.mission-center .mission-delivery-package { padding: 20px; background: rgba(255,255,255,.025); }
+.mission-center .mission-review-panel { padding: 22px; background: linear-gradient(145deg, rgba(244, 184, 80, .1), rgba(255,255,255,.022)); }
+.mission-center .mission-review-panel p { color: var(--text-secondary); line-height: 1.6; }
+.mission-center .next-best-action-panel { padding: 22px 24px; border-radius: var(--premium-radius); }
+.mission-center .next-best-action-panel > span { white-space: normal; text-align: center; }
+
+/* Computer Employee capability showcase: three clear assistants, one shared
+   control model. */
+.computer-capability-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.computer-capability-grid article { min-height: 136px; display: flex; flex-direction: column; }
+.computer-capability-grid article b { font-size: 14px; }
+.computer-capability-grid article em { margin-top: auto; padding-top: 12px; color: #9deadd; font-size: 10px; font-style: normal; line-height: 1.4; }
+.computer-capability-overview > div > p { max-width: 410px; }
+.computer-studio .operator-timeline-surface > header { padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.computer-studio .operator-plan-list li { min-height: 84px; }
+.computer-studio .operator-artifact-surface .operator-evidence { padding: 14px 0; border-bottom: 1px solid rgba(255,255,255,.065); }
+.computer-studio .operator-artifact-surface .operator-evidence:last-of-type { border-bottom: 0; }
+
+/* Deliberately ordinary loading, empty, review, and completed states. */
+.product-empty-state,
+.library-empty-state,
+.operator-empty-state,
+.home-empty-action,
+.home-offline-state {
+  padding: 24px;
+  border-radius: var(--premium-radius-sm);
+  background: linear-gradient(145deg, rgba(105, 136, 219, .075), rgba(255,255,255,.02));
+}
+.product-empty-state b,
+.library-empty-state h3,
+.operator-empty-state b,
+.home-empty-action h3,
+.home-offline-state h3 { font-size: 18px; letter-spacing: -.02em; }
+
+/* Responsive visual hierarchy: 1440 retains generous density, tablet groups
+   work into two columns, and 390px never needs a clipped card. */
+@media (min-width: 1280px) {
+  .home-workspace .workspace-home-hero { padding-inline: 72px; }
+  .mission-center .mission-center-layout { grid-template-columns: minmax(0, 1fr); }
+}
+@media (max-width: 1024px) {
+  .home-workspace .workspace-home-hero { min-height: 360px; }
+  .computer-capability-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .computer-studio .computer-studio-grid { grid-template-columns: minmax(240px, .78fr) minmax(0, 1.22fr); }
+  .computer-studio .operator-artifact-surface { grid-column: 1 / -1; min-height: 0; }
+}
+@media (max-width: 768px) {
+  .home-workspace .workspace-home-hero { min-height: 330px; padding: 38px 30px; }
+  .home-workspace .workspace-home-hero h1 { font-size: clamp(42px, 8vw, 56px); }
+  .mission-center .mission-stream-surface > header { align-items: flex-start; flex-direction: column; }
+  .computer-capability-grid { grid-template-columns: 1fr; }
+  .computer-studio .computer-studio-grid { grid-template-columns: 1fr; }
+  .computer-studio .operator-artifact-surface { grid-column: auto; }
+}
+@media (max-width: 420px) {
+  .app-shell { width: min(100% - 20px, 1320px); }
+  .home-workspace .workspace-home-hero { min-height: 0; padding: 28px 20px; border-radius: 22px; }
+  .home-workspace .workspace-home-hero h1 { font-size: 40px; line-height: 1; }
+  .home-research-input { border-radius: 16px; }
+  .home-research-input .primary-card-action { width: calc(100% - 8px); }
+  .enterprise-upload-strip { display: grid; grid-template-columns: 1fr; }
+  .enterprise-upload-strip > * { justify-content: center; }
+  .mission-center .mission-stage-strip { grid-template-columns: repeat(4, minmax(108px, 1fr)); }
+  .mission-center .mission-stream-surface,
+  .mission-center .mission-review-panel,
+  .mission-center .next-best-action-panel { padding: 18px; border-radius: 16px; }
+  .computer-studio .computer-operator-heading,
+  .computer-studio .computer-capability-overview { padding: 20px; }
+  .computer-capability-overview ul { grid-template-columns: 1fr; }
+  .computer-studio .computer-control-timeline { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+/* AI Employee Presence — a view over existing Mission state, not a synthetic
+   activity feed. The only animated indicator appears when the persisted
+   Mission status indicates active work. */
+.ai-employee-presence,
+.ai-employee-ready {
+  display: grid;
+  gap: 20px;
+  margin: 0;
+  padding: clamp(22px, 3vw, 34px);
+  border: 1px solid rgba(122, 199, 221, .22);
+  border-radius: var(--premium-radius);
+  background:
+    radial-gradient(520px 160px at 90% 0%, rgba(70, 207, 198, .11), transparent 70%),
+    linear-gradient(135deg, rgba(65, 142, 202, .13), rgba(255,255,255,.025));
+  box-shadow: var(--premium-shadow);
+}
+.ai-employee-presence > header,
+.ai-employee-ready { align-items: flex-start; grid-template-columns: minmax(0, 1fr) auto; }
+.ai-employee-presence header > div { min-width: 0; }
+.ai-employee-presence h3,
+.ai-employee-ready h3 { margin: 3px 0 6px; color: var(--text-primary); font-size: clamp(22px, 3vw, 31px); letter-spacing: -.04em; }
+.ai-employee-presence header p,
+.ai-employee-ready p { margin: 0; color: var(--text-secondary); font-size: 14px; line-height: 1.55; }
+.ai-employee-presence header p b { color: var(--text-primary); }
+.ai-employee-presence > header > span {
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px;
+  border: 1px solid rgba(141, 210, 224, .24); border-radius: 999px;
+  color: #b9f5e9; background: rgba(65, 183, 170, .09); font-size: 10px; font-weight: 780; letter-spacing: .07em; text-transform: uppercase;
+}
+.ai-employee-presence > header > span::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(123, 235, 217, .09); content: ""; }
+.ai-employee-presence > header > span.working::before { animation: employee-presence-pulse 1.8s ease-in-out infinite; }
+@keyframes employee-presence-pulse { 0%, 100% { box-shadow: 0 0 0 4px rgba(123,235,217,.08), 0 0 9px rgba(123,235,217,.25); } 50% { box-shadow: 0 0 0 8px rgba(123,235,217,.015), 0 0 16px rgba(123,235,217,.48); } }
+.ai-employee-presence-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.ai-employee-presence-grid article { min-height: 130px; padding: 17px; border: 1px solid rgba(255,255,255,.085); border-radius: 16px; background: rgba(3, 14, 24, .25); }
+.ai-employee-presence-grid small { display: block; color: var(--accent-cyan); font-size: 10px; font-weight: 780; letter-spacing: .1em; text-transform: uppercase; }
+.ai-employee-presence-grid b { display: block; margin-top: 10px; color: var(--text-primary); font-size: 14px; line-height: 1.42; }
+.ai-employee-presence-grid p { margin: 8px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.5; }
+.ai-employee-ready { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+.ai-employee-ready > span { display: block; width: 11px; height: 11px; border-radius: 50%; background: var(--accent-cyan); box-shadow: 0 0 0 7px rgba(123,228,255,.09), 0 0 22px rgba(123,228,255,.28); }
+
+/* Work Journal turns persisted timeline events into an understandable account
+   of what happened, why it matters, and the next real action. */
+.mission-center .ai-work-journal { margin-top: 22px; padding: 20px; border: 1px solid rgba(129, 185, 255, .14); border-radius: 18px; background: rgba(255,255,255,.018); }
+.ai-work-journal > header,
+.mission-evidence-list > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ai-work-journal h4,
+.mission-evidence-list h4,
+.mission-review-panel h4 { margin: 3px 0 0; color: var(--text-primary); font-size: 16px; letter-spacing: -.02em; }
+.ai-work-journal > header > small,
+.mission-evidence-list > header > small { max-width: 270px; padding: 7px 9px; border: 1px solid rgba(127, 225, 255, .17); border-radius: 999px; color: var(--text-secondary); background: rgba(102, 163, 255, .06); font-size: 10px; line-height: 1.4; text-align: right; }
+.mission-center .ai-work-journal .mission-timeline { margin-bottom: 0; }
+.mission-center .ai-work-journal .mission-timeline li { padding: 17px 17px 17px 50px; }
+.mission-center .ai-work-journal .mission-timeline li > b { top: 17px; width: 30px; height: 30px; color: #b7f7ea; background: rgba(41, 151, 144, .14); }
+.mission-center .ai-work-journal .mission-timeline li span { display: block; margin-top: 9px; color: #b8d9ff; font-size: 11px; line-height: 1.5; }
+.mission-center .ai-work-journal .mission-timeline li small { display: block; margin-top: 7px; color: var(--text-muted); font-size: 10px; line-height: 1.5; }
+
+/* Evidence is positioned as support for the Mission, with review state visible
+   alongside real source information. */
+.mission-center .mission-evidence-list { margin-top: 18px; }
+.mission-evidence-list > header { margin-bottom: 14px; }
+.mission-evidence-list > div { padding: 13px 15px 13px 17px; }
+.mission-evidence-list > div b { font-size: 13px; }
+.mission-center .mission-evidence-list > div small { display: block; margin-top: 5px; color: var(--text-secondary); font-size: 10px; line-height: 1.5; }
+.mission-center .mission-review-panel h4 { margin-top: 11px; }
+.mission-center .mission-delivery-package b { display: block; margin-top: 10px; font-size: 17px; }
+.mission-center .mission-delivery-package small { display: block; margin-top: 10px; color: #a8e5cf; line-height: 1.5; }
+
+@media (prefers-reduced-motion: reduce) {
+  .ai-employee-presence > header > span.working::before { animation: none; }
+}
+@media (max-width: 768px) {
+  .ai-employee-presence > header { display: grid; grid-template-columns: 1fr; }
+  .ai-employee-presence-grid { grid-template-columns: 1fr; }
+  .ai-employee-ready { grid-template-columns: auto minmax(0, 1fr); }
+  .ai-employee-ready .primary-card-action { grid-column: 1 / -1; width: 100%; }
+}
+@media (max-width: 420px) {
+  .ai-employee-presence,
+  .ai-employee-ready { padding: 20px; border-radius: 18px; }
+  .ai-work-journal > header,
+  .mission-evidence-list > header { display: grid; }
+  .ai-work-journal > header > small,
+  .mission-evidence-list > header > small { max-width: none; text-align: left; }
+}
+
+/* Executive Experience — a role-gated projection of existing Workspace and
+   Mission records. It remains invisible to researcher-only roles. */
+.executive-overview,
+.manager-mission-summary {
+  position: relative;
+  overflow: hidden;
+  border: 1px solid rgba(151, 181, 255, .2);
+  border-radius: var(--premium-radius);
+  background:
+    radial-gradient(520px 190px at 100% 0%, rgba(126, 107, 239, .12), transparent 72%),
+    linear-gradient(135deg, rgba(85, 122, 221, .105), rgba(255,255,255,.025));
+  box-shadow: var(--premium-shadow);
+}
+.executive-overview { max-width: 1320px; margin: 26px auto 0; padding: clamp(22px, 3vw, 32px); }
+.executive-overview > header,
+.manager-mission-summary > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.executive-overview h3,
+.manager-mission-summary h3 { margin: 3px 0 5px; color: var(--text-primary); font-size: 21px; letter-spacing: -.03em; }
+.executive-overview header p { max-width: 540px; margin: 0; color: var(--text-secondary); font-size: 13px; line-height: 1.5; }
+.executive-overview > header > span,
+.manager-mission-summary > header > span { max-width: 240px; padding: 7px 10px; border: 1px solid rgba(166, 187, 255, .22); border-radius: 999px; color: #d3e3ff; background: rgba(108, 135, 227, .1); font-size: 10px; font-weight: 750; letter-spacing: .05em; text-align: right; }
+.executive-overview-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.executive-overview-grid article { min-height: 142px; padding: 17px; border: 1px solid rgba(255,255,255,.085); border-radius: 16px; background: rgba(5, 13, 30, .27); }
+.executive-overview-grid small,
+.manager-mission-summary small { display: block; color: #b8d6ff; font-size: 10px; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
+.executive-overview-grid b { display: block; margin-top: 8px; color: var(--text-primary); font-size: 30px; line-height: 1; letter-spacing: -.05em; }
+.executive-overview-grid p { margin: 10px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
+.executive-overview-empty { margin-top: 18px; padding: 20px; border: 1px dashed rgba(161, 190, 255, .23); border-radius: 16px; background: rgba(255,255,255,.025); }
+.executive-overview-empty b { color: var(--text-primary); }
+.executive-overview-empty p { margin: 7px 0 0; color: var(--text-secondary); }
+
+.manager-mission-summary { margin: 0; padding: 22px; }
+.manager-mission-summary > div:last-child { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.manager-mission-summary article { min-height: 118px; padding: 15px; border: 1px solid rgba(255,255,255,.08); border-radius: 15px; background: rgba(4, 12, 28, .25); }
+.manager-mission-summary article b { display: block; margin-top: 9px; color: var(--text-primary); font-size: 12px; font-weight: 650; line-height: 1.48; }
+.manager-mission-summary article:nth-child(4) { border-color: rgba(246, 196, 105, .18); background: rgba(185, 131, 48, .055); }
+.manager-mission-summary article:nth-child(5) { border-color: rgba(112, 218, 186, .17); background: rgba(44, 153, 119, .05); }
+
+@media (max-width: 1100px) {
+  .executive-overview-grid,
+  .manager-mission-summary > div:last-child { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .executive-overview > header,
+  .manager-mission-summary > header { display: grid; }
+  .executive-overview > header > span,
+  .manager-mission-summary > header > span { max-width: none; justify-self: start; text-align: left; }
+  .executive-overview-grid,
+  .manager-mission-summary > div:last-child { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 420px) {
+  .executive-overview,
+  .manager-mission-summary { padding: 20px; border-radius: 18px; }
+  .executive-overview-grid,
+  .manager-mission-summary > div:last-child { grid-template-columns: 1fr; }
+}
+
+/* AI Employee Identity — Home and Mission Room share the same trusted
+   companion presence. Content is always derived from the selected Mission. */
+.home-employee-identity,
+.home-employee-ready {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(24px, 3vw, 36px);
+  border: 1px solid rgba(123, 219, 213, .2);
+  border-radius: var(--premium-radius);
+  background:
+    radial-gradient(430px 210px at 96% 8%, rgba(72, 210, 194, .12), transparent 72%),
+    linear-gradient(135deg, rgba(44, 150, 165, .11), rgba(255,255,255,.025));
+  box-shadow: var(--premium-shadow);
+}
+.home-employee-identity > header,
+.home-employee-ready { display: grid; grid-template-columns: minmax(0, 1fr) auto; align-items: start; gap: 18px; }
+.home-employee-identity h2,
+.home-employee-ready h2 { margin: 3px 0 7px; color: var(--text-primary); font-size: clamp(24px, 3vw, 34px); letter-spacing: -.04em; }
+.home-employee-identity header p,
+.home-employee-ready p { margin: 0; color: var(--text-secondary); line-height: 1.55; }
+.home-employee-identity > header > span {
+  display: inline-flex; align-items: center; gap: 7px; padding: 8px 10px;
+  border: 1px solid rgba(112, 225, 203, .22); border-radius: 999px;
+  color: #c1f6e8; background: rgba(53, 164, 146, .1); font-size: 10px; font-weight: 780; letter-spacing: .07em; text-transform: uppercase;
+}
+.home-employee-identity > header > span::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; box-shadow: 0 0 0 4px rgba(128, 239, 218, .09); content: ""; }
+.home-employee-identity > header > span.working::before { animation: employee-presence-pulse 1.8s ease-in-out infinite; }
+.home-employee-identity-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 22px; }
+.home-employee-identity-grid article { min-height: 146px; padding: 17px; border: 1px solid rgba(255,255,255,.085); border-radius: 16px; background: rgba(3, 15, 25, .24); }
+.home-employee-identity-grid small { display: block; color: #a8dfef; font-size: 10px; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
+.home-employee-identity-grid b { display: block; margin-top: 10px; color: var(--text-primary); font-size: 14px; line-height: 1.42; }
+.home-employee-identity-grid p { display: -webkit-box; overflow: hidden; margin: 8px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.5; -webkit-box-orient: vertical; -webkit-line-clamp: 3; }
+.home-employee-ready { grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; }
+.home-employee-ready > span { width: 11px; height: 11px; border-radius: 50%; background: var(--accent-cyan); box-shadow: 0 0 0 7px rgba(123,228,255,.09), 0 0 22px rgba(123,228,255,.24); }
+
+/* Trust collaboration uses one status interpretation on Home and in the Mission
+   Room.  It is intentionally a presentation layer: it never creates progress. */
+.home-employee-identity-grid,
+.ai-employee-presence-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+.home-employee-identity-grid article,
+.ai-employee-presence-grid article { min-height: 156px; }
+.human-ai-decision-card {
+  order: 1;
+  position: relative;
+  overflow: hidden;
+  padding: 22px;
+  border: 1px solid rgba(246, 194, 103, .28);
+  border-radius: var(--premium-radius);
+  background: linear-gradient(135deg, rgba(184, 131, 47, .12), rgba(255,255,255,.024));
+  box-shadow: var(--premium-shadow);
+}
+.human-ai-decision-card > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.human-ai-decision-card h3 { margin: 3px 0 6px; color: var(--text-primary); font-size: 20px; letter-spacing: -.03em; }
+.human-ai-decision-card header p { max-width: 660px; margin: 0; color: var(--text-secondary); line-height: 1.55; }
+.human-ai-decision-card header > span { padding: 7px 10px; border: 1px solid rgba(246, 205, 126, .3); border-radius: 999px; color: #ffe4a7; background: rgba(167, 113, 35, .12); font-size: 10px; font-weight: 780; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.human-ai-decision-card > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.human-ai-decision-card article { min-height: 112px; padding: 15px; border: 1px solid rgba(255,255,255,.085); border-radius: 15px; background: rgba(28, 19, 7, .22); }
+.human-ai-decision-card small { display: block; color: #f5cf85; font-size: 10px; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
+.human-ai-decision-card b { display: block; margin-top: 9px; color: var(--text-primary); font-size: 12px; font-weight: 650; line-height: 1.5; }
+
+/* Mission Room reads as an AI Employee desk rather than a task board. */
+.mission-center { align-content: start; }
+.mission-center .ai-employee-presence { order: 0; }
+.mission-center .manager-mission-summary { order: 1; }
+.mission-center .mission-stage-strip { order: 2; }
+.mission-center .mission-center-layout { order: 3; }
+.mission-center .approval-queue { order: 4; }
+.mission-center .mission-version-history { order: 5; }
+.mission-center .mission-stream-surface { position: relative; }
+.mission-center .mission-stream-surface::before { position: absolute; top: 0; left: 24px; width: 50px; height: 3px; border-radius: 0 0 4px 4px; background: linear-gradient(90deg, var(--accent-cyan), #a982ff); content: ""; }
+.mission-center .mission-stream-surface .mission-graph { margin-top: 16px; padding: 16px; border: 1px solid rgba(255,255,255,.07); border-radius: 16px; background: rgba(255,255,255,.016); }
+.mission-center .mission-graph > span { color: var(--text-muted); font-size: 10px; font-weight: 760; letter-spacing: .1em; }
+.mission-center .mission-graph > div { display: inline-flex; flex-direction: column; min-width: 120px; margin: 12px 8px 0 0; padding: 10px; border: 1px solid rgba(255,255,255,.06); border-radius: 12px; background: rgba(255,255,255,.025); }
+.mission-center .mission-graph small { margin-top: 4px; color: var(--text-secondary); font-size: 10px; }
+
+@media (max-width: 1100px) {
+  .home-employee-identity-grid,
+  .ai-employee-presence-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .home-employee-identity > header { grid-template-columns: 1fr; }
+  .home-employee-identity-grid { grid-template-columns: 1fr; }
+  .ai-employee-presence-grid,
+  .human-ai-decision-card > div { grid-template-columns: 1fr; }
+  .human-ai-decision-card > header { display: grid; }
+  .human-ai-decision-card header > span { justify-self: start; white-space: normal; }
+  .home-employee-ready { grid-template-columns: auto minmax(0, 1fr); }
+  .home-employee-ready .primary-card-action { grid-column: 1 / -1; width: 100%; }
+}
+@media (max-width: 420px) {
+  .home-employee-identity,
+  .home-employee-ready { padding: 20px; border-radius: 18px; }
+}
+
+/* AI Employee Memory & Growth — a readable view of existing Workspace records,
+   never a claim about model learning or an inferred activity total. */
+.workspace-memory-growth,
+.mission-memory-continuity,
+.research-memory-empty {
+  margin-top: 18px;
+  padding: 22px;
+  border: 1px solid rgba(121, 184, 237, .18);
+  border-radius: var(--premium-radius);
+  background: linear-gradient(135deg, rgba(60, 134, 187, .1), rgba(255,255,255,.023) 58%);
+  box-shadow: var(--premium-shadow);
+}
+.workspace-memory-growth > header,
+.mission-memory-continuity > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.workspace-memory-growth h3,
+.mission-memory-continuity h3 { margin: 3px 0 6px; color: var(--text-primary); font-size: 20px; letter-spacing: -.03em; }
+.workspace-memory-growth header p,
+.mission-memory-continuity header p { max-width: 680px; margin: 0; color: var(--text-secondary); line-height: 1.55; }
+.workspace-memory-growth > header > small,
+.mission-memory-continuity > header > small { padding: 7px 10px; border: 1px solid rgba(123, 220, 255, .2); border-radius: 999px; color: #c4eaff; background: rgba(54, 136, 187, .09); font-size: 10px; font-weight: 760; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.workspace-memory-growth-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.workspace-memory-growth-grid article,
+.mission-memory-continuity-grid article { min-height: 130px; padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 15px; background: rgba(4, 18, 31, .25); }
+.workspace-memory-growth-grid b,
+.mission-memory-continuity-grid b { display: block; color: var(--text-primary); font-size: 28px; letter-spacing: -.05em; }
+.workspace-memory-growth-grid strong,
+.mission-memory-continuity-grid small { display: block; margin-top: 8px; color: #bee7ff; font-size: 10px; font-weight: 770; letter-spacing: .075em; text-transform: uppercase; }
+.workspace-memory-growth-grid small,
+.mission-memory-continuity-grid p { display: block; margin-top: 8px; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.workspace-memory-growth-empty,
+.mission-memory-continuity-empty,
+.research-memory-empty { margin-top: 17px; padding: 17px; border: 1px dashed rgba(144, 203, 244, .22); border-radius: 15px; background: rgba(255,255,255,.016); }
+.workspace-memory-growth-empty b,
+.mission-memory-continuity-empty b,
+.research-memory-empty b { color: var(--text-primary); }
+.workspace-memory-growth-empty p,
+.mission-memory-continuity-empty p,
+.research-memory-empty p { margin: 7px 0 0; color: var(--text-secondary); font-size: 12px; line-height: 1.55; }
+.mission-memory-continuity { max-width: 1200px; margin: 24px auto; }
+.mission-memory-continuity-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+
+@media (max-width: 900px) {
+  .workspace-memory-growth-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .workspace-memory-growth,
+  .mission-memory-continuity,
+  .research-memory-empty { padding: 20px; border-radius: 18px; }
+  .workspace-memory-growth > header,
+  .mission-memory-continuity > header { display: grid; }
+  .workspace-memory-growth > header > small,
+  .mission-memory-continuity > header > small { justify-self: start; white-space: normal; }
+  .workspace-memory-growth-grid,
+  .mission-memory-continuity-grid { grid-template-columns: 1fr; }
+}
+
+/* Proactive experience is a read-only interpretation of existing Workspace
+   records. It makes suggestions visible without starting work on the user's
+   behalf. */
+.ai-daily-brief,
+.research-opportunity-card,
+.team-working-patterns {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(22px, 3vw, 32px);
+  border: 1px solid var(--champion-border);
+  border-radius: var(--premium-radius);
+  background: var(--champion-surface);
+  box-shadow: var(--premium-shadow);
+}
+.ai-daily-brief > header,
+.research-opportunity-card > header,
+.team-working-patterns > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ai-daily-brief h2,
+.research-opportunity-card h2,
+.team-working-patterns h3 { margin: 3px 0 6px; color: var(--text-primary); font-size: clamp(20px, 2.2vw, 27px); letter-spacing: -.035em; }
+.ai-daily-brief header p,
+.research-opportunity-card header p,
+.team-working-patterns header p { max-width: 680px; margin: 0; color: var(--text-secondary); line-height: 1.55; }
+.ai-daily-brief-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: 10px; margin-top: 20px; }
+.ai-daily-brief-grid article { min-height: 145px; padding: 17px; border: 1px solid rgba(255,255,255,.08); border-radius: 16px; background: rgba(4, 14, 28, .25); }
+.ai-daily-brief-grid small { display: block; color: #b8eaff; font-size: 10px; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
+.ai-daily-brief-grid b { display: block; margin-top: 9px; color: var(--text-primary); font-size: 13px; line-height: 1.48; }
+.ai-daily-brief-grid p { margin: 9px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.research-opportunity-card { border-color: rgba(155, 139, 255, .2); background: linear-gradient(135deg, rgba(117, 93, 210, .13), rgba(255,255,255,.025) 60%); }
+.research-opportunity-card > header > span { padding: 7px 10px; border: 1px solid rgba(184, 168, 255, .2); border-radius: 999px; color: #ded4ff; background: rgba(141, 110, 235, .1); font-size: 10px; font-weight: 780; letter-spacing: .07em; text-transform: uppercase; white-space: nowrap; }
+.research-opportunity-card > header > span.ready { border-color: rgba(132, 229, 205, .25); color: #c4f6e8; background: rgba(42, 153, 127, .1); }
+.research-opportunity-card > footer { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-top: 20px; padding-top: 16px; border-top: 1px solid rgba(255,255,255,.07); }
+.research-opportunity-card footer small { color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.team-working-patterns { max-width: 1200px; margin: 24px auto; border-color: rgba(119, 198, 221, .18); }
+.team-working-pattern-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.team-working-pattern-grid article { min-height: 124px; padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 15px; background: rgba(5, 17, 29, .24); }
+.team-working-pattern-grid b { color: var(--text-primary); font-size: 13px; }
+.team-working-pattern-grid p { margin: 9px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.52; }
+.team-working-pattern-empty { margin-top: 17px; padding: 17px; border: 1px dashed rgba(134, 210, 232, .2); border-radius: 15px; background: rgba(255,255,255,.016); }
+.team-working-pattern-empty b { color: var(--text-primary); }
+.team-working-pattern-empty p { margin: 7px 0 0; color: var(--text-secondary); line-height: 1.55; }
+
+@media (max-width: 980px) {
+  .ai-daily-brief-grid,
+  .team-working-pattern-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .ai-daily-brief,
+  .research-opportunity-card,
+  .team-working-patterns { padding: 20px; border-radius: 18px; }
+  .ai-daily-brief > header,
+  .research-opportunity-card > header,
+  .team-working-patterns > header,
+  .research-opportunity-card > footer { display: grid; }
+  .research-opportunity-card > header > span { justify-self: start; white-space: normal; }
+  .ai-daily-brief-grid,
+  .team-working-pattern-grid { grid-template-columns: 1fr; }
+}
+
+/* Executive delivery surfaces turn already-recorded Mission outcomes into a
+   clear management summary. They do not turn drafts into released Deliveries. */
+.ai-employee-report,
+.ai-employee-delivery-summary {
+  max-width: 1200px;
+  margin: 24px auto;
+  padding: clamp(22px, 3vw, 32px);
+  border: 1px solid rgba(117, 213, 183, .2);
+  border-radius: var(--premium-radius);
+  background: linear-gradient(135deg, rgba(44, 158, 129, .11), rgba(255,255,255,.024) 60%);
+  box-shadow: var(--premium-shadow);
+}
+.ai-employee-report > header,
+.ai-employee-delivery-summary > header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; }
+.ai-employee-report h3,
+.ai-employee-delivery-summary h3 { margin: 3px 0 6px; color: var(--text-primary); font-size: clamp(20px, 2.2vw, 27px); letter-spacing: -.035em; }
+.ai-employee-report header p,
+.ai-employee-delivery-summary header p { max-width: 680px; margin: 0; color: var(--text-secondary); line-height: 1.55; }
+.ai-employee-report > header > span,
+.ai-employee-delivery-summary > header > span { padding: 7px 10px; border: 1px solid rgba(128, 229, 195, .25); border-radius: 999px; color: #c5f7e6; background: rgba(50, 163, 132, .1); font-size: 10px; font-weight: 780; letter-spacing: .07em; text-transform: uppercase; text-align: right; }
+.ai-employee-report-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.ai-employee-delivery-summary-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 18px; }
+.ai-employee-report-grid article,
+.ai-employee-delivery-summary-grid article { min-height: 128px; padding: 16px; border: 1px solid rgba(255,255,255,.08); border-radius: 15px; background: rgba(4, 20, 24, .25); }
+.ai-employee-report-grid small,
+.ai-employee-delivery-summary-grid small { display: block; color: #b5f0db; font-size: 10px; font-weight: 780; letter-spacing: .09em; text-transform: uppercase; }
+.ai-employee-report-grid b,
+.ai-employee-delivery-summary-grid b { display: block; margin-top: 9px; color: var(--text-primary); font-size: 13px; font-weight: 650; line-height: 1.5; }
+.ai-employee-report-grid p,
+.ai-employee-delivery-summary-grid p { margin: 9px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.solution-showcase-story > article:nth-child(3) { border-color: rgba(115, 214, 181, .2); background: linear-gradient(145deg, rgba(47, 157, 127, .11), rgba(255,255,255,.025)); }
+.solution-showcase-flow header > span { color: #bcf3df; }
+
+@media (max-width: 980px) {
+  .ai-employee-report-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ai-employee-delivery-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 760px) {
+  .ai-employee-report,
+  .ai-employee-delivery-summary { padding: 20px; border-radius: 18px; }
+  .ai-employee-report > header,
+  .ai-employee-delivery-summary > header { display: grid; }
+  .ai-employee-report > header > span,
+  .ai-employee-delivery-summary > header > span { justify-self: start; text-align: left; }
+  .ai-employee-report-grid,
+  .ai-employee-delivery-summary-grid { grid-template-columns: 1fr; }
+}
+
+/* Final product-design convergence: primary navigation is intentionally kept
+   to the five business destinations. Computer assistance remains available
+   from Mission and Home actions, where its purpose is already clear. */
+.top-navigation-links.product-navigation { gap: 2px; }
+.computer-studio .computer-capability-overview {
+  border-color: rgba(122, 213, 255, .2);
+  background: linear-gradient(135deg, rgba(48, 114, 162, .15), rgba(255,255,255,.025) 62%);
+}
+.computer-studio .computer-capability-grid article {
+  min-height: 142px;
+  transition: border-color .18s ease, background .18s ease, transform .18s ease;
+}
+.computer-studio .computer-capability-grid article:hover {
+  border-color: rgba(151, 224, 255, .34);
+  background: rgba(87, 167, 207, .1);
+  transform: translateY(-2px);
+}
+.computer-studio .operator-plan-list small { color: var(--text-secondary); }
+.computer-studio > .computer-environment-timeline,
+.computer-studio > .computer-intelligence-panel:not(.computer-environment-timeline) { display: none !important; }
+section[aria-label="Research Operator Studio"] { display: none !important; }
+
+/* Final convergence: the Mission Room is an employee work desk, not an
+   implementation dashboard. Supporting internals remain available only in
+   authorized compatibility/admin surfaces. */
+.mission-center .manager-mission-summary,
+.mission-center .mission-stage-strip,
+.mission-center .mission-intelligence-surface,
+.mission-center .mission-control-surface,
+.mission-center .mission-context-surface,
+.mission-center .context-retrieval-surface,
+.mission-center .ai-activity-surface,
+.mission-center .ai-team-plan-surface,
+.mission-center .research-insight-panel,
+.mission-center .ai-progress-panel,
+.mission-center .mission-collaboration-panel,
+.mission-memory-continuity { display: none !important; }
+.mission-source-material,
+.ai-employee-report,
+.mission-control-surface,
+.mission-context-surface,
+.context-retrieval-surface,
+.ai-activity-surface,
+.ai-team-plan-surface,
+.research-insight-panel,
+.ai-progress-panel,
+.mission-intelligence-panel { display: none !important; }
+.mission-center:has(.ai-employee-presence) .mission-create-surface { display: none; }
+.mission-center:has(.ai-employee-presence) .mission-center-layout { display: block; }
+.mission-center:has(.ai-employee-presence) .mission-stream-surface { max-width: 100%; }
+.mission-center .ai-employee-presence,
+.mission-center .human-ai-decision-card,
+.mission-center .mission-stream-surface,
+.next-best-action-panel,
+.ai-employee-delivery-summary {
+  border-radius: 20px;
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .18);
+}
+
+/* Workspace leads with real research outcomes. The detailed record inventory
+   is intentionally secondary to current work, trusted knowledge, and
+   decisions that require a person. */
+section[aria-label="AI Employee Workspace"] > .connector-metrics,
+section[aria-label="AI Employee Workspace"] > .research-memory-surface,
+section[aria-label="AI Employee Workspace"] > .mission-tool-trace { display: none; }
+.executive-overview-grid article:nth-child(n+4) { display: none; }
+.executive-overview-grid article:nth-child(1) small,
+.executive-overview-grid article:nth-child(2) small,
+.executive-overview-grid article:nth-child(3) small { font-size: 0; }
+.executive-overview-grid article:nth-child(1) small::after { content: "Active Research"; }
+.executive-overview-grid article:nth-child(2) small::after { content: "Trusted Knowledge"; }
+.executive-overview-grid article:nth-child(3) small::after { content: "Decisions Needed"; }
+.executive-overview-grid article:nth-child(-n+3) small::after {
+  color: #baeaff;
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+
+/* Delivery stages make the outcome lifecycle readable at a glance. */
+.delivery-center .product-artifact-grid article { position: relative; min-height: 224px; }
+.delivery-stage {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  min-height: 24px;
+  padding: 0 9px;
+  border: 1px solid rgba(165, 183, 255, .24);
+  border-radius: 999px;
+  color: #d5dfff;
+  background: rgba(118, 140, 255, .11);
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .07em;
+  text-transform: uppercase;
+}
+.delivery-stage.pending-review,
+.delivery-stage.waiting-review { border-color: rgba(255, 198, 118, .28); color: #ffe3ae; background: rgba(209, 145, 45, .12); }
+.delivery-stage.approved { border-color: rgba(113, 222, 178, .3); color: #c7f5df; background: rgba(45, 153, 114, .12); }
+.delivery-stage.delivered,
+.delivery-stage.released { border-color: rgba(111, 210, 255, .28); color: #c3efff; background: rgba(50, 145, 196, .13); }
+.delivery-center .product-artifact-grid article > p { margin: 11px 0 4px; color: var(--text-secondary); }
+.delivery-center .product-artifact-grid article > small { color: var(--text-muted); }
+
+/* One restrained visual language for customer-facing SaaS surfaces. */
+.home-workspace .workspace-home-hero,
+.ai-employee-presence,
+.workspace-memory-growth,
+.product-experience-center,
+.computer-capability-overview,
+.mission-stream-surface,
+.human-ai-decision-card {
+  border-color: rgba(255, 255, 255, .09);
+  border-radius: 20px;
+}
+.home-quick-grid button,
+.product-artifact-grid article,
+.workspace-memory-growth-grid article,
+.ai-employee-presence-grid article {
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+.home-quick-grid button:hover,
+.product-artifact-grid article:hover,
+.workspace-memory-growth-grid article:hover,
+.ai-employee-presence-grid article:hover {
+  border-color: rgba(151, 218, 255, .3);
+  background: rgba(104, 159, 222, .09);
+  transform: translateY(-2px);
+}
+
+@media (max-width: 760px) {
+  .mission-center .ai-employee-presence,
+  .mission-center .human-ai-decision-card,
+  .mission-center .mission-stream-surface,
+  .next-best-action-panel,
+  .ai-employee-delivery-summary { border-radius: 16px; }
+  .delivery-center .product-artifact-grid article { min-height: 0; }
+}
+
+/* First-impression identity: static product positioning, never synthetic
+   activity. This is shown before a Workspace has a recorded Mission. */
+.home-identity-card { grid-template-columns: auto minmax(0, 1fr) auto; }
+.home-identity-card-grid {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin-top: 4px;
+  padding-top: 18px;
+  border-top: 1px solid rgba(255,255,255,.08);
+}
+.home-identity-card-grid article {
+  min-height: 138px;
+  padding: 16px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 15px;
+  background: rgba(4, 18, 31, .24);
+}
+.home-identity-card-grid small {
+  display: block;
+  color: #b8eaff;
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.home-identity-card-grid b {
+  display: block;
+  margin-top: 9px;
+  color: var(--text-primary);
+  font-size: 13px;
+  line-height: 1.42;
+}
+.home-identity-card-grid p {
+  margin: 9px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Research Timeline restores one calm visual sequence to the Mission Room.
+   Its active state maps only from existing Mission statuses. */
+.mission-center .mission-stage-strip.research-timeline {
+  display: grid !important;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  overflow: visible;
+}
+.mission-center .research-timeline > li { min-height: 104px; }
+.mission-center .research-timeline > li b { line-height: 1.25; }
+.mission-center .research-timeline > li small { line-height: 1.35; }
+
+/* Presentation stays deliberately linear for an FDE conversation: problem,
+   solution, trust, value, then delivery. */
+.presentation-mode .solution-showcase-story > article {
+  position: relative;
+  overflow: hidden;
+  min-height: 188px;
+}
+.presentation-mode .solution-showcase-story > article::after {
+  position: absolute;
+  right: 16px;
+  bottom: 14px;
+  color: rgba(185, 218, 255, .32);
+  font-size: 24px;
+  font-weight: 720;
+  letter-spacing: -.06em;
+}
+.presentation-mode .solution-showcase-story > article:nth-child(1)::after { content: "01"; }
+.presentation-mode .solution-showcase-story > article:nth-child(2)::after { content: "02"; }
+.presentation-mode .solution-showcase-story > article:nth-child(3)::after { content: "03"; }
+.presentation-mode .solution-showcase-story > article:nth-child(4)::after { content: "04"; }
+
+@media (max-width: 980px) {
+  .home-identity-card-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .mission-center .mission-stage-strip.research-timeline { grid-template-columns: repeat(5, minmax(132px, 1fr)); overflow-x: auto; padding-bottom: 6px; }
+}
+@media (max-width: 760px) {
+  .home-identity-card { grid-template-columns: auto minmax(0, 1fr); }
+  .home-identity-card-grid { grid-template-columns: 1fr; }
+  .home-identity-card .primary-card-action { grid-column: 1 / -1; width: 100%; }
+  .mission-center .research-timeline > li { min-height: 92px; }
+}
+
+/* Golden Demo FDE convergence: a concise, truthful walkthrough is shown only
+   inside the existing Demo Workspace. It describes the live path without
+   inventing progress, source availability, or a delivery. */
+.golden-demo-guide {
+  display: grid;
+  gap: 20px;
+  margin: 22px 0;
+  padding: clamp(22px, 3vw, 32px);
+  border: 1px solid rgba(127, 187, 255, .2);
+  border-radius: var(--championship-radius, 22px);
+  background:
+    radial-gradient(440px 180px at 100% 0%, rgba(85, 164, 255, .12), transparent 72%),
+    rgba(255, 255, 255, .026);
+  box-shadow: 0 18px 42px rgba(0, 0, 0, .16);
+}
+.golden-demo-guide > header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+}
+.golden-demo-guide h3 { margin: 5px 0 7px; color: var(--text-primary); font-size: clamp(20px, 2.25vw, 28px); letter-spacing: -.035em; }
+.golden-demo-guide header p { max-width: 630px; margin: 0; color: var(--text-secondary); line-height: 1.55; }
+.golden-demo-guide > header > span {
+  flex: 0 0 auto;
+  padding: 7px 10px;
+  border: 1px solid rgba(125, 230, 207, .24);
+  border-radius: 999px;
+  color: #c4faed;
+  background: rgba(71, 177, 153, .1);
+  font-size: 10px;
+  font-weight: 760;
+  letter-spacing: .075em;
+  text-transform: uppercase;
+}
+.golden-demo-guide > ol {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 10px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.golden-demo-guide > ol > li {
+  display: grid;
+  grid-template-columns: 28px minmax(0, 1fr);
+  gap: 10px;
+  min-height: 112px;
+  padding: 15px;
+  border: 1px solid rgba(255, 255, 255, .075);
+  border-radius: 15px;
+  background: rgba(4, 14, 27, .2);
+}
+.golden-demo-guide > ol b { color: #a8dfff; font-size: 11px; letter-spacing: .06em; }
+.golden-demo-guide > ol strong { display: block; color: var(--text-primary); font-size: 13px; line-height: 1.35; }
+.golden-demo-guide > ol small { display: block; margin-top: 7px; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.golden-demo-boundary { margin: 0; color: var(--text-muted); font-size: 12px; line-height: 1.5; }
+
+@media (max-width: 900px) {
+  .golden-demo-guide > ol { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 560px) {
+  .golden-demo-guide { padding: 20px; }
+  .golden-demo-guide > header { flex-direction: column; }
+  .golden-demo-guide > ol { grid-template-columns: 1fr; }
+  .golden-demo-guide > ol > li { min-height: 0; }
+}
+
+/* Final UI Championship convergence. These are presentation-only refinements:
+   the content remains entirely derived from existing Workspace records. */
+:root {
+  --championship-radius: 22px;
+  --championship-border: rgba(225, 233, 255, .11);
+  --championship-shadow: 0 22px 58px rgba(0, 0, 0, .24), inset 0 1px 0 rgba(255,255,255,.055);
+  --championship-space: clamp(18px, 2.4vw, 30px);
+}
+
+/* Home begins with one clear customer promise and one natural action. Secondary
+   information stays available in the Workspace instead of competing with it. */
+.home-workspace {
+  display: grid;
+  gap: var(--championship-space);
+  max-width: 1200px;
+  margin-inline: auto;
+}
+.home-workspace .workspace-home-hero {
+  position: relative;
+  overflow: hidden;
+  padding: clamp(32px, 5vw, 68px);
+  border: 1px solid rgba(147, 185, 255, .2);
+  border-radius: 28px;
+  background:
+    radial-gradient(760px 330px at 100% 0%, rgba(111, 126, 255, .2), transparent 68%),
+    radial-gradient(380px 220px at 12% 100%, rgba(76, 219, 204, .12), transparent 70%),
+    linear-gradient(140deg, rgba(38, 61, 114, .42), rgba(15, 20, 37, .64) 58%, rgba(57, 39, 97, .38));
+  box-shadow: var(--championship-shadow);
+}
+.home-workspace .workspace-home-hero::after {
+  position: absolute;
+  top: -76px;
+  right: -34px;
+  width: 250px;
+  height: 250px;
+  border: 1px solid rgba(165, 204, 255, .12);
+  border-radius: 50%;
+  box-shadow: 0 0 0 28px rgba(165, 204, 255, .03), 0 0 0 56px rgba(165, 204, 255, .018);
+  content: "";
+}
+.home-workspace .workspace-home-hero > * { position: relative; z-index: 1; }
+.home-workspace .workspace-home-hero h1 {
+  max-width: 760px;
+  margin: 10px 0 14px;
+  font-size: clamp(38px, 5.2vw, 62px);
+  line-height: .99;
+  letter-spacing: -.065em;
+}
+.home-workspace .workspace-home-hero > p:not(.section-kicker) {
+  max-width: 625px;
+  margin-bottom: 28px;
+  color: rgba(235, 242, 255, .76);
+  font-size: clamp(15px, 1.45vw, 18px);
+  line-height: 1.55;
+}
+.home-workspace .home-research-input {
+  max-width: 790px;
+  padding: 7px;
+  border: 1px solid rgba(206, 221, 255, .16);
+  border-radius: 18px;
+  background: rgba(4, 10, 22, .34);
+  box-shadow: inset 0 1px rgba(255,255,255,.05);
+}
+.home-workspace .home-research-input textarea { min-height: 74px; border-color: transparent; background: transparent; }
+.home-workspace .home-research-input .primary-card-action { min-height: 46px; }
+.home-workspace .enterprise-upload-strip { margin-top: 14px; }
+.home-workspace .workspace-home-hero > small { display: block; max-width: 680px; margin-top: 16px; color: var(--text-muted); }
+.home-workspace .solution-narrative,
+.home-workspace .organization-learning-surface,
+.home-workspace .home-recent-workspaces,
+.home-workspace .research-opportunity-card { display: none; }
+
+/* A small capability row reinforces the whole product model without turning
+   the landing surface into a dashboard. */
+.home-workspace .product-capability-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+.home-workspace .product-capability-grid > button {
+  min-height: 176px;
+  padding: 24px;
+  border: 1px solid var(--championship-border);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(255,255,255,.055), rgba(255,255,255,.022));
+  box-shadow: inset 0 1px rgba(255,255,255,.045);
+}
+.home-workspace .product-capability-grid > button:hover { border-color: rgba(148, 204, 255, .32); box-shadow: 0 14px 32px rgba(0,0,0,.16); }
+.home-workspace .home-focus-grid { gap: 14px; }
+.home-workspace .home-focus-card { min-height: 184px; border-radius: 18px; }
+
+/* Workspace is a management view of research work, not a record inventory. */
+section[aria-label="AI Employee Workspace"] { display: grid; gap: var(--championship-space); max-width: 1200px; margin-inline: auto; }
+section[aria-label="AI Employee Workspace"] > .dashboard-heading {
+  padding: clamp(28px, 4vw, 46px);
+  border: 1px solid var(--championship-border);
+  border-radius: var(--championship-radius);
+  background: linear-gradient(135deg, rgba(72, 117, 199, .14), rgba(255,255,255,.025));
+  box-shadow: var(--championship-shadow);
+}
+section[aria-label="AI Employee Workspace"] .workspace-context-panel { margin: 0; }
+section[aria-label="AI Employee Workspace"] .workspace-context-panel article { min-height: 124px; padding: 20px; border-radius: 17px; }
+section[aria-label="AI Employee Workspace"] .connector-grid { gap: 14px; }
+section[aria-label="AI Employee Workspace"] .connector-grid > article { min-height: 184px; padding: 20px; border-radius: 17px; }
+
+/* Mission Room follows the employee-work narrative: status, journey, work,
+   evidence, a human decision, then delivery. */
+.mission-center { max-width: 1200px; margin-inline: auto; gap: var(--championship-space); }
+.mission-center .dashboard-heading { padding: clamp(28px, 4vw, 46px); border-radius: var(--championship-radius); }
+.mission-center .dashboard-heading h2 { max-width: 790px; font-size: clamp(28px, 4vw, 46px); letter-spacing: -.05em; }
+.mission-center .ai-employee-presence,
+.mission-center .human-ai-decision-card,
+.mission-center .mission-stream-surface,
+.mission-center .approval-queue,
+.mission-center .ai-employee-delivery-summary { border: 1px solid var(--championship-border); }
+.mission-center .research-timeline { padding: 10px; border-radius: 18px; background: rgba(255,255,255,.022); }
+.mission-center .research-timeline > li { position: relative; min-height: 114px; padding: 17px; border: 1px solid rgba(255,255,255,.065); background: rgba(3, 10, 22, .24); }
+.mission-center .research-timeline > li.active { border-color: rgba(129, 209, 235, .3); background: linear-gradient(145deg, rgba(66, 143, 184, .14), rgba(255,255,255,.025)); }
+.mission-center .research-timeline > li.active::before { position: absolute; top: 14px; right: 14px; width: 7px; height: 7px; border-radius: 50%; background: var(--accent-cyan); box-shadow: 0 0 0 5px rgba(123,228,255,.09); content: ""; }
+.mission-center .mission-stream-surface { padding: clamp(22px, 3vw, 30px); }
+.mission-center .ai-work-journal > header { display: grid; gap: 7px; padding-bottom: 14px; border-bottom: 1px solid rgba(255,255,255,.07); }
+.mission-center .ai-work-journal > header > small { color: var(--text-secondary); }
+.mission-center .mission-timeline li { padding: 16px 0; }
+.mission-center .mission-timeline li > b { color: var(--accent-cyan); }
+.mission-center .mission-evidence-list,
+.mission-center .mission-review-panel,
+.mission-center .mission-delivery-package { margin-top: 22px; }
+
+/* The Computer area is a set of assistants with clearly stated human limits. */
+.computer-studio .computer-operator-heading h2 { max-width: 620px; color: var(--text-primary); font-size: clamp(30px, 3.4vw, 44px); letter-spacing: -.035em; }
+.computer-studio .computer-operator-heading h2::after,
+.computer-studio .computer-operator-heading > div > p:not(.section-kicker)::after,
+.computer-studio .operator-empty-state b::after { display: none; content: none; }
+.computer-studio .computer-operator-heading > div > p:not(.section-kicker) { max-width: 600px; color: var(--text-secondary); font-size: 13px; line-height: 1.6; }
+.computer-studio .computer-operator-heading > div > .section-kicker,
+.computer-studio .operator-timeline-surface > header .section-kicker { color: var(--accent-cyan); font-size: 10px; }
+.computer-studio .computer-operator-heading > div > .section-kicker::after,
+.computer-studio .operator-timeline-surface > header .section-kicker::after,
+.computer-studio .computer-command-surface > h3::after { display: none; content: none; }
+.computer-studio .computer-command-surface > h3 { color: var(--text-primary); font-size: 20px; }
+.computer-studio .operator-artifact-surface::before { display: none; content: none; }
+.computer-access-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 9px;
+  margin: 0;
+  padding: 13px 15px;
+  border: 1px solid rgba(123, 190, 255, .18);
+  border-radius: 14px;
+  color: var(--text-secondary);
+  background: rgba(74, 136, 194, .08);
+  line-height: 1.5;
+}
+.computer-access-note > span { color: var(--accent-cyan); }
+.computer-studio .computer-capability-overview { border-radius: var(--championship-radius); }
+.computer-studio .computer-capability-grid article { min-height: 162px; padding: 18px; border-radius: 16px; }
+.computer-studio .computer-capability-grid article b { font-size: 15px; }
+.computer-studio .computer-capability-grid article small { display: block; margin-top: 9px; }
+.computer-studio .computer-capability-grid article em { display: block; margin-top: 13px; color: #c9eefe; font-size: 11px; font-style: normal; line-height: 1.45; }
+
+/* Deliveries behave like a concise customer-ready delivery center. */
+.delivery-center .product-artifact-grid { gap: 14px; }
+.delivery-center .product-artifact-grid article { display: flex; flex-direction: column; align-items: flex-start; min-height: 258px; padding: 22px; border-radius: 18px; }
+.delivery-center .product-artifact-grid h3 { margin: 16px 0 8px; font-size: 19px; letter-spacing: -.025em; }
+.delivery-center .product-artifact-grid .delivery-purpose { margin: 0 0 12px; color: var(--text-secondary); }
+.delivery-center .product-artifact-grid small { display: block; margin-top: 7px; color: var(--text-muted); line-height: 1.48; }
+.delivery-center .product-artifact-grid .text-button { margin-top: auto; padding-top: 18px; }
+
+/* One restrained motion language: feedback and loading awareness, never theatre. */
+.workspace-home-hero,
+.ai-employee-presence,
+.human-ai-decision-card,
+.mission-stream-surface,
+.computer-capability-overview,
+.product-artifact-grid > article { animation: championship-enter .42s cubic-bezier(.2,.8,.2,1) both; }
+.home-card-skeleton i { background: linear-gradient(90deg, rgba(255,255,255,.04), rgba(176, 208, 255, .16), rgba(255,255,255,.04)); background-size: 200% 100%; animation: championship-shimmer 1.6s ease-in-out infinite; }
+@keyframes championship-enter { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+@keyframes championship-shimmer { to { background-position: -200% 0; } }
+
+@media (max-width: 980px) {
+  .home-workspace .product-capability-grid { grid-template-columns: 1fr; }
+  .mission-center .research-timeline { grid-template-columns: repeat(5, minmax(154px, 1fr)); overflow-x: auto; }
+}
+@media (max-width: 760px) {
+  .home-workspace .workspace-home-hero,
+  section[aria-label="AI Employee Workspace"] > .dashboard-heading,
+  .mission-center .dashboard-heading { padding: 26px 22px; border-radius: 20px; }
+  .home-workspace .workspace-home-hero h1 { font-size: clamp(36px, 12vw, 48px); }
+  .home-workspace .enterprise-upload-strip { align-items: stretch; }
+  .home-workspace .enterprise-upload-strip > * { width: 100%; justify-content: center; }
+  .mission-center .mission-header-actions { display: grid; width: 100%; grid-template-columns: 1fr 1fr; }
+  .mission-center .mission-header-actions button { width: 100%; }
+  .delivery-center .product-artifact-grid article { min-height: 0; }
+}
+@media (max-width: 420px) {
+  .home-workspace .workspace-home-hero { padding: 24px 18px; }
+  .mission-center .mission-header-actions { grid-template-columns: 1fr; }
+}
+
+/* Release polish: clarify the human work path without introducing any new
+   state. These refinements only shape records that already exist. */
+.mission-center .mission-requirements {
+  padding: 18px 20px;
+  border: 1px solid rgba(123, 228, 255, .14);
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(50, 123, 160, .10), rgba(255,255,255,.018));
+}
+.mission-center .mission-requirements > span,
+.mission-center .mission-evidence-list > header > div > span,
+.mission-center .mission-review-panel > span,
+.mission-center .mission-delivery-package > span {
+  color: #b9edff;
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .095em;
+  text-transform: uppercase;
+}
+.mission-center .mission-requirements > p {
+  max-width: 840px;
+  margin: 9px 0 10px;
+  color: var(--text-primary);
+  font-size: clamp(15px, 1.45vw, 18px);
+  line-height: 1.5;
+}
+.mission-center .mission-requirements > small { color: var(--text-secondary); }
+.mission-center .mission-evidence-list > div {
+  position: relative;
+  padding: 15px 16px 15px 20px;
+  border-radius: 14px;
+  background: rgba(255,255,255,.025);
+}
+.mission-center .mission-evidence-list > div::before {
+  position: absolute;
+  top: 17px;
+  left: 0;
+  width: 3px;
+  height: calc(100% - 34px);
+  border-radius: 999px;
+  background: #83d6bd;
+  content: "";
+}
+.mission-center .mission-review-panel,
+.mission-center .mission-delivery-package {
+  padding: 22px;
+  border-radius: 18px;
+}
+.mission-center .mission-review-panel { border-color: rgba(255, 203, 123, .20); background: rgba(127, 87, 31, .075); }
+.mission-center .mission-delivery-package { border-color: rgba(123, 228, 255, .20); }
+.workspace-memory-growth,
+.home-employee-ready,
+.home-employee-identity,
+.product-experience-center.delivery-center > .dashboard-heading {
+  box-shadow: var(--championship-shadow);
+}
+.workspace-memory-growth-empty,
+.research-memory-empty,
+.delivery-center .product-empty-state,
+.mission-center .product-empty-state {
+  min-height: 174px;
+  padding: 28px;
+  border-style: dashed;
+  border-color: rgba(144, 188, 255, .22);
+  border-radius: 18px;
+  background: linear-gradient(145deg, rgba(91, 121, 198, .07), rgba(255,255,255,.018));
+}
+.workspace-context-panel article,
+.workspace-memory-growth-grid article,
+.delivery-center .product-artifact-grid article {
+  border-color: var(--championship-border);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+}
+@media (max-width: 390px) {
+  .home-workspace .workspace-home-hero h1 { font-size: 35px; }
+  .home-workspace .home-research-input { padding: 5px; border-radius: 15px; }
+  .home-workspace .home-research-input textarea { min-height: 88px; }
+  .home-identity-card-grid article { min-height: 0; }
+  .mission-center .mission-requirements,
+  .mission-center .mission-review-panel,
+  .mission-center .mission-delivery-package { padding: 17px; }
+  .computer-studio .computer-capability-grid article { min-height: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    scroll-behavior: auto !important;
+    animation-duration: .01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: .01ms !important;
+  }
+}
+
+/* Golden Demo guidance exposes real permission and evidence boundaries before
+   a presenter reaches them. It is not a synthetic readiness indicator. */
+.demo-workspace-banner .demo-readiness-note {
+  display: block;
+  max-width: 720px;
+  margin-top: 5px;
+  color: rgba(220, 236, 255, .72);
+  font-size: 11px;
+  line-height: 1.5;
+}
+
+/* Connection language reflects the current Workspace state rather than a
+   decorative always-ready label. */
+.top-navigation-status.connected { color: #bdeedc; }
+.top-navigation-status.connected > i { background: #73d8ae; box-shadow: 0 0 0 4px rgba(115, 216, 174, .12); }
+.top-navigation-status.offline { color: #f2d6aa; }
+.top-navigation-status.offline > i { background: #efb966; box-shadow: 0 0 0 4px rgba(239, 185, 102, .12); }
+.top-navigation-status.connecting { color: var(--text-secondary); }
+
+/* Collaboration belongs to the Workspace, never the product landing page. */
+section[aria-label="AI Employee Workspace"] + .team-collaboration-panel {
+  max-width: 1200px;
+  margin: var(--championship-space) auto 0;
+  padding: clamp(22px, 3vw, 30px);
+  border: 1px solid var(--championship-border);
+  border-radius: var(--championship-radius);
+  background: linear-gradient(145deg, rgba(99, 133, 214, .09), rgba(255,255,255,.018));
+  box-shadow: var(--championship-shadow);
+}
+.team-collaboration-panel .team-collaboration-metrics article { min-height: 116px; }
+.solution-proof-empty { color: var(--text-secondary); line-height: 1.55; }
+
+/* Customer-facing distinction: a Mission is a governed work object, not a
+   detached chat response. */
+.ai-employee-difference {
+  display: grid;
+  grid-template-columns: minmax(0, .82fr) minmax(0, 1.18fr);
+  gap: 16px;
+  align-items: stretch;
+  padding: clamp(22px, 3.2vw, 34px);
+  border: 1px solid var(--championship-border);
+  border-radius: var(--championship-radius);
+  background: linear-gradient(135deg, rgba(91, 122, 210, .10), rgba(255,255,255,.018));
+  box-shadow: var(--championship-shadow);
+}
+.ai-employee-difference header { display: grid; align-content: center; }
+.ai-employee-difference h2 { max-width: 430px; margin: 7px 0 10px; color: var(--text-primary); font-size: clamp(23px, 2.4vw, 33px); letter-spacing: -.045em; line-height: 1.08; }
+.ai-employee-difference header > p:last-child { max-width: 450px; margin: 0; color: var(--text-secondary); line-height: 1.6; }
+.ai-employee-difference > div { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 11px; }
+.ai-employee-difference article { min-height: 178px; padding: 20px; border: 1px solid rgba(255,255,255,.075); border-radius: 16px; background: rgba(3, 10, 22, .22); }
+.ai-employee-difference article > span { color: var(--text-muted); font-size: 10px; font-weight: 780; letter-spacing: .1em; }
+.ai-employee-difference article h3 { margin: 12px 0 8px; color: var(--text-primary); font-size: 17px; letter-spacing: -.02em; }
+.ai-employee-difference article p { margin: 0; color: var(--text-secondary); font-size: 12px; line-height: 1.58; }
+.ai-employee-difference .ai-employee-difference-highlight { border-color: rgba(123, 228, 255, .25); background: linear-gradient(145deg, rgba(61, 135, 176, .15), rgba(255,255,255,.025)); }
+.ai-employee-difference .ai-employee-difference-highlight > span { color: #bcefff; }
+
+/* A concise before/after frame makes the customer value legible before the
+   presenter reaches the product workflow. */
+.solution-before-after { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.solution-before-after article { min-height: 180px; padding: clamp(20px, 2.7vw, 30px); border: 1px solid var(--championship-border); border-radius: 20px; background: rgba(255,255,255,.022); }
+.solution-before-after article:last-child { border-color: rgba(123,228,255,.22); background: linear-gradient(145deg, rgba(56, 134, 177, .14), rgba(255,255,255,.022)); }
+.solution-before-after span { color: var(--text-muted); font-size: 10px; font-weight: 780; letter-spacing: .1em; }
+.solution-before-after article:last-child span { color: #bceeff; }
+.solution-before-after h3 { margin: 12px 0 8px; color: var(--text-primary); font-size: 20px; letter-spacing: -.03em; }
+.solution-before-after p { max-width: 460px; margin: 0; color: var(--text-secondary); line-height: 1.6; }
+
+/* A presenter sees the existing responsibility model before reaching a
+   permission boundary. This is guidance, not a role-management surface. */
+.solution-demo-roles {
+  padding: 22px;
+  border: 1px solid rgba(188, 231, 255, .16);
+  border-radius: 20px;
+  background: linear-gradient(135deg, rgba(57, 115, 148, .10), rgba(255,255,255,.022));
+}
+.solution-demo-roles > header > span {
+  color: #bdeeff;
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .1em;
+}
+.solution-demo-roles h3 { margin: 7px 0 5px; color: var(--text-primary); font-size: 19px; letter-spacing: -.025em; }
+.solution-demo-roles header > p,
+.solution-demo-roles > small { color: var(--text-secondary); font-size: 12px; line-height: 1.55; }
+.solution-demo-roles > div { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; margin-top: 17px; }
+.solution-demo-roles article { min-height: 126px; padding: 16px; border: 1px solid rgba(255,255,255,.075); border-radius: 14px; background: rgba(5, 14, 27, .26); }
+.solution-demo-roles article b { color: var(--text-primary); font-size: 14px; }
+.solution-demo-roles article p { margin: 8px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.55; }
+.solution-demo-roles > small { display: block; margin-top: 14px; color: #cae4f6; }
+@media (max-width: 760px) {
+  .solution-demo-roles { padding: 18px; }
+  .solution-demo-roles > div { grid-template-columns: 1fr; }
+  .solution-demo-roles article { min-height: 0; }
+  .ai-employee-difference,
+  .solution-before-after { grid-template-columns: 1fr; }
+  .ai-employee-difference > div { grid-template-columns: 1fr; }
+  .ai-employee-difference article,
+  .solution-before-after article { min-height: 0; }
+}
+
+/* AI OS experience: Home is a decision surface, not a collection of
+   disconnected counters. Every field below is derived from existing Mission,
+   Review, Evidence, and organizational-intelligence records. */
+.ai-os-command-center,
+.workspace-context-center {
+  display: grid;
+  gap: 20px;
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: clamp(22px, 3.2vw, 34px);
+  border: 1px solid rgba(135, 194, 255, .2);
+  border-radius: var(--championship-radius, 22px);
+  background:
+    radial-gradient(600px 240px at 100% 0%, rgba(85, 133, 255, .13), transparent 70%),
+    linear-gradient(145deg, rgba(22, 38, 76, .54), rgba(255,255,255,.025));
+  box-shadow: var(--championship-shadow);
+}
+.ai-os-command-center > header,
+.workspace-context-center > header,
+.ai-os-command-center > footer,
+.workspace-context-center > footer {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+.ai-os-command-center h2,
+.workspace-context-center h3 {
+  margin: 6px 0 8px;
+  color: var(--text-primary);
+  font-size: clamp(22px, 2.5vw, 32px);
+  letter-spacing: -.045em;
+  line-height: 1.08;
+}
+.workspace-context-center h3 { font-size: clamp(20px, 2.2vw, 27px); }
+.ai-os-command-center header p:last-child,
+.workspace-context-center header p:last-child {
+  max-width: 650px;
+  margin: 0;
+  color: var(--text-secondary);
+  line-height: 1.58;
+}
+.ai-os-command-center > header > span,
+.workspace-context-center > header > span {
+  flex: 0 0 auto;
+  max-width: 210px;
+  padding: 8px 11px;
+  border: 1px solid rgba(129, 223, 203, .24);
+  border-radius: 999px;
+  color: #c9f8e7;
+  background: rgba(55, 165, 136, .1);
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .075em;
+  line-height: 1.3;
+  text-align: center;
+  text-transform: uppercase;
+}
+.ai-os-command-center > header > span.working { border-color: rgba(132, 198, 255, .32); color: #d0edff; background: rgba(76, 145, 210, .12); }
+.ai-os-command-grid,
+.workspace-context-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.ai-os-command-grid article,
+.workspace-context-grid article {
+  min-height: 142px;
+  padding: 17px;
+  border: 1px solid rgba(255,255,255,.075);
+  border-radius: 16px;
+  background: rgba(3, 12, 27, .26);
+  transition: transform .18s ease, border-color .18s ease, background .18s ease;
+}
+.ai-os-command-grid article:hover,
+.workspace-context-grid article:hover { transform: translateY(-2px); border-color: rgba(151, 218, 255, .26); background: rgba(81, 130, 205, .1); }
+.ai-os-command-grid small,
+.workspace-context-grid small {
+  display: block;
+  color: #bceeff;
+  font-size: 10px;
+  font-weight: 780;
+  letter-spacing: .09em;
+  text-transform: uppercase;
+}
+.ai-os-command-grid b,
+.workspace-context-grid b {
+  display: -webkit-box;
+  overflow: hidden;
+  margin-top: 9px;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.4;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.ai-os-command-grid p,
+.workspace-context-grid p { margin: 8px 0 0; color: var(--text-secondary); font-size: 11px; line-height: 1.5; }
+.ai-os-command-center > footer { align-items: center; }
+.ai-os-command-center > footer .primary-card-action { width: auto; }
+.workspace-context-center > footer { padding-top: 3px; border-top: 1px solid rgba(255,255,255,.075); }
+.workspace-context-center > footer b { color: #bceeff; font-size: 11px; letter-spacing: .07em; text-transform: uppercase; }
+.workspace-context-center > footer span { color: var(--text-secondary); font-size: 12px; }
+
+/* The journey must remain an event record. The static phase strip can suggest
+   progress that has not happened, so Mission Room prioritizes the recorded
+   work journal and its honest empty state. */
+.mission-center .mission-stage-strip.research-timeline { display: none !important; }
+.mission-center .ai-work-journal { position: relative; margin-top: 20px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,.075); }
+.mission-center .ai-work-journal > header { align-items: flex-start; }
+.mission-center .ai-work-journal > header > div::before { content: "RESEARCH JOURNEY"; display: block; margin-bottom: 6px; color: #bceeff; font-size: 10px; font-weight: 780; letter-spacing: .09em; }
+.mission-center .ai-work-journal .section-kicker { display: none; }
+.mission-center .ai-work-journal h4 { margin: 0; color: var(--text-primary); font-size: 18px; letter-spacing: -.025em; }
+.mission-center .ai-work-journal .mission-timeline { margin-bottom: 10px; }
+
+/* Old summary tiles now duplicate the command and context center. The live
+   sources remain intact; the customer sees one coherent AI OS view. */
+.home-workspace > .home-employee-identity,
+.home-workspace > .home-employee-ready,
+section[aria-label="AI Employee Workspace"] > .workspace-context-panel { display: none; }
+.computer-studio .computer-capability-grid article > b { display: block; margin-top: 5px; }
+.computer-studio .computer-capability-grid article > small::before { content: "Capability · "; color: #bceeff; font-weight: 760; }
+.computer-studio .computer-capability-grid article > em { display: block; margin-top: 11px; color: #cde6ee; font-size: 11px; font-style: normal; line-height: 1.45; }
+
+@media (max-width: 980px) {
+  .ai-os-command-grid,
+  .workspace-context-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+@media (max-width: 620px) {
+  .ai-os-command-center,
+  .workspace-context-center { padding: 20px; }
+  .ai-os-command-center > header,
+  .workspace-context-center > header,
+  .ai-os-command-center > footer,
+  .workspace-context-center > footer { align-items: stretch; flex-direction: column; }
+  .ai-os-command-center > header > span,
+  .workspace-context-center > header > span { max-width: none; width: fit-content; }
+  .ai-os-command-grid,
+  .workspace-context-grid { grid-template-columns: 1fr; }
+  .ai-os-command-grid article,
+  .workspace-context-grid article { min-height: 0; }
+}
+
+/* AI OS Evolution Phase 2: customer-facing surfaces use one quiet operating
+   system language—what happened, what matters, and where a human is needed. */
+.home-workspace > .ai-os-command-center {
+  position: relative;
+  overflow: hidden;
+}
+.home-workspace > .ai-os-command-center::after {
+  position: absolute;
+  right: -58px;
+  bottom: -86px;
+  width: 230px;
+  height: 230px;
+  border: 1px solid rgba(140, 205, 255, .11);
+  border-radius: 50%;
+  box-shadow: 0 0 0 28px rgba(140, 205, 255, .025), 0 0 0 56px rgba(140, 205, 255, .013);
+  content: "";
+  pointer-events: none;
+}
+.home-workspace > .ai-os-command-center > * { position: relative; z-index: 1; }
+.ai-os-command-center .ai-os-command-grid article:nth-child(1),
+.ai-os-command-center .ai-os-command-grid article:nth-child(4) { background: linear-gradient(145deg, rgba(74, 136, 208, .12), rgba(5, 15, 30, .26)); }
+.ai-os-command-center .ai-os-command-grid article:nth-child(5),
+.ai-os-command-center .ai-os-command-grid article:nth-child(6) { border-color: rgba(116, 219, 196, .15); }
+.ai-os-command-center > header > span.working::before {
+  display: inline-block;
+  width: 6px;
+  height: 6px;
+  margin: 0 6px 1px 0;
+  border-radius: 50%;
+  background: currentColor;
+  box-shadow: 0 0 0 0 rgba(184, 235, 255, .5);
+  content: "";
+  animation: ai-os-presence 2.2s ease-out infinite;
+}
+@keyframes ai-os-presence {
+  0% { box-shadow: 0 0 0 0 rgba(184, 235, 255, .42); }
+  72%, 100% { box-shadow: 0 0 0 7px rgba(184, 235, 255, 0); }
+}
+
+/* Mission Room reads like a work assignment. The existing sections retain
+   their data and controls; this sequence only clarifies their role. */
+.mission-center .mission-stream-surface > header { position: relative; }
+.mission-center .mission-stream-surface > header::after {
+  align-self: center;
+  padding: 6px 9px;
+  border: 1px solid rgba(136, 210, 255, .22);
+  border-radius: 999px;
+  color: #c4edff;
+  background: rgba(61, 133, 184, .1);
+  content: "AI EMPLOYEE WORKSPACE";
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  white-space: nowrap;
+}
+.mission-center .mission-requirements,
+.mission-center .ai-work-journal,
+.mission-center .mission-evidence-list,
+.mission-center .mission-review-panel,
+.mission-center .mission-delivery-package { position: relative; }
+.mission-center .mission-requirements::before,
+.mission-center .ai-work-journal::before,
+.mission-center .mission-evidence-list::before,
+.mission-center .mission-review-panel::before,
+.mission-center .mission-delivery-package::before {
+  position: absolute;
+  top: 0;
+  right: 0;
+  padding: 4px 7px;
+  border-radius: 0 13px 0 10px;
+  color: rgba(203, 228, 255, .74);
+  background: rgba(127, 171, 238, .1);
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .08em;
+}
+.mission-center .mission-requirements::before { content: "GOAL"; }
+.mission-center .ai-work-journal::before { content: "PROGRESS"; }
+.mission-center .mission-evidence-list::before { content: "EVIDENCE"; }
+.mission-center .mission-review-panel::before { content: "HUMAN DECISION"; color: #ffe1ad; background: rgba(195, 131, 50, .12); }
+.mission-center .mission-delivery-package::before { content: "OUTCOME"; color: #c9f8e7; background: rgba(59, 156, 129, .12); }
+.mission-center .mission-review-panel > span,
+.mission-center .mission-delivery-package > span { display: none; }
+.mission-center .mission-evidence-list > header { padding-right: 64px; }
+
+/* Knowledge and Delivery are enterprise assets, not file inventory. */
+.library-workspace .library-header,
+.delivery-center > .dashboard-heading {
+  position: relative;
+  overflow: hidden;
+}
+.library-workspace .library-header::after,
+.delivery-center > .dashboard-heading::after {
+  position: absolute;
+  right: 26px;
+  bottom: 18px;
+  color: rgba(169, 211, 255, .13);
+  font-size: clamp(28px, 4vw, 54px);
+  font-weight: 800;
+  letter-spacing: -.07em;
+  pointer-events: none;
+}
+.library-workspace .library-header::after { content: "KNOWLEDGE"; }
+.delivery-center > .dashboard-heading::after { content: "OUTCOMES"; }
+.delivery-center .product-artifact-grid article::before {
+  display: block;
+  margin-bottom: 4px;
+  color: #bceeff;
+  content: "RESEARCH OUTCOME";
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+.delivery-center .product-empty-state::before {
+  display: block;
+  margin-bottom: 11px;
+  color: #bceeff;
+  content: "OUTCOME CENTER";
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: .09em;
+}
+
+/* Executive cards explain organizational direction rather than presenting a
+   dense analytics wall. Their values continue to use persisted records. */
+.executive-overview { background: linear-gradient(145deg, rgba(86, 118, 204, .08), rgba(255,255,255,.018)); }
+.executive-overview-grid article { transition: border-color .18s ease, transform .18s ease, background .18s ease; }
+.executive-overview-grid article:hover { transform: translateY(-2px); border-color: rgba(143, 212, 255, .25); background: rgba(77, 122, 197, .1); }
+.executive-overview-grid article:nth-child(1) { border-color: rgba(120, 196, 255, .19); }
+.executive-overview-grid article:nth-child(2) { border-color: rgba(110, 218, 183, .17); }
+.executive-overview-grid article:nth-child(3) { border-color: rgba(248, 192, 112, .18); }
+
+/* Loading, empty, and error surfaces retain a calm enterprise cadence. */
+.product-empty-state,
+.workspace-memory-growth-empty,
+.research-memory-empty,
+.team-working-pattern-empty,
+.executive-overview-empty {
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.035);
+}
+.product-empty-state > b,
+.workspace-memory-growth-empty > b,
+.research-memory-empty > b,
+.team-working-pattern-empty > b,
+.executive-overview-empty > b { letter-spacing: -.015em; }
+.error-alert { border-radius: 15px; box-shadow: 0 10px 28px rgba(0,0,0,.12); }
+.loading-state .spinner { box-shadow: 0 0 0 6px rgba(125, 195, 255, .06); }
+
+@media (max-width: 760px) {
+  .mission-center .mission-stream-surface > header::after { align-self: flex-start; }
+  .library-workspace .library-header::after,
+  .delivery-center > .dashboard-heading::after { right: 18px; bottom: 14px; font-size: 26px; }
+}
+
+/* Championship final pass: retain one primary decision surface on Home.
+   The Command Center already carries the live Mission, decision, and knowledge
+   state, so the legacy operational summary is intentionally removed from the
+   customer journey instead of repeating the same records as dashboard tiles. */
+.home-workspace > .home-focus-grid { display: none; }
+
+/* A calmer hero-to-command transition gives the page a clear hierarchy:
+   identity first, live work second, the product story third. */
+.home-workspace .workspace-home-hero {
+  isolation: isolate;
+  box-shadow: 0 26px 80px rgba(0, 0, 0, .27), inset 0 1px 0 rgba(255, 255, 255, .06);
+}
+.home-workspace .workspace-home-hero > small {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  margin-top: 18px;
+  padding: 7px 10px;
+  border: 1px solid rgba(161, 219, 255, .14);
+  border-radius: 999px;
+  color: #c9e9fb;
+  background: rgba(6, 19, 35, .32);
+  font-size: 11px;
+}
+.home-workspace .workspace-home-hero > small::before {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #72dfc4;
+  box-shadow: 0 0 0 4px rgba(114, 223, 196, .09);
+  content: "";
+}
+
+.ai-os-command-center {
+  border-color: rgba(151, 213, 255, .15);
+  box-shadow: 0 22px 56px rgba(0, 0, 0, .20), inset 0 1px 0 rgba(255, 255, 255, .045);
+}
+.ai-os-command-center .ai-os-command-grid article {
+  min-height: 132px;
+  background: rgba(4, 14, 29, .31);
+}
+.ai-os-command-center .ai-os-command-grid article:hover {
+  transform: translateY(-2px);
+  border-color: rgba(146, 211, 255, .28);
+  background: rgba(47, 102, 168, .12);
+}
+.ai-os-command-center .ai-os-command-grid article b {
+  display: -webkit-box;
+  overflow: hidden;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+  line-height: 1.3;
+}
+
+/* Keep the operational path readable at every breakpoint; no mobile-only
+   secondary panels are required to understand the next user decision. */
+@media (max-width: 620px) {
+  .home-workspace .workspace-home-hero > small { align-items: flex-start; border-radius: 14px; }
+  .ai-os-command-center .ai-os-command-grid article { min-height: 118px; }
+  .ai-os-command-center > footer .primary-card-action,
+  .ai-os-command-center > footer .text-button { width: 100%; text-align: center; }
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .home-workspace .workspace-home-hero,
+  .ai-os-command-center,
+  .solution-narrative {
+    animation: championship-surface-in .38s ease both;
+  }
+  .ai-os-command-center .ai-os-command-grid article { transition: transform .18s ease, border-color .18s ease, background .18s ease; }
+}
+@keyframes championship-surface-in {
+  from { opacity: .01; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Final Enterprise Product Polish — clarify the demo story without adding a
+   second workflow. These annotations sit on controls that already point to
+   real, persisted Mission and Delivery states. */
+.home-workspace .ai-os-command-center > footer {
+  position: relative;
+  flex-wrap: wrap;
+  margin-top: 4px;
+  padding-top: 22px;
+}
+.home-workspace .ai-os-command-center > footer::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  color: rgba(190, 228, 249, .70);
+  content: "WHAT HAPPENS NEXT";
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .1em;
+}
+.home-workspace .ai-os-command-center > footer::after {
+  flex: 1 0 100%;
+  order: 3;
+  color: var(--text-muted);
+  content: "AI prepares the work. Your team validates the decisions.";
+  font-size: 11px;
+  line-height: 1.45;
+}
+.home-workspace .ai-os-command-center > footer .primary-card-action {
+  box-shadow: 0 10px 24px rgba(63, 152, 213, .18);
+}
+
+/* Make the trust boundary recognizable in every normal customer-facing
+   workflow without claiming that an absent Mission has made progress. */
+.mission-center .ai-employee-presence,
+.mission-center .mission-review-panel,
+.mission-center .mission-delivery-package,
+.delivery-center .product-artifact-grid article {
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .035);
+}
+
+/* Presentation mode retains the customer problem-to-value arc at a glance. */
+.presentation-mode .solution-showcase > .dashboard-heading > div::after {
+  display: block;
+  max-width: 560px;
+  margin-top: 18px;
+  color: rgba(211, 237, 253, .78);
+  content: "Customer challenge · AI-supported research work · human validation · traceable delivery";
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: .025em;
+  line-height: 1.55;
+}
+.presentation-mode .solution-showcase-flow li:first-child,
+.presentation-mode .solution-showcase-flow li:nth-child(3),
+.presentation-mode .solution-showcase-flow li:nth-child(5) {
+  border-color: rgba(137, 206, 255, .22);
+  background: rgba(73, 135, 191, .09);
+}
+
+@media (max-width: 620px) {
+  .home-workspace .ai-os-command-center > footer { gap: 10px; }
+  .home-workspace .ai-os-command-center > footer::after { flex-basis: 100%; }
+  .presentation-mode .solution-showcase > .dashboard-heading > div::after { font-size: 10px; }
+}
+
+/* Presentation mode exposes only the live Mission facts a customer needs. */
+.presentation-mission-status { display: grid; grid-template-columns: minmax(130px, .55fr) repeat(3, minmax(0, 1fr)); gap: 10px; align-items: stretch; margin: var(--product-gap) 0; padding: 14px; border: 1px solid rgba(123, 228, 255, .18); border-radius: var(--product-radius); background: linear-gradient(135deg, rgba(73, 167, 218, .12), rgba(255,255,255,.02)); }
+.presentation-mission-status > b { align-self: center; color: var(--accent-cyan); font-size: 10px; letter-spacing: .1em; }
+.presentation-mission-status > span { display: grid; gap: 4px; padding: 10px 12px; border: 1px solid rgba(255,255,255,.07); border-radius: 13px; color: var(--text-primary); background: rgba(5, 14, 28, .24); font-size: 12px; line-height: 1.45; }
+.presentation-mission-status small { color: var(--text-muted); font-size: 9px; font-weight: 750; letter-spacing: .07em; text-transform: uppercase; }
+@media (max-width: 900px) { .presentation-mission-status { grid-template-columns: 1fr; }.presentation-mission-status > b { padding: 4px 2px; } }
+
+/* Championship Demo convergence: the Home view has one product promise, one
+   live command view, and one daily briefing.  These rules only remove repeated
+   projections of the same persisted state; they do not alter Mission data or
+   its review boundary. */
+.home-workspace > .home-employee-identity,
+.home-workspace > .home-quick-grid,
+.home-workspace > .ai-employee-difference,
+.home-workspace > .home-recent-workspaces { display: none; }
+.home-workspace .ai-os-command-grid > article:nth-child(1),
+.home-workspace .ai-os-command-grid > article:nth-child(3) { display: none; }
+.home-workspace .ai-os-command-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+
+/* The primary Mission Room already communicates goal, journal, Evidence,
+   Review, and Delivery. Keep companion diagnostics out of the normal customer
+   story so a live demo reads like an employee handoff rather than a console. */
+.app-shell > .mission-source-material,
+.app-shell > .ai-employee-report,
+.app-shell > .mission-control-surface,
+.app-shell > .mission-context-surface,
+.app-shell > .context-retrieval-surface,
+.app-shell > .ai-activity-surface,
+.app-shell > .ai-team-plan-surface,
+.app-shell > .research-insight-panel,
+.app-shell > .ai-progress-panel,
+.app-shell > .mission-intelligence-panel,
+.app-shell > .next-best-action-panel,
+.app-shell > .mission-collaboration-panel,
+.app-shell > .mission-memory-continuity,
+.app-shell > .ai-employee-delivery-summary { display: none; }
+
+/* A live demo needs a single clear handoff into the Mission Room. */
+.golden-demo-guide-actions { display: flex; flex-wrap: wrap; align-items: center; justify-content: flex-end; gap: 10px; }
+.golden-demo-guide-actions > span { white-space: nowrap; }
+
+@media (max-width: 900px) {
+  .home-workspace .ai-os-command-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+
+@media (max-width: 620px) {
+  .home-workspace .ai-os-command-grid { grid-template-columns: 1fr; }
+  .golden-demo-guide-actions { align-items: flex-start; justify-content: flex-start; }
+  .golden-demo-guide-actions .outline-button { width: 100%; text-align: center; }
+}
+
+/* FDE Demo flow: every transition explains the real state and the one next
+   presentation action. These are navigation cues only; they never create work
+   or mark an Evidence, Review, or Delivery as complete. */
+.demo-workspace-banner > div { min-width: 0; flex: 1 1 auto; }
+.demo-workspace-banner .demo-walkthrough-action {
+  flex: 0 0 auto;
+  padding: 7px 8px;
+  border: 1px solid rgba(126, 206, 255, .18);
+  border-radius: 9px;
+  color: #c9edff;
+  background: rgba(77, 140, 203, .1);
+  font-size: 10px;
+  white-space: nowrap;
+}
+.demo-workspace-banner .demo-walkthrough-action:hover {
+  border-color: rgba(126, 206, 255, .35);
+  color: var(--text-primary);
+  background: rgba(77, 140, 203, .18);
+}
+.golden-demo-live-step {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+  padding-top: 2px;
+}
+.golden-demo-live-step > div {
+  min-height: 116px;
+  padding: 16px;
+  border: 1px solid rgba(138, 202, 255, .14);
+  border-radius: 15px;
+  background: rgba(5, 15, 29, .25);
+}
+.golden-demo-live-step > div:last-child {
+  border-color: rgba(246, 198, 108, .2);
+  background: linear-gradient(135deg, rgba(180, 125, 47, .09), rgba(5, 15, 29, .22));
+}
+.golden-demo-live-step small {
+  display: block;
+  color: #bceeff;
+  font-size: 9px;
+  font-weight: 780;
+  letter-spacing: .09em;
+}
+.golden-demo-live-step b {
+  display: block;
+  margin-top: 8px;
+  color: var(--text-primary);
+  font-size: 14px;
+  line-height: 1.35;
+}
+.golden-demo-live-step p {
+  margin: 8px 0 0;
+  color: var(--text-secondary);
+  font-size: 11px;
+  line-height: 1.5;
+}
+@media (max-width: 760px) {
+  .demo-workspace-banner { flex-wrap: wrap; }
+  .demo-workspace-banner .demo-walkthrough-action { width: 100%; text-align: center; }
+  .golden-demo-live-step { grid-template-columns: 1fr; }
+  .golden-demo-live-step > div { min-height: 0; }
 }

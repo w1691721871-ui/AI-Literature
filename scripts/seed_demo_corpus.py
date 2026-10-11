@@ -1,4 +1,4 @@
-"""Idempotently import the approved public-paper corpus for a Golden Demo.
+"""Idempotently import the Golden Demo low-carbon-building-materials corpus.
 
 Run this only against an explicitly provisioned Demo deployment with a real
 embedding credential.  The script downloads public PDFs, uses the existing
@@ -7,6 +7,7 @@ paper parser/indexer, and creates no Evidence, Insight, Review or Artifact.
 from __future__ import annotations
 
 import hashlib
+import os
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -18,9 +19,11 @@ if str(PROJECT_ROOT) not in sys.path:
 
 from sqlalchemy import select
 
+from app.models.governance import GovernanceWorkspace
 from app.models.paper import Paper
 from app.services.database import SessionLocal, initialize_database
 from app.services.document_store import read_pdf_file
+from app.services.identity_service import IdentityService
 from app.services.paper_library_service import PaperLibraryService
 from app.services.researchos_diagnostic_service import ResearchOSDiagnosticService
 
@@ -33,12 +36,12 @@ class PublicPaper:
 
 
 PUBLIC_DEMO_CORPUS = (
-    PublicPaper("lewis_2020_retrieval_augmented_generation.pdf", "Retrieval-Augmented Generation for Knowledge-Intensive NLP Tasks", "https://arxiv.org/pdf/2005.11401"),
-    PublicPaper("yao_2022_react.pdf", "ReAct: Synergizing Reasoning and Acting in Language Models", "https://arxiv.org/pdf/2210.03629"),
-    PublicPaper("schick_2023_toolformer.pdf", "Toolformer: Language Models Can Teach Themselves to Use Tools", "https://arxiv.org/pdf/2302.04761"),
-    PublicPaper("asai_2023_self_rag.pdf", "Self-RAG: Learning to Retrieve, Generate, and Critique through Self-Reflection", "https://arxiv.org/pdf/2310.11511"),
-    PublicPaper("yan_2024_corrective_rag.pdf", "Corrective Retrieval Augmented Generation", "https://arxiv.org/pdf/2401.15884"),
-    PublicPaper("liu_2023_agentbench.pdf", "AgentBench: Evaluating LLMs as Agents", "https://arxiv.org/pdf/2308.03688"),
+    PublicPaper("ge_2022_low_carbon_concrete.pdf", "Accelerated Design and Deployment of Low-Carbon Concrete for Data Centers", "https://arxiv.org/pdf/2204.05397"),
+    PublicPaper("he_2025_recycled_concrete_aggregate_leachate.pdf", "Assessing the Impact of Contact Time on Leachate Chemistry from Recycled Concrete Aggregates", "https://arxiv.org/pdf/2510.03344"),
+    PublicPaper("toboso_2025_virgin_aggregate_lca.pdf", "Understanding the Environmental Impacts of Virgin Aggregates: Critical Literature Review and Primary Comprehensive Life Cycle Assessments", "https://arxiv.org/pdf/2501.10457"),
+    PublicPaper("martinez_2021_incinerator_bottom_ash_concrete.pdf", "Valorization of Incinerator Bottom Ash for the Production of Resource-Efficient Eco-Friendly Concrete: Performance and Toxicological Characterization", "https://arxiv.org/pdf/2104.12497"),
+    PublicPaper("deb_2022_concrete_aggregate_grading.pdf", "Learning to Sieve: Prediction of Grading Curves from Images of Concrete Aggregate", "https://arxiv.org/pdf/2204.03333"),
+    PublicPaper("dixit_2024_building_lca_energy_efficiency.pdf", "LCA and Energy Efficiency in Buildings: Mapping More Than Twenty Years of Research", "https://arxiv.org/pdf/2409.00065"),
 )
 
 
@@ -59,8 +62,43 @@ def _existing(filename: str) -> Paper | None:
         session.close()
 
 
-def seed() -> int:
+def _require_dedicated_demo_workspace() -> str:
+    """Refuse global-library writes unless this is a dedicated Demo deployment.
+
+    ``Paper`` has no workspace foreign key in the existing schema, so the
+    library is deployment-level. The seed therefore must never run beside a
+    customer Workspace merely because its filenames look demo-related.
+    """
+    if os.getenv("DEMO_MODE", "").strip().lower() != "true":
+        raise RuntimeError("DEMO_MODE=true is required before importing the Golden Demo corpus")
+    expected_name = IdentityService.demo_workspace_name
+    if os.getenv("RESEARCHOS_DEMO_CORPUS_TARGET", "").strip() != expected_name:
+        raise RuntimeError(
+            "Set RESEARCHOS_DEMO_CORPUS_TARGET to the exact Demo Workspace name before importing public Demo sources"
+        )
+
     initialize_database()
+    session = SessionLocal()
+    try:
+        demo_workspace = session.scalar(select(GovernanceWorkspace).where(
+            GovernanceWorkspace.name == expected_name
+        ))
+        if not demo_workspace:
+            raise RuntimeError("ResearchOS Demo Workspace is not provisioned; create the Demo identity first")
+        other_workspaces = list(session.scalars(select(GovernanceWorkspace.name).where(
+            GovernanceWorkspace.id != demo_workspace.id
+        )))
+        if other_workspaces:
+            raise RuntimeError(
+                "Golden Demo corpus import is blocked in a shared deployment; use a dedicated Demo database and persistent disk"
+            )
+        return str(demo_workspace.id)
+    finally:
+        session.close()
+
+
+def seed() -> int:
+    demo_workspace_id = _require_dedicated_demo_workspace()
     library = PaperLibraryService()
     imported = 0
     skipped = 0
@@ -83,7 +121,10 @@ def seed() -> int:
         imported += 1
 
     readiness = ResearchOSDiagnosticService().run()
-    print(f"Imported {imported}; skipped {skipped}; diagnostics={readiness['overall']} counts={readiness['counts']}")
+    print(
+        f"Demo Workspace {demo_workspace_id}: imported {imported}; skipped {skipped}; "
+        f"diagnostics={readiness['overall']} counts={readiness['counts']}"
+    )
     return 0 if readiness["overall"] == "PASS" else 2
 
 
