@@ -17,7 +17,13 @@ PROJECT_ROOT = Path(__file__).resolve().parents[1]
 if str(PROJECT_ROOT) not in sys.path:
     sys.path.insert(0, str(PROJECT_ROOT))
 
-from scripts.demo_environment import DEMO_ROOT, DemoEnvironmentError, apply_demo_environment, isolated_demo_environment
+from scripts.demo_environment import (
+    DEMO_ROOT,
+    DemoEnvironmentError,
+    apply_demo_environment,
+    isolated_demo_environment,
+    load_demo_environment_file,
+)
 
 
 def _require_bootstrap_configuration() -> None:
@@ -47,6 +53,7 @@ def _backup_existing_demo(environment) -> Path | None:
 
 
 def bootstrap(apply: bool) -> int:
+    load_demo_environment_file()
     _require_bootstrap_configuration()
     environment = isolated_demo_environment()
     print(f"Demo database target: {environment.database_path}")

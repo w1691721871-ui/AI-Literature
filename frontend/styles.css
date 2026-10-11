@@ -149,6 +149,9 @@ a { color: var(--accent-cyan); }
 .login-card .primary-card-action { width: 100%; margin-top: 4px; }
 .auth-entry-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
 .auth-entry-actions .outline-button { min-height: 36px; padding: 7px 12px; }
+.auth-demo-entry { display: grid; gap: 4px; padding: 11px 12px; border: 1px solid rgba(123, 207, 255, .16); border-radius: 14px; background: rgba(123, 207, 255, .045); }
+.auth-demo-entry span { color: var(--accent-cyan); font-size: 9px; font-weight: 800; letter-spacing: .12em; }
+.auth-demo-entry p { margin: 0; color: var(--text-secondary); font-size: 11px; line-height: 1.45; }
 .demo-workspace-banner { position: fixed; z-index: 20; top: 76px; left: 50%; display: flex; align-items: center; gap: 10px; width: min(720px, calc(100% - 32px)); padding: 9px 12px; border: 1px solid rgba(123, 228, 255, .22); border-radius: 14px; color: var(--text-secondary); background: rgba(10, 20, 35, .82); box-shadow: 0 12px 36px rgba(0,0,0,.22); backdrop-filter: blur(16px); transform: translateX(-50%); }
 .demo-workspace-banner > span { display: grid; min-width: 38px; min-height: 22px; place-items: center; border: 1px solid rgba(123, 228, 255, .36); border-radius: 999px; color: var(--accent-cyan); background: rgba(123, 228, 255, .08); font-size: 9px; font-weight: 800; letter-spacing: .08em; }
 .demo-workspace-banner b { display: block; color: var(--text-primary); font-size: 11px; }.demo-workspace-banner small { display: block; margin-top: 2px; color: var(--text-muted); font-size: 10px; }

@@ -48,11 +48,12 @@ EMBEDDING_MODEL=text-embedding-v4
 EMBEDDING_DIMENSIONS=1024
 DASHSCOPE_API_KEY=<secret>
 CORS_ALLOWED_ORIGINS=https://<your-frontend-host>
-RESEARCHOS_RELEASE=release-closure-v169
-RESEARCHOS_COMMIT=<the deployed Git commit>
-RESEARCHOS_FRONTEND_VERSION=v169
+RESEARCHOS_ALLOW_LOCAL_CORS=false
+RESEARCHOS_RELEASE=researchos-demo-v200
+RESEARCHOS_FRONTEND_VERSION=v200
 RESEARCHOS_BACKEND_VERSION=api-2026.10
-RESEARCHOS_ENVIRONMENT=production
+RESEARCHOS_ENVIRONMENT=demo
+RESEARCHOS_RELEASE_GUARD=true
 ```
 
 Use the actual frontend origin in `CORS_ALLOWED_ORIGINS`. Add a second comma-separated origin only when another deployed frontend must call this API.
@@ -68,7 +69,7 @@ GET /api/release/demo-readiness
 GET /researchos/diagnostics
 ```
 
-`/api/version` must identify the deployed commit and report `frontend_version: v169`. The frontend static host must serve `/release-info.json` with the same frontend version. If either still reports an older version, the deployment is stale; redeploy before accepting the release.
+`/api/version` must identify the deployed commit and report `frontend_version: v200`. Render supplies the deployed commit through `RENDER_GIT_COMMIT`; do not override it with a stale static SHA. The frontend static host must serve `/release-info.json` with the same frontend version. In Demo mode, a mismatch prevents FastAPI startup. If either still reports an older version, the deployment is stale; redeploy before accepting the release.
 
 ## 6. Seed the real public-paper corpus once
 

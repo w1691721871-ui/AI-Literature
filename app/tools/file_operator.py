@@ -4,7 +4,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from app.services.database import PROJECT_ROOT
+from app.services.database import WORK_DIRECTORY
 
 
 class FileOperator:
@@ -20,7 +20,7 @@ class FileOperator:
     allowed_suffixes = {".pdf", ".docx", ".xlsx", ".pptx", ".md", ".txt", ".csv"}
 
     def __init__(self, workspace_root: Path | None = None) -> None:
-        self.workspace_root = (workspace_root or PROJECT_ROOT / "research_workspace").resolve()
+        self.workspace_root = (workspace_root or WORK_DIRECTORY / "research_workspace").resolve()
 
     def inspect(self) -> dict[str, object]:
         self.workspace_root.mkdir(parents=True, exist_ok=True)

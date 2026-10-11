@@ -132,8 +132,9 @@ ResearchOS uses a static frontend and a FastAPI API service.
 - **Hosting:** Render Web Service using [`render.yaml`](render.yaml)
 - **Start command:** `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
 - **Health check:** `/health`
-- **Required secrets:** `DASHSCOPE_API_KEY`, `CORS_ALLOWED_ORIGINS`
-- **Release metadata:** set `RESEARCHOS_RELEASE`, `RESEARCHOS_COMMIT`, and verify the frontend version value before a public release.
+- **Required secrets:** `DASHSCOPE_API_KEY`, `DEMO_OWNER_PASSWORD`, and `DEMO_REVIEWER_PASSWORD`.
+- **Required configuration:** set `CORS_ALLOWED_ORIGINS` to the exact HTTPS frontend origin and keep `RESEARCHOS_ALLOW_LOCAL_CORS=false` in the managed service.
+- **Release metadata:** set `RESEARCHOS_RELEASE` and `RESEARCHOS_FRONTEND_VERSION`; Render supplies the deployed commit through `RENDER_GIT_COMMIT`, so do not hardcode a stale `RESEARCHOS_COMMIT`.
 - **State and storage:** retain `DATABASE_URL`, `WORK_DIRECTORY`, and `STORAGE_ROOT` exactly as declared in [`render.yaml`](render.yaml).
 - **Model configuration:** set the approved `LLM_*` and `EMBEDDING_*` values in the managed environment; do not place provider credentials in the frontend or Git.
 - **Demo governance:** keep `DEMO_MODE=true` and `REQUIRE_HUMAN_REVIEW=true` only for the intended isolated Demo service.

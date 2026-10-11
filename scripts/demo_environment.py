@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import os
+import subprocess
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -15,10 +16,45 @@ DEFAULT_WORK_DIRECTORY = DEMO_ROOT / "work"
 # filename beneath WORK_DIRECTORY. Keeping the isolated Demo target aligned
 # avoids a false "database missing" result without changing application code.
 DEFAULT_DATABASE_PATH = DEFAULT_WORK_DIRECTORY / "research_library.db"
+DEMO_ENV_FILE = DEMO_ROOT / ".env"
+DEMO_RELEASE = "researchos-demo-v200"
+DEMO_COMMIT = "35fc0eb8709e141c6fa66124242660905acab476"
+DEMO_FRONTEND_VERSION = "v200"
+DEMO_ENVIRONMENT = "demo"
 
 
 class DemoEnvironmentError(RuntimeError):
     """Raised when a command could reach a non-Demo persistence target."""
+
+
+def load_demo_environment_file() -> None:
+    """Load local Demo variables without overriding explicit process values.
+
+    The file is ignored by Git and is only read by Demo utilities.  This makes
+    the preflight and bootstrap commands repeatable without ever reading a
+    development ``.env`` or printing any credential value.
+    """
+    if not DEMO_ENV_FILE.exists():
+        return
+    for raw_line in DEMO_ENV_FILE.read_text(encoding="utf-8").splitlines():
+        line = raw_line.strip()
+        if not line or line.startswith("#") or "=" not in line:
+            continue
+        key, value = line.split("=", 1)
+        key = key.strip()
+        if key and key not in os.environ:
+            os.environ[key] = value.strip().strip('"').strip("'")
+
+
+def _current_git_commit() -> str:
+    """Return the checked-out commit for a local Demo without logging it."""
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "HEAD"], cwd=PROJECT_ROOT, check=True,
+            capture_output=True, text=True,
+        ).stdout.strip()
+    except (OSError, subprocess.SubprocessError):
+        return ""
 
 
 @dataclass(frozen=True)
@@ -42,6 +78,7 @@ def isolated_demo_environment() -> DemoEnvironment:
     set ``RESEARCHOS_DATABASE_URL_DEMO`` to a different SQLite file, but it
     must remain beneath the repository's ``demo/`` directory.
     """
+    load_demo_environment_file()
     configured_url = os.getenv("RESEARCHOS_DATABASE_URL_DEMO", "").strip()
     if not configured_url:
         configured_url = f"sqlite:///{DEFAULT_DATABASE_PATH.as_posix()}"
@@ -63,8 +100,25 @@ def isolated_demo_environment() -> DemoEnvironment:
 
 
 def apply_demo_environment(environment: DemoEnvironment) -> None:
-    """Select the isolated database before any ``app`` module is imported."""
+    """Select isolated persistence and public release identity before app import."""
     environment.work_directory.mkdir(parents=True, exist_ok=True)
     environment.database_path.parent.mkdir(parents=True, exist_ok=True)
     os.environ["DATABASE_URL"] = environment.database_url
     os.environ["WORK_DIRECTORY"] = str(environment.work_directory)
+    # These are public, non-secret Demo release values. Explicit process or
+    # ``demo/.env`` values still win so a future release can advance them.
+    if not os.getenv("RESEARCHOS_RELEASE", "").strip():
+        os.environ["RESEARCHOS_RELEASE"] = DEMO_RELEASE
+    if not os.getenv("RESEARCHOS_COMMIT", "").strip():
+        os.environ["RESEARCHOS_COMMIT"] = _current_git_commit() or DEMO_COMMIT
+    if not os.getenv("RESEARCHOS_FRONTEND_VERSION", "").strip():
+        os.environ["RESEARCHOS_FRONTEND_VERSION"] = DEMO_FRONTEND_VERSION
+    if not os.getenv("RESEARCHOS_ENVIRONMENT", "").strip():
+        os.environ["RESEARCHOS_ENVIRONMENT"] = DEMO_ENVIRONMENT
+    if not os.getenv("RESEARCHOS_RELEASE_GUARD", "").strip():
+        os.environ["RESEARCHOS_RELEASE_GUARD"] = "true"
+    # The isolated launcher is used with a same-machine static frontend. This
+    # opt-in stays inside the Demo process; managed deployments keep it false
+    # and admit only their configured public frontend origin.
+    if not os.getenv("RESEARCHOS_ALLOW_LOCAL_CORS", "").strip():
+        os.environ["RESEARCHOS_ALLOW_LOCAL_CORS"] = "true"

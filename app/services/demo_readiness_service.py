@@ -52,7 +52,12 @@ class DemoReadinessService:
 
     @staticmethod
     def _release_is_configured() -> bool:
-        return bool(os.getenv("RESEARCHOS_RELEASE", "").strip() and os.getenv("RESEARCHOS_COMMIT", "").strip())
+        # Render exposes the deployed Git SHA as RENDER_GIT_COMMIT. The
+        # release endpoint uses the same precedence, so readiness must not
+        # report a healthy managed deployment as unverified merely because we
+        # intentionally avoid committing a stale static RESEARCHOS_COMMIT.
+        commit = os.getenv("RESEARCHOS_COMMIT", "").strip() or os.getenv("RENDER_GIT_COMMIT", "").strip()
+        return bool(os.getenv("RESEARCHOS_RELEASE", "").strip() and commit)
 
     def snapshot(self) -> dict[str, object]:
         session = self._sessions()

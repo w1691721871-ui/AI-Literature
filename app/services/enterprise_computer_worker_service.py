@@ -18,7 +18,7 @@ from app.models.ai_mission import AIMission, AIMissionEvent
 from app.models.file_asset import FileAsset
 from app.models.mission_file_source import MissionFileSource
 from app.services.artifact_service import ArtifactService
-from app.services.database import PROJECT_ROOT, SessionLocal, initialize_database
+from app.services.database import WORK_DIRECTORY, SessionLocal, initialize_database
 from app.services.document_parser_service import DocumentParserService
 
 
@@ -110,7 +110,7 @@ class EnterpriseComputerWorkerService:
 
     def _parse(self, source: FileAsset) -> dict[str, object]:
         path = Path(source.storage_path).resolve()
-        controlled_root = (PROJECT_ROOT / "work").resolve()
+        controlled_root = WORK_DIRECTORY.resolve()
         if controlled_root not in path.parents or not path.is_file():
             raise ValueError("Authorized source is outside the controlled input store.")
         return self._parser.parse(source.filename, path.read_bytes(), source.file_type)

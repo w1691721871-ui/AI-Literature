@@ -21,10 +21,21 @@ services:
         value: "43200"
       - key: DEMO_MODE
         value: "true"
+      # Configure these deployment secrets in Render before enabling the
+      # public Demo. They provision the isolated Demo Owner and Reviewer and
+      # are never stored in source or exposed by release endpoints.
+      - key: DEMO_OWNER_PASSWORD
+        sync: false
+      - key: DEMO_REVIEWER_PASSWORD
+        sync: false
       - key: REQUIRE_HUMAN_REVIEW
         value: "true"
       - key: CORS_ALLOWED_ORIGINS
         sync: false
+      # A public deployment admits only CORS_ALLOWED_ORIGINS. Local browser
+      # access is for isolated development and must remain disabled here.
+      - key: RESEARCHOS_ALLOW_LOCAL_CORS
+        value: "false"
       - key: DASHSCOPE_API_KEY
         sync: false
       - key: LLM_BASE_URL
@@ -38,12 +49,12 @@ services:
       # Set these non-secret values in the managed service before a release.
       # They allow /api/version to prove backend/frontend deployment parity.
       - key: RESEARCHOS_RELEASE
-        sync: false
-      - key: RESEARCHOS_COMMIT
-        sync: false
+        value: researchos-demo-v200
+      # app.main reads Render's built-in RENDER_GIT_COMMIT at runtime. Do not
+      # hardcode a commit here: a static value becomes stale after the next deploy.
       - key: RESEARCHOS_FRONTEND_VERSION
-        value: v199
+        value: v200
       - key: RESEARCHOS_BACKEND_VERSION
         value: api-2026.10
       - key: RESEARCHOS_ENVIRONMENT
-        value: production
+        value: demo

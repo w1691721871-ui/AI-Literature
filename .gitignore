@@ -33,6 +33,9 @@ logs/
 *.sqlite
 *.sqlite3
 *.faiss
+*.index
+*.bin
+*.pdf
 
 # User-provided autonomous Research Workspace assets
 research_workspace/
@@ -43,6 +46,7 @@ artifacts/
 papers/
 vector_index/
 embeddings/
+demo/backups/
 
 # Local historical interview material; only the public index below is tracked.
 docs/interview/*

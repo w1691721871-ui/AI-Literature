@@ -7,11 +7,11 @@ import zipfile
 from pathlib import Path
 from xml.etree import ElementTree
 
-from app.services.database import PROJECT_ROOT
+from app.services.database import WORK_DIRECTORY
 from app.services.pdf_service import extract_pdf_text
 
 
-RESEARCH_WORKSPACE = PROJECT_ROOT / "research_workspace"
+RESEARCH_WORKSPACE = WORK_DIRECTORY / "research_workspace"
 ALLOWED_SUFFIXES = {".pdf", ".docx", ".txt", ".csv", ".xlsx"}
 
 

@@ -37,7 +37,8 @@ RESEARCHOS_API_URL=https://<your-api-host>
 Then set the exact Vercel origin in Render (no wildcard):
 
 ```text
-CORS_ALLOWED_ORIGINS=https://<your-vercel-project>.vercel.app,http://localhost:5173
+CORS_ALLOWED_ORIGINS=https://<your-vercel-project>.vercel.app
+RESEARCHOS_ALLOW_LOCAL_CORS=false
 ```
 
 The browser loads the generated runtime config, sends protected requests to the configured Render base URL, and attaches its opaque session token in the request authorization header. Tokens are never written into the generated config.
@@ -62,7 +63,7 @@ Optionally set demo emails. Do not enable this option in a customer or productio
 
 - Confirm HTTPS and allowed browser origins.
 - Use managed secrets for model and demo credentials.
-- A free Render web service has ephemeral local storage. For a durable public demo, attach a paid Render Persistent Disk at `/var/data`. The included Render configuration maps `WORK_DIRECTORY`, `DATABASE_URL`, and `STORAGE_ROOT` there, keeping SQLite, FAISS, and generated artifacts together. The ignored local `work/` corpus is not deployed automatically; import an approved corpus backup before claiming the hosted diagnostics contain the 7-paper library.
+- A free Render web service has ephemeral local storage. For a durable public demo, attach a paid Render Persistent Disk at `/var/data`. The included Render configuration maps `WORK_DIRECTORY`, `DATABASE_URL`, and `STORAGE_ROOT` there, keeping SQLite, FAISS, and generated artifacts together. The ignored local demo corpus is not deployed automatically; seed the approved six-paper Golden Demo corpus into the dedicated deployment workspace before claiming hosted diagnostics are ready.
 - Verify `/health` and `/researchos/diagnostics` after deployment.
 - Confirm that the initial owner has an authorized Workspace membership.
 - Verify `POST /api/identity/demo-session`, `GET /api/identity/me`, and `GET /api/missions` with the returned session. A Demo session must receive `403` from `GET /api/organizations`.

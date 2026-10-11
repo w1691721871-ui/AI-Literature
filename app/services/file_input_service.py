@@ -13,7 +13,7 @@ from app.models.document_summary import DocumentSummary
 from app.models.file_asset import FileAsset
 from app.models.mission_file_source import MissionFileSource
 from app.services.copilot_mission_service import CopilotMissionService
-from app.services.database import PROJECT_ROOT, SessionLocal, initialize_database
+from app.services.database import WORK_DIRECTORY, SessionLocal, initialize_database
 from app.services.document_parser_service import DocumentParserService
 from app.services.requirement_extractor import RequirementExtractor
 from app.services.connector_service import ConnectorManager
@@ -29,7 +29,10 @@ class FileInputService:
 
     def __init__(self, session_factory=SessionLocal, *, initialize: bool=True, storage_root: Path|None=None, parser=None, extractor=None, copilot=None):
         if initialize: initialize_database()
-        self._sessions=session_factory; self._storage=storage_root or PROJECT_ROOT / "work" / "enterprise_inputs"
+        # Keep authorized uploads on the same configured persistent volume as
+        # SQLite, PDFs, FAISS and Artifacts. Locally WORK_DIRECTORY still
+        # defaults to the repository's ignored work/ directory.
+        self._sessions=session_factory; self._storage=storage_root or WORK_DIRECTORY / "enterprise_inputs"
         self._parser=parser or DocumentParserService(); self._extractor=extractor or RequirementExtractor(); self._copilot=copilot or CopilotMissionService(session_factory,initialize=False)
 
     def upload(self, filename: str, content: bytes, user_id: str="local-user") -> dict[str, object]:

@@ -3,7 +3,9 @@ from __future__ import annotations
 
 import unittest
 import tempfile
+import os
 from pathlib import Path
+from unittest.mock import patch
 
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
@@ -55,17 +57,60 @@ class ReleaseClosureTests(unittest.TestCase):
         self.assertEqual(next(item for item in snapshot["checks"] if item["id"] == "demo_corpus")["status"], "BLOCKED")
         self.assertEqual(snapshot["overall"], "BLOCKED")
 
-    def test_version_endpoint_declares_no_secret_configuration(self):
-        from app.main import version_identity
+    def test_version_endpoint_declares_configured_demo_identity_without_secrets(self):
+        from app.main import DEMO_COMMIT, DEMO_RELEASE, FRONTEND_RELEASE, version_identity
         identity = version_identity()
         self.assertEqual(set(identity), {"service", "release", "commit", "frontend_version", "backend_version", "environment", "status"})
         self.assertEqual(identity["service"], "researchos-api")
         self.assertEqual(identity["status"], "ok")
-        self.assertEqual(identity["frontend_version"], "v169")
+        self.assertEqual(identity["release"], DEMO_RELEASE)
+        self.assertEqual(identity["commit"], DEMO_COMMIT)
+        self.assertEqual(identity["frontend_version"], FRONTEND_RELEASE)
+        self.assertEqual(identity["environment"], "demo")
         rendered = str(identity).lower()
         self.assertNotIn("secret", rendered)
         self.assertNotIn("password", rendered)
         self.assertNotIn("token", rendered)
+
+    def test_demo_startup_guard_rejects_frontend_version_mismatch(self):
+        from app.main import DEMO_COMMIT, DEMO_RELEASE, _validate_release_identity
+        with patch.dict(os.environ, {
+            "DEMO_MODE": "true",
+            "RESEARCHOS_RELEASE": DEMO_RELEASE,
+            "RESEARCHOS_COMMIT": DEMO_COMMIT,
+            "RESEARCHOS_FRONTEND_VERSION": "v199",
+            "RESEARCHOS_ENVIRONMENT": "demo",
+        }, clear=False):
+            with self.assertRaisesRegex(RuntimeError, "frontend version mismatch"):
+                _validate_release_identity()
+
+    def test_demo_startup_guard_accepts_matching_release_identity(self):
+        from app.main import DEMO_COMMIT, DEMO_RELEASE, FRONTEND_RELEASE, _validate_release_identity
+        with patch.dict(os.environ, {
+            "DEMO_MODE": "true",
+            "RESEARCHOS_RELEASE": DEMO_RELEASE,
+            "RESEARCHOS_COMMIT": DEMO_COMMIT,
+            "RESEARCHOS_FRONTEND_VERSION": FRONTEND_RELEASE,
+            "RESEARCHOS_ENVIRONMENT": "demo",
+        }, clear=False):
+            _validate_release_identity()
+
+    def test_readiness_accepts_render_deploy_commit_without_static_override(self):
+        with patch.dict(os.environ, {
+            "RESEARCHOS_RELEASE": "researchos-demo-v200",
+            "RESEARCHOS_COMMIT": "",
+            "RENDER_GIT_COMMIT": "render-deploy-sha",
+        }, clear=False):
+            self.assertTrue(DemoReadinessService._release_is_configured())
+
+    def test_managed_cors_does_not_admit_localhost_without_explicit_opt_in(self):
+        from app.main import _cors_allowed_origins
+        with patch.dict(os.environ, {
+            "RESEARCHOS_ENVIRONMENT": "demo",
+            "RESEARCHOS_ALLOW_LOCAL_CORS": "false",
+            "CORS_ALLOWED_ORIGINS": "https://research.example.com",
+        }, clear=False):
+            self.assertEqual(_cors_allowed_origins(), ["https://research.example.com"])
 
 
 if __name__ == "__main__":

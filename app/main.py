@@ -1,5 +1,7 @@
 import os
+import json
 from contextlib import asynccontextmanager
+from pathlib import Path
 
 from pydantic import BaseModel
 from fastapi import FastAPI, File, Form, HTTPException, UploadFile, status
@@ -61,25 +63,79 @@ from app.services.persistent_mission_execution_service import PersistentMissionE
 from app.services.demo_readiness_service import DemoReadinessService
 
 
-FRONTEND_RELEASE = "v169"
+FRONTEND_RELEASE = "v200"
+DEMO_RELEASE = "researchos-demo-v200"
+DEMO_COMMIT = "35fc0eb8709e141c6fa66124242660905acab476"
+DEMO_ENVIRONMENT = "demo"
+RELEASE_INFO_PATH = Path(__file__).resolve().parents[1] / "frontend" / "release-info.json"
+
+
+def _demo_mode_enabled() -> bool:
+    return os.getenv("DEMO_MODE", "false").strip().lower() == "true"
+
+
+def _release_commit() -> str:
+    """Prefer the deploy platform's immutable revision over a source fallback."""
+    return (
+        os.getenv("RESEARCHOS_COMMIT", "").strip()
+        or os.getenv("RENDER_GIT_COMMIT", "").strip()
+        or DEMO_COMMIT
+    )
 
 
 def _release_identity() -> dict[str, str]:
     """Expose a minimal deploy identity without operational configuration."""
     return {
         "service": "researchos-api",
-        "release": os.getenv("RESEARCHOS_RELEASE", "local-unlabeled"),
-        "commit": os.getenv("RESEARCHOS_COMMIT", "not-configured"),
+        "release": os.getenv("RESEARCHOS_RELEASE", DEMO_RELEASE),
+        "commit": _release_commit(),
         "frontend_version": os.getenv("RESEARCHOS_FRONTEND_VERSION", FRONTEND_RELEASE),
         "backend_version": os.getenv("RESEARCHOS_BACKEND_VERSION", "api-2026.10"),
-        "environment": os.getenv("RESEARCHOS_ENVIRONMENT", "unlabeled"),
+        "environment": os.getenv("RESEARCHOS_ENVIRONMENT", DEMO_ENVIRONMENT),
         "status": "ok",
     }
+
+
+def _validate_release_identity() -> None:
+    """Fail a guarded Demo startup when the presented release cannot be proven.
+
+    This checks release metadata only; it does not initialize data, alter a
+    Mission, or change any runtime behaviour. The guard is automatically
+    enabled for ``DEMO_MODE=true`` and may be enabled in another environment
+    with ``RESEARCHOS_RELEASE_GUARD=true``.
+    """
+    guarded = _demo_mode_enabled() or os.getenv("RESEARCHOS_RELEASE_GUARD", "").strip().lower() == "true"
+    if not guarded:
+        return
+    try:
+        frontend_metadata = json.loads(RELEASE_INFO_PATH.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError) as error:
+        raise RuntimeError("Release identity check failed: frontend release metadata is unavailable") from error
+
+    identity = _release_identity()
+    expected_frontend = str(frontend_metadata.get("frontend_version", "")).strip()
+    failures: list[str] = []
+    if not expected_frontend:
+        failures.append("frontend release version is missing")
+    elif identity["frontend_version"] != expected_frontend:
+        failures.append(
+            f"frontend version mismatch (backend={identity['frontend_version']}, frontend={expected_frontend})"
+        )
+    if not identity["commit"] or identity["commit"] == "not-configured":
+        failures.append("release commit is not configured")
+    if _demo_mode_enabled():
+        if identity["release"] != DEMO_RELEASE:
+            failures.append(f"demo release must be {DEMO_RELEASE}")
+        if identity["environment"] != DEMO_ENVIRONMENT:
+            failures.append(f"demo environment must be {DEMO_ENVIRONMENT}")
+    if failures:
+        raise RuntimeError("Release identity check failed: " + "; ".join(failures))
 
 
 @asynccontextmanager
 async def application_lifespan(_app: FastAPI):
     """Provision persistence before serving requests in local and production runs."""
+    _validate_release_identity()
     provision_demo_identity_if_enabled()
     # Restart recovery only classifies durable checkpoints. It intentionally
     # never executes a Mission without a fresh authenticated Workspace actor.
@@ -122,11 +178,15 @@ app.include_router(organization_intelligence_router)
 
 # Allow the local Vue page and the deployed Render frontend to call this API.
 def _cors_allowed_origins() -> list[str]:
-    """Return explicit browser origins; never fall back to a wildcard."""
+    """Return explicit browser origins; local development access is opt-in."""
     configured = os.getenv("CORS_ALLOWED_ORIGINS", "")
     origins = [value.strip().rstrip("/") for value in configured.split(",") if value.strip()]
     local_origins = ["http://localhost:5173", "http://127.0.0.1:5173"]
-    return list(dict.fromkeys([*local_origins, *origins]))
+    environment = os.getenv("RESEARCHOS_ENVIRONMENT", "").strip().lower()
+    local_access = os.getenv("RESEARCHOS_ALLOW_LOCAL_CORS", "").strip().lower() == "true"
+    if environment in {"local", "development", "test"} or local_access:
+        origins = [*local_origins, *origins]
+    return list(dict.fromkeys(origins))
 
 
 app.add_middleware(
